@@ -17,9 +17,6 @@
 
 import argparse
 
-from benchmark import parse_args, run_benchmark
-
-
 def initialize(M, N, K, ft):
     A = np.random.uniform(size=(N, N), dtype=ft)
     B = np.random.uniform(size=(N, N), dtype=ft)
