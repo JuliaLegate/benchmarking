@@ -1,0 +1,30 @@
+using CSV, DataFrames, Plots
+
+# Load data
+df = CSV.read("gemm.csv", DataFrame)
+
+# Compute total problem size and per-GPU size
+df.size = df.n .* df.m
+df.size_per_gpu = df.size ./ df.gpus
+
+# Sort so GPUs increase left-to-right
+sort!(df, [:model, :gpus])
+
+plt = plot(; 
+    xlabel = "Number of GPUs", 
+    ylabel = "GFLOPS",
+    title = "Weak Scaling Performance by Model",
+    xticks = sort(unique(df.gpus)),
+    legend = :bottomright,
+    dpi = 300
+)
+
+# Plot one line per model
+for g in groupby(df, :model)
+    label = g.model[1]
+    sort!(g, :gpus)
+    plot!(plt, g.gpus, g.gflops; label, lw=2, marker=:circle)
+end
+
+savefig(plt, "gemm_weak_scaling.png")
+println("Saved plot to gemm_weak_scaling.png")
