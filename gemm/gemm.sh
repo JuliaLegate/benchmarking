@@ -13,10 +13,11 @@ CUDA_GEMM="bash run_benchmark.sh cuda matmul"
 #   "20000 20000"
 # )
 
-GPUS_LIST=(1 2 4 8)
+# GPUS_LIST=(1 2 4 8)
+GPUS_LIST=(2 4 8)
 
 declare -a SIZES=(
-  "48000 48000"
+  # "48000 48000"
   "48000 96000"
   "96000 96000"
   "96000 192000"

@@ -27,6 +27,7 @@ function synchronize_all(devices)
 end
 
 function multi_gpu_matmul(gpus, N, M, n_samples, n_warmup)
+    all_devices = CUDA.devices()
     gpus = min(gpus, length(all_devices))
     devices = all_devices[1:gpus]
     n_devices = length(devices)
