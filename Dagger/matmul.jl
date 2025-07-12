@@ -2,7 +2,6 @@ using CUDA
 using Dagger
 
 function init_dagger(N, bs)
-  @assert div(N, bs) == 0 "N must be multiple of block size"
   DA = rand(Blocks(bs, bs), Float32, N, N)
   DB = rand(Blocks(bs, bs), Float32, N, N)
   DC = zeros(Blocks(bs,bs), Float32, N, N)
