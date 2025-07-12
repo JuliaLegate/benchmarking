@@ -34,6 +34,6 @@ for i in "${!GPUS_LIST[@]}"; do
     read -r N M <<< "${SIZES[$i]}"
     args=(--gpus "$gpus" "$N" "$M" "$NUM_TRIALS" "$WARMUP")
 
-    $CUNUMERIC_GEMM "${args[@]}"
+    # $CUNUMERIC_GEMM "${args[@]}"
     $CUDA_GEMM "${args[@]}"
 done

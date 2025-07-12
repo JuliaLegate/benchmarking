@@ -20,7 +20,7 @@ using Random
     # Numerics
     nx, ny     = ARGS[1], ARGS[1];                          # Number of gridpoints in dimensions x and y
     nt         = ARGS[2];                                   # Number of time steps
-    me, dims   = init_global_grid(nx, ny);                  # Initialize the implicit global grid
+    me, dims   = ImplicitGlobalGrid.init_global_grid(nx, ny);                  # Initialize the implicit global grid
     dx         = 1
     dy         = dx
     dt         = dx / 5
