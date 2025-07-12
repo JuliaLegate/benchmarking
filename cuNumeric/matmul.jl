@@ -7,6 +7,7 @@ function initialize_cunumeric(N)
     A = cuNumeric.as_type(cuNumeric.rand(NDArray, N, N), Float32)
     B = cuNumeric.as_type(cuNumeric.rand(NDArray, N, N), Float32)
     C = cuNumeric.zeros(Float32, N, N)
+    GC.gc() # remove the intermediate FP64 arrays
     return A, B, C
 end
 
