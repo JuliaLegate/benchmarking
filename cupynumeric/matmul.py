@@ -90,5 +90,6 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
+    print(args)
 
     run_gemm(args.num, args.iter, args.warmup, np.float32)
