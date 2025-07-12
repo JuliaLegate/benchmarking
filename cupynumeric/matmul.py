@@ -94,4 +94,4 @@ if __name__ == "__main__":
 
     args, np, timer = parse_args(parser)
 
-  run_gemm(args.num, args.iter, args.warmup, np.float32)
+    run_gemm(args.num, args.iter, args.warmup, np.float32)
