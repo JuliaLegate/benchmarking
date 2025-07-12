@@ -22,10 +22,10 @@ declare -a SIZES=(
   "96000 192000"
 )
 
-touch gemm.csv 
+touch gemm/gemm.csv
 expected_header="model,gpus,n,m,mean_time_ms,gflops"
-if ! head -n 1 gemm.csv | grep -qx "$expected_header"; then
-    sed -i "1i $expected_header" gemm.csv
+if ! head -n 1 gemm/gemm.csv | grep -qx "$expected_header"; then
+    sed -i "1i $expected_header" gemm/gemm.csv
 fi
 
 for i in "${!GPUS_LIST[@]}"; do

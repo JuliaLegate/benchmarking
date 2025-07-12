@@ -59,6 +59,6 @@ end
 println("[CUDA] Mean Run Time: $(mean_time_ms) ms")
 println("[CUDA] FLOPS: $(gflops) GFLOPS")
 
-open("gemm.csv", "a") do io
+open("./gemm/gemm.csv", "a") do io
     @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cuda", gpus, N, M, mean_time_ms, gflops)
 end

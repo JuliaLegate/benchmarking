@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check for script existence
-if [[ ! -f "$MODEL/$BENCHMARK.jl" ]]; then
+if [[ ! -f "models/$MODEL/$BENCHMARK.jl" ]]; then
     echo "Error: File $MODEL/$BENCHMARK.jl does not exist."
     exit 1
 fi
@@ -60,6 +60,6 @@ fi
 
 printf "\n"
 echo "Running: $MODEL/$BENCHMARK.jl with $CPUS CPUs and $GPUS GPUs"
-CMD="julia --project='./$MODEL' $MODEL/$BENCHMARK.jl $GPUS ${EXTRA_ARGS[@]}"
+CMD="julia --project='models/$MODEL' models/$MODEL/$BENCHMARK.jl $GPUS ${EXTRA_ARGS[@]}"
 printf "Running: %s\n" "$CMD"
 eval "$CMD"

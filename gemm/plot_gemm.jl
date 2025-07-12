@@ -1,7 +1,7 @@
 using CSV, DataFrames, Plots
 
 # Load data
-df = CSV.read("gemm.csv", DataFrame)
+df = CSV.read("gemm/gemm.csv", DataFrame)
 
 # Compute total problem size and per-GPU size
 df.size = df.n .* df.m
