@@ -3,6 +3,8 @@ using CSV, DataFrames, Plots
 # Load data
 df = CSV.read("gemm/gemm.csv", DataFrame)
 
+nr_gpus = length(df.gpus)
+
 # Compute total problem size and per-GPU size
 df.size = df.n .* df.m
 df.size_per_gpu = df.size ./ df.gpus
@@ -23,7 +25,11 @@ plt = plot(;
 for g in groupby(df, :model)
     label = g.model[1]
     sort!(g, :gpus)
-    plot!(plt, g.gpus, g.gflops / g.gpus; label, lw=2, marker=:circle)
+    plot!(plt, g.gpus, g.gflops / nr_gpus;
+      label=label,
+      lw=2,
+      marker=:circle,
+      yscale=:log10)
 end
 
 savefig(plt, "gemm_weak_scaling.png")
