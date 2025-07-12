@@ -23,7 +23,7 @@ plt = plot(;
 for g in groupby(df, :model)
     label = g.model[1]
     sort!(g, :gpus)
-    plot!(plt, g.gpus, g.gflops; label, lw=2, marker=:circle)
+    plot!(plt, g.gpus, g.gflops / g.gpus; label, lw=2, marker=:circle)
 end
 
 savefig(plt, "gemm_weak_scaling.png")

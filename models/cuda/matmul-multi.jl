@@ -61,7 +61,7 @@ function multi_gpu_matmul(gpus, N, M, n_samples, n_warmup)
         for s in 1:n_samples
             for i in 1:n_devices
                 CUDA.device!(devices[i])
-                mul!(C[i], A_parts[i], B[i])
+                mul!(C[i], A[i], B[i])
             end
             synchronize_all(CUDA.devices())
         end
