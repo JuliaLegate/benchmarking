@@ -1,5 +1,4 @@
-WARMUP=1
-NUM_TRIALS=20
+NUM_ITERS=1000
 
 CUNUMERIC_GRAY="bash run_benchmark.sh cunumeric grayscott"
 DIFFEQ_GRAY="bash run_benchmark.sh diffeq grayscott"
@@ -21,7 +20,7 @@ fi
 for i in "${!GPUS_LIST[@]}"; do
     gpus="${GPUS_LIST[$i]}"
     read -r N M <<< "${SIZES[$i]}"
-    args=(--gpus "$gpus" "$N" "$N" "$NUM_TRIALS" "$WARMUP")
+    args=(--gpus "$gpus" "$N" "$N" "$NUM_ITERS")
 
     $CUNUMERIC_GRAY "${args[@]}"
     $DIFFEQ_GRAY "${args[@]}"

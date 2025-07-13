@@ -2,8 +2,6 @@
 # eh we will restrict to NxN
 # N^3 / P --> constant
 
-
-
 function calc(baseline_N, label)
     gpu_counts = [1, 2, 4, 8]
 

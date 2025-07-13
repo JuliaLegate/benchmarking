@@ -9,8 +9,7 @@ using Random
 @views lap1(A) = A[3:end, 2:end-1] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[1:end-2, 2:end-1]
 @views lap2(A) = A[2:end-1, 3:end] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[2:end-1, 1:end-2]
 
-@views function grayscott()
-
+@views function grayscott(nx, ny, nt)
     # Physics
     c_u = 1.0f0
     c_v = 0.3f0
@@ -18,8 +17,6 @@ using Random
     k = 0.06f0
     
     # Numerics
-    nx, ny     = parse(Int, ARGS[1]), parse(Int, ARGS[1]);                          # Number of gridpoints in dimensions x and y
-    nt         = parse(Int, ARGS[2]);                                   # Number of time steps
     me, dims   = ImplicitGlobalGrid.init_global_grid(nx, ny, 1);                  # Initialize the implicit global grid
     dx         = 1
     dy         = dx
@@ -63,11 +60,12 @@ end
 
 gpus = parse(Int, ARGS[1])
 N = parse(Int, ARGS[2])
-steps = parse(Int, ARGS[3])
+M = parse(Int, ARGS[3])
+n_samples = parse(Int, ARGS[3])
 
 println("[DIFFEQ] GrayScott benchmark on $(N)x$(N) matricies for $(n_samples) iterations")
 
-t = CUDA.@elapsed grayscott()
+t = CUDA.@elapsed grayscott(N, N, n_samples)
 
 total_time_μs = t * 1e6
 mean_time_ms = total_time_μs / (n_samples * 1e3)
