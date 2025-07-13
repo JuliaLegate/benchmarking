@@ -1,27 +1,25 @@
 WARMUP=1
-NUM_TRIALS=20
+NUM_TRIALS=10
 
 CUNUMERIC_GEMM="bash run_benchmark.sh cunumeric matmul"
 CUDA_GEMM="bash run_benchmark.sh cuda matmul"
 
-# GPUS_LIST=(1)
+GPUS_LIST=(1 2 4 8)
 
 # declare -a SIZES=(
-#   "10000 10000"
-#   "12000 8000"
-#   "16000 4000"
-#   "20000 20000"
+#   "48000 48000"
+#   "48000 96000"
+#   "96000 96000"
+#   "96000 192000"
 # )
 
-# GPUS_LIST=(1 2 4 8)
-GPUS_LIST=(2 4 8)
-
 declare -a SIZES=(
-  # "48000 48000"
-  "48000 96000"
-  "96000 96000"
-  "96000 192000"
+  "12288 24576"
+  "16384 92682"
+  "24576 49152"
+  "32768 65536"
 )
+
 
 touch gemm/gemm.csv
 expected_header="model,gpus,n,m,mean_time_ms,gflops"
