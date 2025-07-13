@@ -1,7 +1,7 @@
 #######################################################################
 # This file contains a multi-GPU GEMM. 
 # C = A * B
-# Each GPU will get the entirity of B and subset of the rows of a
+# Each GPU will get the entirety of B and subset of the rows of a
 # This will allow for localised computation of C without communication
 # You must be able to fit 
 #      [(N / GPUS) * M] + (M * N) + [(N^2 / GPUS)] elements on each GPU
