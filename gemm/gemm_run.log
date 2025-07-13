@@ -1,0 +1,105 @@
+(base) root@e462a2ff8d04:~/juliacon-benchmarking# bash gemm/gemm.sh
+
+Running: cunumeric/matmul.jl with 1 CPUs and 1 GPUs
+Running: julia --project='models/cunumeric' models/cunumeric/matmul.jl 1 12288 24576 20 1
+[0 - 7f804cfdb740]    0.000000 {5}{module_config}: Module numa can not detect resources.
+[ Info: Started Legate
+┌ Warning: CUDA runtime library `libcudart.so.12` was loaded from a system path, `/usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12`.
+│ This may cause errors.
+│
+│ If you're running under a profiler, this situation is expected. Otherwise,
+│ ensure that your library path environment variable (e.g., `PATH` on Windows
+│ or `LD_LIBRARY_PATH` on Linux) does not include CUDA library paths.
+│
+│ In any other case, please file an issue.
+└ @ CUDA ~/.julia/packages/CUDA/ja0IX/src/initialization.jl:218
+[ Info: Started cuNuermic
+[cuNumeric]  MATMUL benchmark on 12288x24576 matricies for 20 iterations, 1 warmups
+[cuNumeric]  Mean Run Time: 390.199 ms
+[cuNumeric]  FLOPS: 19019.916741314046 GFLOPS
+[ Info: Cleaning Up cuNuermic
+[ Info: Cleaning Up Legate
+
+Running: cuda/matmul.jl with 1 CPUs and 1 GPUs
+Running: julia --project='models/cuda' models/cuda/matmul.jl 1 12288 24576 20 1
+[CUDA] MATMUL benchmark on 12288x24576 matricies for 20 iterations, 1 warmups
+[CUDA] Mean Run Time: 388.6985778808594 ms
+[CUDA] FLOPS: 19093.33585166548 GFLOPS
+
+Running: cunumeric/matmul.jl with 1 CPUs and 2 GPUs
+Running: julia --project='models/cunumeric' models/cunumeric/matmul.jl 2 16384 92682 20 1
+[0 - 7ff5a698d740]    0.000000 {5}{module_config}: Module numa can not detect resources.
+[ Info: Started Legate
+┌ Warning: CUDA runtime library `libcudart.so.12` was loaded from a system path, `/usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12`.
+│ This may cause errors.
+│
+│ If you're running under a profiler, this situation is expected. Otherwise,
+│ ensure that your library path environment variable (e.g., `PATH` on Windows
+│ or `LD_LIBRARY_PATH` on Linux) does not include CUDA library paths.
+│
+│ In any other case, please file an issue.
+└ @ CUDA ~/.julia/packages/CUDA/ja0IX/src/initialization.jl:218
+[ Info: Started cuNuermic
+[cuNumeric]  MATMUL benchmark on 16384x92682 matricies for 20 iterations, 1 warmups
+[cuNumeric]  Mean Run Time: 1336.84985 ms
+[cuNumeric]  FLOPS: 37220.33662234244 GFLOPS
+[ Info: Cleaning Up cuNuermic
+[ Info: Cleaning Up Legate
+
+Running: cuda/matmul.jl with 1 CPUs and 2 GPUs
+Running: julia --project='models/cuda' models/cuda/matmul.jl 2 16384 92682 20 1
+[CUDA] MATMUL benchmark on 16384x92682 matricies for 20 iterations, 1 warmups
+[CUDA] Mean Run Time: 1356.7405700683594 ms
+[CUDA] FLOPS: 36674.66170634298 GFLOPS
+
+Running: cunumeric/matmul.jl with 1 CPUs and 4 GPUs
+Running: julia --project='models/cunumeric' models/cunumeric/matmul.jl 4 24576 49152 20 1
+[0 - 7f8762413740]    0.000000 {5}{module_config}: Module numa can not detect resources.
+[ Info: Started Legate
+┌ Warning: CUDA runtime library `libcudart.so.12` was loaded from a system path, `/usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12`.
+│ This may cause errors.
+│
+│ If you're running under a profiler, this situation is expected. Otherwise,
+│ ensure that your library path environment variable (e.g., `PATH` on Windows
+│ or `LD_LIBRARY_PATH` on Linux) does not include CUDA library paths.
+│
+│ In any other case, please file an issue.
+└ @ CUDA ~/.julia/packages/CUDA/ja0IX/src/initialization.jl:218
+[ Info: Started cuNuermic
+[cuNumeric]  MATMUL benchmark on 24576x49152 matricies for 20 iterations, 1 warmups
+[cuNumeric]  Mean Run Time: 799.0564 ms
+[cuNumeric]  FLOPS: 74303.92137542232 GFLOPS
+[ Info: Cleaning Up cuNuermic
+[ Info: Cleaning Up Legate
+
+Running: cuda/matmul.jl with 1 CPUs and 4 GPUs
+Running: julia --project='models/cuda' models/cuda/matmul.jl 4 24576 49152 20 1
+[CUDA] MATMUL benchmark on 24576x49152 matricies for 20 iterations, 1 warmups
+[CUDA] Mean Run Time: 778.7315845489502 ms
+[CUDA] FLOPS: 76243.2461944092 GFLOPS
+
+Running: cunumeric/matmul.jl with 1 CPUs and 8 GPUs
+Running: julia --project='models/cunumeric' models/cunumeric/matmul.jl 8 32768 65536 20 1
+[0 - 7f5219eb1740]    0.000000 {5}{module_config}: Module numa can not detect resources.
+[ Info: Started Legate
+┌ Warning: CUDA runtime library `libcudart.so.12` was loaded from a system path, `/usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12`.
+│ This may cause errors.
+│
+│ If you're running under a profiler, this situation is expected. Otherwise,
+│ ensure that your library path environment variable (e.g., `PATH` on Windows
+│ or `LD_LIBRARY_PATH` on Linux) does not include CUDA library paths.
+│
+│ In any other case, please file an issue.
+└ @ CUDA ~/.julia/packages/CUDA/ja0IX/src/initialization.jl:218
+[ Info: Started cuNuermic
+[cuNumeric]  MATMUL benchmark on 32768x65536 matricies for 20 iterations, 1 warmups
+[cuNumeric]  Mean Run Time: 939.99745 ms
+[cuNumeric]  FLOPS: 149719.9961696747 GFLOPS
+[ Info: Cleaning Up cuNuermic
+[ Info: Cleaning Up Legate
+
+Running: cuda/matmul.jl with 1 CPUs and 8 GPUs
+Running: julia --project='models/cuda' models/cuda/matmul.jl 8 32768 65536 20 1
+[CUDA] MATMUL benchmark on 32768x65536 matricies for 20 iterations, 1 warmups
+[CUDA] Mean Run Time: 986.8818283081055 ms
+[CUDA] FLOPS: 142607.15982052305 GFLOPS

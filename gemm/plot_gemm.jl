@@ -33,5 +33,5 @@ for g in groupby(df, :model)
         ylims=(1, 1e5))
 end
 
-savefig(plt, "gemm_weak_scaling_small.png")
+savefig(plt, "gemm/gemm_weak_scaling_small.png")
 println("Saved plot to gemm_weak_scaling_small.png")
