@@ -53,8 +53,8 @@ fi
 # Configure runtime
 if [[ $MODEL -eq "cunumeric" ]]; then
     export LEGATE_AUTO_CONFIG=0
-    export LEGATE_CONFIG="--cpus=$CPUS  --gpus=$GPUS  --omps=8 --ompthreads=4 --utility=2 --sysmem=774026  --numamem=0 --fbmem=76596 --zcmem=128 --regmem=0"
-    # export LEGATE_CONFIG="--cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=2 --sysmem=256 --numamem=19029 --fbmem=7569 --zcmem=128 --regmem=0"
+    # export LEGATE_CONFIG="--cpus=$CPUS  --gpus=$GPUS  --omps=8 --ompthreads=4 --utility=2 --sysmem=774026  --numamem=0 --fbmem=76596 --zcmem=128 --regmem=0"
+    export LEGATE_CONFIG="--cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=2 --sysmem=256 --numamem=19029 --fbmem=7569 --zcmem=128 --regmem=0"
     export LEGATE_SHOW_CONFIG=0
 fi
 

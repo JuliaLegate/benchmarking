@@ -1,5 +1,6 @@
 using cuNumeric
 using Legate
+using Printf
 
 struct Params
     dx::Float64
@@ -72,7 +73,7 @@ function step(u, v, u_new, v_new, args::Params)
     v_new[end, :] = v[2, :]
 end
 
-function gray_scott(N, M, n_steps)
+function grayscott(N, M, n_steps)
     dims = (N, M)
     FT = Float32
     args = Params()
@@ -108,7 +109,7 @@ N = parse(Int, ARGS[2])
 M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
 
-println("[DIFFEQ] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
+println("[cuNumeric] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
 
 start_time = get_time_us()
 
@@ -118,9 +119,9 @@ total_time_μs = get_time_us() - start_time
 mean_time_ms = total_time_μs / (n_samples * 1e3)
 gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
 
-println("[DIFFEQ] Mean Run Time: $(mean_time_ms) ms")
-println("[DIFFEQ] FLOPS: $(gflops) GFLOPS")
+println("[cuNumeric] Mean Run Time: $(mean_time_ms) ms")
+println("[cuNumeric] FLOPS: $(gflops) GFLOPS")
 
 open("./grayscott/grayscott.csv", "a") do io
-    @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "diffeq", gpus, N, M, mean_time_ms, gflops)
+    @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cunumeric", gpus, N, M, mean_time_ms, gflops)
 end

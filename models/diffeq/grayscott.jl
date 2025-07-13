@@ -1,6 +1,7 @@
 using CUDA                # Import CUDA before ImplicitGlobalGrid to activate its CUDA device support
 using ImplicitGlobalGrid
 using Random
+using Printf
 
 
 #export IGG_CUDAAWARE_MPI=1
