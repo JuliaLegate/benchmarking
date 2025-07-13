@@ -39,7 +39,6 @@ using Random
 
     # Time loop
     for it = 1:nt
-
         F_u   .= (-inn(u) .* (inn(v) .^ 2)) .+ f .* (1.0f0 .- inn(u));                     
         F_v   .= (inn(u) .* (inn(v) .^ 2)) .- (f + k) .* inn(v);
 
@@ -57,6 +56,26 @@ using Random
     finalize_global_grid();
 end
 
+
+function total_flops(N, T)
+    return N * N * T # O(N^2 * T)
+end
+
+gpus = parse(Int, ARGS[1])
+N = parse(Int, ARGS[2])
+steps = parse(Int, ARGS[3])
+
+println("[DIFFEQ] GrayScott benchmark on $(N)x$(N) matricies for $(n_samples) iterations")
+
 t = CUDA.@elapsed grayscott()
 
-println("Gray Scott took, $(t) seconds")
+total_time_μs = t * 1e6
+mean_time_ms = total_time_μs / (n_samples * 1e3)
+gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
+
+println("[DIFFEQ] Mean Run Time: $(mean_time_ms) ms")
+println("[DIFFEQ] FLOPS: $(gflops) GFLOPS")
+
+open("./grayscott/grayscott.csv", "a") do io
+    @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "diffeq", gpus, N, M, mean_time_ms, gflops)
+end
