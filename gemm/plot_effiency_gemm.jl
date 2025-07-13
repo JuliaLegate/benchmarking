@@ -15,13 +15,7 @@ function small_params()
 end
 
 
-function make_plot(type::String)
-    if type=="large" 
-        csv, title, file = large_params()
-    else
-        csv, title, file = small_params()
-    end
-
+function make_plot(csv, title, file )
     df = CSV.read(csv, DataFrame)
     sort!(df, [:model, :gpus])
 
@@ -61,5 +55,5 @@ function make_plot(type::String)
     println("Saved weak scaling efficiency plot to $(file)")
 end 
 
-make_plot("large")
-make_plot("small")
+make_plot(large_params()...)
+make_plot(small_params()...)
