@@ -18,9 +18,9 @@ using Random
     k = 0.06f0
     
     # Numerics
-    nx, ny     = ARGS[1], ARGS[1];                          # Number of gridpoints in dimensions x and y
-    nt         = ARGS[2];                                   # Number of time steps
-    me, dims   = ImplicitGlobalGrid.init_global_grid(nx, ny);                  # Initialize the implicit global grid
+    nx, ny     = parse(Int, ARGS[1]), parse(Int, ARGS[1]);                          # Number of gridpoints in dimensions x and y
+    nt         = parse(Int, ARGS[2]);                                   # Number of time steps
+    me, dims   = ImplicitGlobalGrid.init_global_grid(nx, ny, 1);                  # Initialize the implicit global grid
     dx         = 1
     dy         = dx
     dt         = dx / 5
