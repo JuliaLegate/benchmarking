@@ -8,8 +8,8 @@ GPUS_LIST=(1 2 4 8)
 julia grayscott/grayscott_nval.jl > grayscott/nval.sh
 source grayscott/nval.sh
 
-# SIZES=("${small[@]}")  
-SIZES=("${large[@]}")  
+SIZES=("${small[@]}")  
+# SIZES=("${large[@]}")  
 
 touch grayscott/grayscott.csv
 expected_header="model,gpus,n,m,mean_time_ms,gflops"

@@ -77,7 +77,7 @@ function grayscott(N, M, n_steps)
     dims = (N, M)
     FT = Float32
     args = Params()
-    garbage_interval = 5
+    garbage_interval = 1
 
     u = cuNumeric.ones(dims)
     v = cuNumeric.zeros(dims)
