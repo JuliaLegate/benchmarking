@@ -11,7 +11,7 @@ function calc(baseline_N, label)
     println("declare -a $label=(")
     for P in gpu_counts
         N = round(Int, baseline_N * P^(1/3))
-        println("  \"$N $(2 * N)\"")
+        println("  \"$N $N\"")
     end
     println(")")
     println()
