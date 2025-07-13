@@ -1,4 +1,5 @@
 using cuNumeric
+using Legate
 
 struct Params
     dx::Float64
@@ -12,6 +13,9 @@ struct Params
         new(dx, dx/5, c_u, c_v, f, k)
     end
 end
+
+
+get_time_us() = Legate.value(Legate.time_microseconds())
 
 function step(u, v, u_new, v_new, args::Params)
     # calculate F_u and F_v functions
@@ -102,13 +106,15 @@ end
 gpus = parse(Int, ARGS[1])
 N = parse(Int, ARGS[2])
 M = parse(Int, ARGS[3])
-n_samples = parse(Int, ARGS[3])
+n_samples = parse(Int, ARGS[4])
 
-println("[DIFFEQ] GrayScott benchmark on $(N)x$(N) matricies for $(n_samples) iterations")
+println("[DIFFEQ] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
 
-t = CUDA.@elapsed grayscott(N, N, n_samples)
+start_time = get_time_us()
 
-total_time_μs = t * 1e6
+grayscott(N, N, n_samples)
+
+total_time_μs = get_time_us() - start_time
 mean_time_ms = total_time_μs / (n_samples * 1e3)
 gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
 

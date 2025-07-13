@@ -61,7 +61,7 @@ end
 gpus = parse(Int, ARGS[1])
 N = parse(Int, ARGS[2])
 M = parse(Int, ARGS[3])
-n_samples = parse(Int, ARGS[3])
+n_samples = parse(Int, ARGS[4])
 
 println("[DIFFEQ] GrayScott benchmark on $(N)x$(N) matricies for $(n_samples) iterations")
 
