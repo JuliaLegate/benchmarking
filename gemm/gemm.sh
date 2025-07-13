@@ -9,8 +9,8 @@ GPUS_LIST=(1 2 4 8)
 julia gemm/gemm_nval.jl > gemm/nval.sh
 source gemm/nval.sh
 
-# SIZES=("${small[@]}")  
-SIZES=("${large[@]}")  
+SIZES=("${small[@]}")  
+# SIZES=("${large[@]}")  
 
 touch gemm/gemm.csv
 expected_header="model,gpus,n,m,mean_time_ms,gflops"
