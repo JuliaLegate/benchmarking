@@ -26,10 +26,11 @@ for g in groupby(df, :model)
     label = g.model[1]
     sort!(g, :gpus)
     plot!(plt, g.gpus, g.gflops / nr_gpus;
-      label=label,
-      lw=2,
-      marker=:circle,
-      yscale=:log10)
+        label=label,
+        lw=2,
+        marker=:circle,
+        yscale=:log10,
+        ylims=(1, maximum(g.gflops / nr_gpus) * 1.1))
 end
 
 savefig(plt, "gemm_weak_scaling.png")

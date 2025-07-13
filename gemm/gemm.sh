@@ -1,11 +1,12 @@
 WARMUP=1
-NUM_TRIALS=10
+NUM_TRIALS=20
 
 CUNUMERIC_GEMM="bash run_benchmark.sh cunumeric matmul"
 CUDA_GEMM="bash run_benchmark.sh cuda matmul"
 
 GPUS_LIST=(1 2 4 8)
 
+# large test
 # declare -a SIZES=(
 #   "48000 48000"
 #   "48000 96000"
@@ -13,6 +14,7 @@ GPUS_LIST=(1 2 4 8)
 #   "96000 192000"
 # )
 
+# small test
 declare -a SIZES=(
   "12288 24576"
   "16384 92682"
@@ -32,6 +34,6 @@ for i in "${!GPUS_LIST[@]}"; do
     read -r N M <<< "${SIZES[$i]}"
     args=(--gpus "$gpus" "$N" "$M" "$NUM_TRIALS" "$WARMUP")
 
-    # $CUNUMERIC_GEMM "${args[@]}"
+    $CUNUMERIC_GEMM "${args[@]}"
     $CUDA_GEMM "${args[@]}"
 done
