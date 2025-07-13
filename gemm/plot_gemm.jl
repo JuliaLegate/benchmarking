@@ -15,7 +15,7 @@ sort!(df, [:model, :gpus])
 plt = plot(; 
     xlabel = "Number of GPUs", 
     ylabel = "GFLOPS",
-    title = "Weak Scaling Performance by Model",
+    title = "GEMM Weak Scaling Performance [Small Test]",
     xticks = sort(unique(df.gpus)),
     legend = :bottomright,
     dpi = 300
@@ -30,8 +30,8 @@ for g in groupby(df, :model)
         lw=2,
         marker=:circle,
         yscale=:log10,
-        ylims=(1, maximum(g.gflops / nr_gpus) * 1.1))
+        ylims=(1, 1e5))
 end
 
-savefig(plt, "gemm_weak_scaling.png")
-println("Saved plot to gemm_weak_scaling.png")
+savefig(plt, "gemm_weak_scaling_small.png")
+println("Saved plot to gemm_weak_scaling_small.png")
