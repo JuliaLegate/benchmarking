@@ -24,10 +24,10 @@ function make_plot(type::String)
     end
 
     df = CSV.read(csv, DataFrame)
-    nr_gpus = length(df.gpus)
     # Compute total problem size and per-GPU size
     df.size = df.n .* df.m
     df.size_per_gpu = df.size ./ df.gpus
+    df.gflops_per_gpu = df.gflops ./ df.gpus
 
     # Sort so GPUs increase left-to-right
     sort!(df, [:model, :gpus])
@@ -45,7 +45,7 @@ function make_plot(type::String)
     for g in groupby(df, :model)
         label = g.model[1]
         sort!(g, :gpus)
-        plot!(plt, g.gpus, g.gflops / nr_gpus;
+        plot!(plt, g.gpus, g.gflops_per_gpu;
             label=label,
             lw=2,
             marker=:circle,
