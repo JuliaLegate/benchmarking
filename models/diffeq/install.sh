@@ -17,7 +17,7 @@ cd $HOME
 curl -fsSL https://install.julialang.org | bash -s -- --default-channel 1.10 --yes
 
 git clone https://github.com/JuliaLegate/juliacon-benchmarking.git
-cd juliacon-benchmarking/models/diffeq
+cd $HOME/juliacon-benchmarking/models/diffeq
 
 julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
 julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names="/home/ubuntu/.local/lib/libmpi.so", extra_paths=["/home/ubuntu/.local/lib/"])'
