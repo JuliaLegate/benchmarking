@@ -60,6 +60,6 @@ fi
 
 printf "\n"
 echo "Running: $MODEL/$BENCHMARK.jl with $CPUS CPUs and $GPUS GPUs"
-CMD="julia --project='models/$MODEL' models/$MODEL/$BENCHMARK.jl $GPUS ${EXTRA_ARGS[@]}"
+CMD="mpiexec -np $GPUS julia --project='models/$MODEL' models/$MODEL/$BENCHMARK.jl $GPUS ${EXTRA_ARGS[@]}"
 printf "Running: %s\n" "$CMD"
 eval "$CMD"
