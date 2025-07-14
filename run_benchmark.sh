@@ -39,12 +39,7 @@ done
 
 if [[ $DIFFEQ_CONDITION -eq 1 ]]; then
     # DIFFEQ="mpiexec -n $GPUS"
-    DIFFEQ= "mpiexec -np $GPUS \
-            --mca btl ^vader,tcp,openib \
-            --mca pml ob1 \
-            --mca btl_smcuda_use_cuda_ipc 0 \
-            --mca mpi_cuda_support 1 \
-            "
+    DIFFEQ="mpiexec --mca btl_smcuda_use_cuda_ipc 0 --mca mpi_cuda_support 1 -n $GPUS"
 fi
 
 # Check for script existence
