@@ -51,7 +51,7 @@ using Printf
         update_halo!(u, v); 
     end
 
-    # finalize_global_grid();
+    finalize_global_grid();
 end
 
 
