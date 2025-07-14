@@ -1,0 +1,422 @@
+Running: diffeq/grayscott.jl with 1 CPUs and 1 GPUs
+Running: mpiexec -n 1 julia --project='models/diffeq' models/diffeq/grayscott.jl 1 2000 2000 1000
+[DIFFEQ] GrayScott benchmark on 2000x2000 matricies for 1000 iterations
+Global grid: 2000x2000x1 (nprocs: 1, dims: 1x1x1; device support: CUDA-aware)
+[DIFFEQ] Mean Run Time: 19.52678871154785 ms
+[DIFFEQ] FLOPS: 409.69358137566775 GFLOPS
+
+Running: diffeq/grayscott.jl with 1 CPUs and 2 GPUs
+Running: mpiexec -n 2 julia --project='models/diffeq' models/diffeq/grayscott.jl 2 2828 2828 1000
+[DIFFEQ] GrayScott benchmark on 2828x2828 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 2828x2828 matricies for 1000 iterations
+Global grid: 5654x2828x1 (nprocs: 2, dims: 2x1x1; device support: CUDA-aware)
+--------------------------------------------------------------------------
+The call to cuIpcGetMemHandle failed. This means the GPU RDMA protocol
+cannot be used.
+  cuIpcGetMemHandle return value:   1
+  address: 0xa3125ca00
+Check the cuda.h file for what the return value means. Perhaps a reboot
+of the node will clear the problem.
+--------------------------------------------------------------------------
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16277] [[26340,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 513
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16277] [[26340,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16277] [[26340,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 501
+[DIFFEQ] Mean Run Time: 23.059965133666992 ms
+[DIFFEQ] FLOPS: 980.7979943117729 GFLOPS
+ERROR: LoadError: CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpiexec detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[26340,1],1]
+  Exit code:    1
+--------------------------------------------------------------------------
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16277] 3992 more processes have sent help message help-mpi-common-cuda.txt / cuIpcGetMemHandle failed
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16277] Set MCA parameter "orte_base_help_aggregate" to 0 to see all help / error messages
+
+Running: diffeq/grayscott.jl with 1 CPUs and 4 GPUs
+Running: mpiexec -n 4 julia --project='models/diffeq' models/diffeq/grayscott.jl 4 4000 4000 1000
+[DIFFEQ] GrayScott benchmark on 4000x4000 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 4000x4000 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 4000x4000 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 4000x4000 matricies for 1000 iterations
+Global grid: 7998x7998x1 (nprocs: 4, dims: 2x2x1; device support: CUDA-aware)
+--------------------------------------------------------------------------
+The call to cuIpcGetMemHandle failed. This means the GPU RDMA protocol
+cannot be used.
+  cuIpcGetMemHandle return value:   1
+  address: 0xa42503800
+Check the cuda.h file for what the return value means. Perhaps a reboot
+of the node will clear the problem.
+--------------------------------------------------------------------------
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack had inadequate space in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] 14082 more processes have sent help message help-mpi-common-cuda.txt / cuIpcGetMemHandle failed
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] Set MCA parameter "orte_base_help_aggregate" to 0 to see all help / error messages
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] [[6973,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[DIFFEQ] Mean Run Time: 24.12359619140625 ms
+[DIFFEQ] FLOPS: 2653.0041164757704 GFLOPS
+ERROR: ERROR: LoadError: LoadError: ERROR: LoadError: CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+
+Stacktrace:
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpiexec detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[6973,1],3]
+  Exit code:    1
+--------------------------------------------------------------------------
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:16972] 1829 more processes have sent help message help-mpi-common-cuda.txt / cuIpcGetMemHandle failed
+
+Running: diffeq/grayscott.jl with 1 CPUs and 8 GPUs
+Running: mpiexec -n 8 julia --project='models/diffeq' models/diffeq/grayscott.jl 8 5657 5657 1000
+[DIFFEQ] GrayScott benchmark on 5657x5657 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 5657x5657 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 5657x5657 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 5657x5657 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 5657x5657 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 5657x5657 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 5657x5657 matricies for 1000 iterations
+[DIFFEQ] GrayScott benchmark on 5657x5657 matricies for 1000 iterations
+Global grid: 22622x11312x1 (nprocs: 8, dims: 4x2x1; device support: CUDA-aware)
+--------------------------------------------------------------------------
+The call to cuIpcGetMemHandle failed. This means the GPU RDMA protocol
+cannot be used.
+  cuIpcGetMemHandle return value:   1
+  address: 0xa64a42a00
+Check the cuda.h file for what the return value means. Perhaps a reboot
+of the node will clear the problem.
+--------------------------------------------------------------------------
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack had inadequate space in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] 22877 more processes have sent help message help-mpi-common-cuda.txt / cuIpcGetMemHandle failed
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] Set MCA parameter "orte_base_help_aggregate" to 0 to see all help / error messages
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack had inadequate space in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Data unpack would read past end of buffer in file util/show_help.c at line 501
+[crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] [[926,0],0] ORTE_ERROR_LOG: Out of resource in file util/show_help.c at line 507
+[DIFFEQ] Mean Run Time: 29.425312042236328 ms
+[DIFFEQ] FLOPS: 6152.299358224289 GFLOPS
+ERROR: ERROR: ERROR: ERROR: ERROR: LoadError: LoadError: LoadError: LoadError: LoadError: ERROR: ERROR: LoadError: LoadError: [crusoe-prod--inst-2zsakxvy26hsd4k71nj70nh6pfy:23279] 17007 more processes have sent help message help-mpi-common-cuda.txt / cuIpcGetMemHandle failed
+CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE) [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5]
+Stacktrace:
+record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [1]  [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+CUDA error: invalid resource handle (code 400, ERROR_INVALID_HANDLE)
+Stacktrace:
+ [1] throw_api_error(res::CUDA.cudaError_enum)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:30
+ [2] check
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/libcuda.jl:37 [inlined]
+ [3] cuEventRecord
+   @ ~/.julia/packages/GPUToolbox/cZlg7/src/ccalls.jl:33 [inlined]
+ [4] record
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44 [inlined]
+ [5] record(e::CuEvent)
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:44
+ [6] top-level scope
+   @ ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/events.jl:122
+in expression starting at /home/ubuntu/juliacon-benchmarking/models/diffeq/grayscott.jl:69
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpiexec detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[926,1],3]
+  Exit code:    1
+--------------------------------------------------------------------------
