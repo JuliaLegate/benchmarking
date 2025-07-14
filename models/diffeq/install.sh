@@ -20,6 +20,6 @@ git clone https://github.com/JuliaLegate/juliacon-benchmarking.git
 cd juliacon-benchmarking/models/diffeq
 
 julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
-julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names="/home/ubuntu/.local/lib/libmpi.so", extra_paths="/home/ubuntu/.local/lib/")'
+julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names="/home/ubuntu/.local/lib/libmpi.so", extra_paths=["/home/ubuntu/.local/lib/"])'
 julia --project=. -e "using CUDA; CUDA.set_runtime_version!(local_toolkit=true)"
 julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate();'
