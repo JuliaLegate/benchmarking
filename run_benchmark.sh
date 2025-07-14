@@ -26,12 +26,20 @@ while [[ $# -gt 0 ]]; do
             CPUS=$2
             shift 2
             ;;
+        --diffeq)
+            DIFFEQ_CONDITION=1
+            shift 1
+            ;;
         *)
             EXTRA_ARGS+=("$1")
             shift
             ;;
     esac
 done
+
+if [[ $DIFFEQ_CONDITION -eq 1 ]]; then
+    DIFFEQ="mpiexec -n $GPUS"
+fi
 
 # Check for script existence
 if [[ ! -f "models/$MODEL/$BENCHMARK.jl" ]]; then
@@ -60,6 +68,6 @@ fi
 
 printf "\n"
 echo "Running: $MODEL/$BENCHMARK.jl with $CPUS CPUs and $GPUS GPUs"
-CMD="mpiexec --allow-run-as-root -n $GPUS julia --project='models/$MODEL' models/$MODEL/$BENCHMARK.jl $GPUS ${EXTRA_ARGS[@]}"
+CMD="$DIFFEQ julia --project='models/$MODEL' models/$MODEL/$BENCHMARK.jl $GPUS ${EXTRA_ARGS[@]}"
 printf "Running: %s\n" "$CMD"
 eval "$CMD"
