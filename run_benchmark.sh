@@ -4,7 +4,8 @@ if [[ $# -lt 2 ]]; then
     echo "Usage: $0 <programming_model> <benchmark> [--gpus <num_gpus>] [--cpus <num_cpus>] [--config-as-args] [extra_args...]"
     exit 1
 fi
-
+RUNNER=
+FILEEXT=".jl"
 MODEL=$1
 BENCHMARK=$2
 shift 2  # Move past MODEL and BENCHMARK
@@ -42,9 +43,17 @@ if [[ $DIFFEQ_CONDITION -eq 1 ]]; then
     DIFFEQ="mpiexec --mca btl_smcuda_use_cuda_ipc 0 --mca mpi_cuda_support 1 -n $GPUS"
 fi
 
+RUNNER="julia --project='models/$MODEL'"
+
+
+if [[ "$MODEL" == "cupynumeric" ]]; then
+    FILEEXT=".py"
+    RUNNER=python3
+fi
+
 # Check for script existence
-if [[ ! -f "models/$MODEL/$BENCHMARK.jl" ]]; then
-    echo "Error: File $MODEL/$BENCHMARK.jl does not exist."
+if [[ ! -f "models/$MODEL/$BENCHMARK$FILEEXT" ]]; then
+    echo "Error: File $MODEL/$BENCHMARK$FILEEXT does not exist."
     exit 1
 fi
 
@@ -60,15 +69,15 @@ if [[ $CPUS -lt 0 ]]; then
 fi
 
 # Configure runtime
-if [[ $MODEL -eq "cunumeric" ]]; then
+if [[ "$MODEL" == "cunumeric" || "$MODEL" == "cupynumeric" ]]; then
     export LEGATE_AUTO_CONFIG=0
-    export LEGATE_CONFIG="--cpus=$CPUS  --gpus=$GPUS  --omps=8 --ompthreads=4 --utility=2 --sysmem=774026  --numamem=0 --fbmem=76596 --zcmem=128 --regmem=0"
-    # export LEGATE_CONFIG="--cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=2 --sysmem=256 --numamem=19029 --fbmem=7569 --zcmem=128 --regmem=0"
+    # export LEGATE_CONFIG="--cpus=$CPUS  --gpus=$GPUS  --omps=8 --ompthreads=4 --utility=2 --sysmem=774026  --numamem=0 --fbmem=76596 --zcmem=128 --regmem=0"
+    export LEGATE_CONFIG="--cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=2 --sysmem=256 --numamem=19029 --fbmem=7569 --zcmem=128 --regmem=0"
     export LEGATE_SHOW_CONFIG=0
 fi
 
 printf "\n"
 echo "Running: $MODEL/$BENCHMARK.jl with $CPUS CPUs and $GPUS GPUs"
-CMD="$DIFFEQ julia --project='models/$MODEL' models/$MODEL/$BENCHMARK.jl $GPUS ${EXTRA_ARGS[@]}"
+CMD="$DIFFEQ $RUNNER models/$MODEL/$BENCHMARK$FILEEXT $GPUS ${EXTRA_ARGS[@]}"
 printf "Running: %s\n" "$CMD"
 eval "$CMD"

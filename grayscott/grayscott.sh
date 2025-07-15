@@ -3,6 +3,7 @@ export IGG_CUDAAWARE_MPI=1
 NUM_ITERS=1000
 
 CUNUMERIC_GRAY="bash run_benchmark.sh cunumeric grayscott"
+CUPYNUMERIC_GRAY="bash run_benchmark.sh cupynumeric grayscott"
 DIFFEQ_GRAY="bash run_benchmark.sh diffeq grayscott --diffeq"
 
 GPUS_LIST=(1 2 4 8)
@@ -24,6 +25,7 @@ for i in "${!GPUS_LIST[@]}"; do
     read -r N M <<< "${SIZES[$i]}"
     args=(--gpus "$gpus" "$N" "$M" "$NUM_ITERS")
 
+    $CUPYNUMERIC_GRAY "${args[@]}"
     # $CUNUMERIC_GRAY "${args[@]}"
-    $DIFFEQ_GRAY "${args[@]}"
+    # $DIFFEQ_GRAY "${args[@]}"
 done
