@@ -77,7 +77,7 @@ if [[ "$MODEL" == "cunumeric" || "$MODEL" == "cupynumeric" ]]; then
 fi
 
 printf "\n"
-echo "Running: $MODEL/$BENCHMARK.jl with $CPUS CPUs and $GPUS GPUs"
+echo "Running: $MODEL/$BENCHMARK$FILEEXT with $CPUS CPUs and $GPUS GPUs"
 CMD="$DIFFEQ $RUNNER models/$MODEL/$BENCHMARK$FILEEXT $GPUS ${EXTRA_ARGS[@]}"
 printf "Running: %s\n" "$CMD"
 eval "$CMD"
