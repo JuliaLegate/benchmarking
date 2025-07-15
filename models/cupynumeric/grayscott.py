@@ -82,4 +82,4 @@ print(f"[cuPyNumeric] FLOPS: {gflops} GFLOPS")
 
 with open("./grayscott/grayscott.csv", "a", newline="") as csvfile:
     writer = csv.writer(csvfile)
-    writer.writerow(["cunumeric", gpus, N, M, f"{mean_time_ms:.6f}", f"{gflops:.6f}"])
+    writer.writerow(["cupynumeric", gpus, N, M, f"{mean_time_ms:.6f}", f"{gflops:.6f}"])
