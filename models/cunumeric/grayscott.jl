@@ -108,13 +108,13 @@ gpus = parse(Int, ARGS[1])
 N = parse(Int, ARGS[2])
 M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
-
+warmup=5
 println("[cuNumeric] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
 
+grayscott(N, M, warmup)
+
 start_time = get_time_us()
-
-grayscott(N, N, n_samples)
-
+grayscott(N, M, n_samples)
 total_time_μs = get_time_us() - start_time
 mean_time_ms = total_time_μs / (n_samples * 1e3)
 gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9

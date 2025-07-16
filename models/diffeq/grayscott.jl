@@ -63,10 +63,12 @@ gpus = parse(Int, ARGS[1])
 N = parse(Int, ARGS[2])
 M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
+warmup=5
 
-println("[DIFFEQ] GrayScott benchmark on $(N)x$(N) matricies for $(n_samples) iterations")
+println("[DIFFEQ] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
+grayscott(N, M, warmup)
 
-t = CUDA.@elapsed grayscott(N, N, n_samples)
+t = CUDA.@elapsed grayscott(N, M, n_samples)
 
 total_time_μs = t * 1e6
 mean_time_ms = total_time_μs / (n_samples * 1e3)

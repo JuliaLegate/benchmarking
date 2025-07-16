@@ -63,13 +63,14 @@ gpus = int(sys.argv[1])
 N = int(sys.argv[2])
 M = int(sys.argv[3])
 n_samples = int(sys.argv[4])
-
+warmup=5
 
 print(f"[cuPyNumeric] GrayScott benchmark on {N}x{M} matricies for {n_samples} iterations")
 
+grayscott(N, M, warmup)
 
 start_time = time()
-grayscott(N, N, n_samples)
+grayscott(N, M, n_samples)
 end_time = time()
 
 total_time_ms = (end_time - start_time)/1000.0

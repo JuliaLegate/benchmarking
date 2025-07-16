@@ -108,12 +108,12 @@ N = parse(Int, ARGS[2])
 M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
 gc_interval = parse(Int, ARGS[5])
-
+warmup =5
 println("[cuNumeric] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
 
+grayscott(N, M, warmup, 1)
 start_time = get_time_us()
-
-grayscott(N, N, n_samples, gc_interval)
+grayscott(N, M, n_samples, gc_interval)
 
 total_time_μs = get_time_us() - start_time
 mean_time_ms = total_time_μs / (n_samples * 1e3)
