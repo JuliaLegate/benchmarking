@@ -27,6 +27,9 @@ fi
 for i in "${!GPUS_LIST[@]}"; do
     gpus="${GPUS_LIST[$i]}"
     read -r N M <<< "${SIZES[$i]}"
+
+    N=5657
+    M=5657
     args=(--gpus "$gpus" "$N" "$M" "$NUM_ITERS")
 
     # $CUPYNUMERIC_GRAY "${args[@]}"
