@@ -19,7 +19,7 @@ function make_efficiency_plot(csv, title, file)
         ylabel = "Scaling Efficiency [T(1) / T(Np)]",
         title = title,
         xticks = [1, 2, 4, 8],
-        legend = :bottomright,
+        legend = :bottomleft,
         dpi = 300,
         xscale = :log2,
         ylims = (0, 1.2)

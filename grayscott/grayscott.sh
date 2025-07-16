@@ -28,11 +28,11 @@ for i in "${!GPUS_LIST[@]}"; do
 
     args=(--gpus "$gpus" "$N" "$M" "$NUM_ITERS")
 
-    $CUPYNUMERIC_GRAY "${args[@]}"
-    $CUNUMERIC_GRAY "${args[@]}"
-    # $DIFFEQ_GRAY "${args[@]}" # this crashes on exit
+    # $CUPYNUMERIC_GRAY "${args[@]}"
+    # $CUNUMERIC_GRAY "${args[@]}"
+    $DIFFEQ_GRAY "${args[@]}" # this crashes on exit
 
-    for gc in "${GC_LIST[@]}"; do
-        $CUNUMERIC_GRAY_GC "${args[@]}" "${gc}"
-    done
+    # for gc in "${GC_LIST[@]}"; do
+    #     $CUNUMERIC_GRAY_GC "${args[@]}" "${gc}"
+    # done
 done
