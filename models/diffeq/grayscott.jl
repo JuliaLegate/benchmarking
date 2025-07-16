@@ -74,7 +74,7 @@ println("[DIFFEQ] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) it
 grayscott(N, M, warmup, true)
 
 CUDA.synchronize()
-t = @elapsed begin
+t = CUDA.@elapsed begin
     grayscott(N, M, n_samples, false)
     CUDA.synchronize()  # Wait for GPU to finish
 end
