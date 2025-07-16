@@ -13,8 +13,8 @@ GC_LIST=(1 2 3 4 5)
 julia grayscott/grayscott_nval.jl > grayscott/nval.sh
 source grayscott/nval.sh
 
-SIZES=("${small[@]}")  
-# SIZES=("${large[@]}")  
+# SIZES=("${small[@]}")  
+SIZES=("${large[@]}")  
 
 touch grayscott/grayscott.csv
 expected_header="model,gpus,n,m,mean_time_ms,gflops"
@@ -29,7 +29,7 @@ for i in "${!GPUS_LIST[@]}"; do
     args=(--gpus "$gpus" "$N" "$M" "$NUM_ITERS")
 
     $CUPYNUMERIC_GRAY "${args[@]}"
-    # $CUNUMERIC_GRAY "${args[@]}"
+    $CUNUMERIC_GRAY "${args[@]}"
     # $DIFFEQ_GRAY "${args[@]}" # this crashes on exit
 
     # for gc in "${GC_LIST[@]}"; do
