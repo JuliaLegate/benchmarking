@@ -70,16 +70,16 @@ M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
 warmup=5
 
+warmup_begin_t = tic()
 println("[DIFFEQ] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
 grayscott(N, M, warmup, true)
+warmup_elasped_t = toc()
 
-CUDA.synchronize()
-t = CUDA.@elapsed begin
-    grayscott(N, M, n_samples, false)
-    CUDA.synchronize()  # Wait for GPU to finish
-end
+begin_t = tic()
+grayscott(N, M, n_samples, false)
+elapsed_t = toc()
 
-avg_t = t / n_samples # t is time in seconds
+avg_t = elapsed_t / n_samples # t is time in seconds
 mean_time_ms = avg_t * 1e3 # time in ms
 gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
 
