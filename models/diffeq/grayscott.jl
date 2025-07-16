@@ -10,7 +10,7 @@ using Printf
 @views lap1(A) = A[3:end, 2:end-1] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[1:end-2, 2:end-1]
 @views lap2(A) = A[2:end-1, 3:end] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[2:end-1, 1:end-2]
 
-@views function grayscott(nx, ny, nt)
+@views function grayscott(nx, ny, nt, iswarmup)
     # Physics
     c_u = 1.0f0
     c_v = 0.3f0
@@ -22,6 +22,7 @@ using Printf
     dy         = dx
     dt         = dx / 5
 
+    me, dims   = ImplicitGlobalGrid.init_global_grid(nx, ny, 1, init_MPI=iswarmup);  
     # Array initializations
     u     = CUDA.zeros(Float32, nx, ny)
     v     = CUDA.zeros(Float32, nx, ny)
@@ -49,6 +50,7 @@ using Printf
 
         update_halo!(u, v); 
     end
+    finalize_global_grid();
 end
 
 
@@ -62,14 +64,10 @@ M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
 warmup=5
 
-me, dims   = ImplicitGlobalGrid.init_global_grid(N, M, 1);  
-
 println("[DIFFEQ] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
-grayscott(N, M, warmup)
+grayscott(N, M, warmup, true)
 
-t = CUDA.@elapsed grayscott(N, M, n_samples)
-
-finalize_global_grid();
+t = CUDA.@elapsed grayscott(N, M, n_samples, false)
 
 total_time_μs = t * 1e6
 mean_time_ms = total_time_μs / (n_samples * 1e3)
