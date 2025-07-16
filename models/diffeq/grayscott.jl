@@ -73,7 +73,12 @@ warmup=5
 println("[DIFFEQ] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
 grayscott(N, M, warmup, true)
 
-t = CUDA.@elapsed grayscott(N, M, n_samples, false)
+CUDA.synchronize()
+t = @elapsed begin
+    grayscott(N, M, n_samples, false)
+    CUDA.synchronize()  # Wait for GPU to finish
+end
+
 # t is time in seconds
 avg_t = t / n_samples
 mean_time_ms = avg_t * 1e3 # time in ms
