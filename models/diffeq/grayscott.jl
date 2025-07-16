@@ -79,10 +79,9 @@ t = CUDA.@elapsed begin
     CUDA.synchronize()  # Wait for GPU to finish
 end
 
-# t is time in seconds
-avg_t = t / n_samples
+avg_t = t / n_samples # t is time in seconds
 mean_time_ms = avg_t * 1e3 # time in ms
-gflops = total_flops(N, M) / (avg_t * 1e9) # GFLOP is 1e9
+gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
 
 println("[DIFFEQ] Mean Run Time: $(mean_time_ms) ms")
 println("[DIFFEQ] FLOPS: $(gflops) GFLOPS")
