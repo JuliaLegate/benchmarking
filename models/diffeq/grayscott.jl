@@ -22,7 +22,10 @@ using Printf
     dy         = dx
     dt         = dx / 5
 
-    me, dims   = ImplicitGlobalGrid.init_global_grid(nx, ny, 1, init_MPI=iswarmup);  
+    if iswarmup # setup global grid
+        me, dims   = ImplicitGlobalGrid.init_global_grid(nx, ny, 1);  
+    end
+
     # Array initializations
     u     = CUDA.zeros(Float32, nx, ny)
     v     = CUDA.zeros(Float32, nx, ny)
