@@ -4,7 +4,6 @@ if [[ $# -lt 2 ]]; then
     echo "Usage: $0 <programming_model> <benchmark> [--gpus <num_gpus>] [--cpus <num_cpus>] [--config-as-args] [extra_args...]"
     exit 1
 fi
-RUNNER=
 FILEEXT=".jl"
 MODEL=$1
 BENCHMARK=$2

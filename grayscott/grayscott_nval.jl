@@ -14,7 +14,7 @@ function calc(baseline_N, label)
 end
 
 small = 2000  # N for 1 GPU
-large = 8000
+large = 6000
 
 calc(large, "large")
 calc(small, "small")
