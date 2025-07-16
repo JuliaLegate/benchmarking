@@ -7,10 +7,8 @@ CUNUMERIC_GRAY="bash run_benchmark.sh cunumeric grayscott"
 CUPYNUMERIC_GRAY="bash run_benchmark.sh cupynumeric grayscott"
 DIFFEQ_GRAY="bash run_benchmark.sh diffeq grayscott --diffeq"
 
-# GPUS_LIST=(1 2 4 8)
-GPUS_LIST=(8)
+GPUS_LIST=(1 2 4 8)
 GC_LIST=(1 2 3 4 5)
-
 
 julia grayscott/grayscott_nval.jl > grayscott/nval.sh
 source grayscott/nval.sh
@@ -28,15 +26,13 @@ for i in "${!GPUS_LIST[@]}"; do
     gpus="${GPUS_LIST[$i]}"
     read -r N M <<< "${SIZES[$i]}"
 
-    N=5657
-    M=5657
     args=(--gpus "$gpus" "$N" "$M" "$NUM_ITERS")
 
-    # $CUPYNUMERIC_GRAY "${args[@]}"
+    $CUPYNUMERIC_GRAY "${args[@]}"
     # $CUNUMERIC_GRAY "${args[@]}"
     # $DIFFEQ_GRAY "${args[@]}" # this crashes on exit
 
-    for gc in "${GC_LIST[@]}"; do
-        $CUNUMERIC_GRAY_GC "${args[@]}" "${gc}"
-    done
+    # for gc in "${GC_LIST[@]}"; do
+    #     $CUNUMERIC_GRAY_GC "${args[@]}" "${gc}"
+    # done
 done

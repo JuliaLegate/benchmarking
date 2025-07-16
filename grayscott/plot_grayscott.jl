@@ -32,8 +32,8 @@ end
 
 function gc_params()
     csv = "grayscott/grayscott_gc.csv"
-    title = "grayscott GC Weak Scaling Efficiency [Small Test]"
-    file = "grayscott/grayscott_gc_weak_scaling_efficiency_small.png"
+    title = "grayscott GC Weak Scaling [Small Test]"
+    file = "grayscott/grayscott_gc_weak_scaling_small.png"
     return csv, title, file
 end
 
@@ -51,4 +51,4 @@ make_weak_plot(gc_params()...)
 
 # make_efficiency_plot(large_params_eff()...)
 make_efficiency_plot(small_params_eff()...)
-make_efficiency_plot(gc_params()...)
+make_efficiency_plot(gc_params_eff()...)
