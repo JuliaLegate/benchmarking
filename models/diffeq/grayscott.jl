@@ -50,7 +50,10 @@ using Printf
 
         update_halo!(u, v); 
     end
-    finalize_global_grid();
+
+    if !iswarmup # only mpi final non warmup
+        finalize_global_grid();
+    end
 end
 
 
