@@ -69,6 +69,8 @@ grayscott(N, M, warmup)
 
 t = CUDA.@elapsed grayscott(N, M, n_samples)
 
+finalize_global_grid();
+
 total_time_μs = t * 1e6
 mean_time_ms = total_time_μs / (n_samples * 1e3)
 gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
@@ -79,5 +81,3 @@ println("[DIFFEQ] FLOPS: $(gflops) GFLOPS")
 open("./grayscott/grayscott.csv", "a") do io
     @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "diffeq", gpus, N, M, mean_time_ms, gflops)
 end
-
-finalize_global_grid();
