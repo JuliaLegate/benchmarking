@@ -18,7 +18,6 @@ using Printf
     k = 0.06f0
     
     # Numerics
-    me, dims   = ImplicitGlobalGrid.init_global_grid(nx, ny, 1);                  # Initialize the implicit global grid
     dx         = 1
     dy         = dx
     dt         = dx / 5
@@ -50,8 +49,6 @@ using Printf
 
         update_halo!(u, v); 
     end
-
-    finalize_global_grid();
 end
 
 
@@ -64,6 +61,8 @@ N = parse(Int, ARGS[2])
 M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
 warmup=5
+
+me, dims   = ImplicitGlobalGrid.init_global_grid(N, M, 1);  
 
 println("[DIFFEQ] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
 grayscott(N, M, warmup)
@@ -80,3 +79,5 @@ println("[DIFFEQ] FLOPS: $(gflops) GFLOPS")
 open("./grayscott/grayscott.csv", "a") do io
     @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "diffeq", gpus, N, M, mean_time_ms, gflops)
 end
+
+finalize_global_grid();

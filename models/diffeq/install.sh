@@ -2,6 +2,7 @@
 
 # Install Open MPI v4.1.5
 cd $HOME
+sudo apt-get install libpmix2 libpmix-dev
 
 wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
 tar -xvf openmpi-4.1.5.tar.gz
