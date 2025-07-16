@@ -79,7 +79,7 @@ avg_s = t / n_samples
 flops_per_sample = total_flops(N, M) / n_samples
 gflops = flops_per_sample / avg_s / 1e9
 
-println("[DIFFEQ] Mean Run Time: $(mean_time_ms) ms")
+println("[DIFFEQ] Mean Run Time: $(avg_s / 1e3) ms")
 println("[DIFFEQ] FLOPS: $(gflops) GFLOPS")
 
 open("./grayscott/grayscott.csv", "a") do io
