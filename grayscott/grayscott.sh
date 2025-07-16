@@ -7,7 +7,8 @@ CUNUMERIC_GRAY="bash run_benchmark.sh cunumeric grayscott"
 CUPYNUMERIC_GRAY="bash run_benchmark.sh cupynumeric grayscott"
 DIFFEQ_GRAY="bash run_benchmark.sh diffeq grayscott --diffeq"
 
-GPUS_LIST=(1 2 4 8)
+# GPUS_LIST=(1 2 4 8)
+GPUS_LIST=(8)
 GC_LIST=(1 2 3 4 5)
 
 
