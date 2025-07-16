@@ -75,8 +75,9 @@ grayscott(N, M, warmup, true)
 
 t = CUDA.@elapsed grayscott(N, M, n_samples, false)
 # t is time in seconds
-mean_time_ms = t / (n_samples / 1e3) # time in ms
-gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
+avg_t = t / n_samples
+mean_time_ms = avg_t * 1e3 # time in ms
+gflops = total_flops(N, M) / (avg_t * 1e9) # GFLOP is 1e9
 
 println("[DIFFEQ] Mean Run Time: $(mean_time_ms) ms")
 println("[DIFFEQ] FLOPS: $(gflops) GFLOPS")
