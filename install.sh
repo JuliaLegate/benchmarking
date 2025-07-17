@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 
 sudo apt-get -y install libsz2
-sudo apt-get -y install libpmix2 libpmix-dev
-sudo apt-get -y install gfortran
+sudo apt-get -y install libpmix2 libpmix-dev # pmix
+sudo apt-get -y install gfortran # fortran compiler
 
 # Install MPICH
+# consider UCX install; however, legate_jll doesn't use it currently
+# sudo apt-get -y install libucx0 libucx-dev ucx-utils
+# ./configure --prefix=$HOME/.local --with-cuda=/usr/local/cuda --with-ucx=/usr --with-device=ch4:ucx
 cd $HOME && \
     wget https://www.mpich.org/static/downloads/4.3.1/mpich-4.3.1.tar.gz && \
     tar -xvf mpich-4.3.1.tar.gz && \
     cd mpich-4.3.1 && \
-    ./configure --prefix=$HOME/.local --with-cuda=/usr/local/cuda --with-device=ch4:ucx && \
+    ./configure --prefix=$HOME/.local --with-cuda=/usr/local/cuda --enable-fast=ndebug,O3 --enable-static=no --with-device=ch3 && \
     make -j && \
     make install
 
