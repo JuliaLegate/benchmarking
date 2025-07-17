@@ -38,8 +38,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $DIFFEQ_CONDITION -eq 1 ]]; then
-    # DIFFEQ="mpiexec -n $GPUS"
-    DIFFEQ="mpiexec --mca btl_smcuda_use_cuda_ipc 0 --mca mpi_cuda_support 1 -n $GPUS"
+    DIFFEQ="mpiexec -n $GPUS"
 fi
 
 RUNNER="julia --project='models/$MODEL'"

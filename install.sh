@@ -4,15 +4,6 @@ sudo apt-get -y install libsz2
 sudo apt-get -y install libpmix2 libpmix-dev
 sudo apt-get -y install gfortran
 
-# Install Open MPI v4.1.5
-# cd $HOME && \
-#     wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz && \
-#     tar -xvf openmpi-4.1.5.tar.gz && \
-#     cd openmpi-4.1.5 && \
-#     ./configure --prefix=$HOME/.local --enable-mpi-cxx  --with-pmix=internal --with-cuda=/usr/local/cuda && \
-#     make all -j && \
-#     make install
-
 # Install MPICH
 cd $HOME && \
     wget https://www.mpich.org/static/downloads/4.3.1/mpich-4.3.1.tar.gz && \
