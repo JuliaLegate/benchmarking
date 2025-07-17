@@ -11,6 +11,9 @@ cd $HOME && \
     make all -j && \
     make install
 
+cd $HOME/.local/lib && \
+    ln -s libmpi_cxx.so libmpicxx.so
+
 # Install CMAKE v3.30
 cd $HOME && \
     wget https://github.com/Kitware/CMake/releases/download/v3.30.7/cmake-3.30.7-linux-x86_64.sh --no-check-certificate && \
