@@ -7,7 +7,7 @@ cd $HOME && \
     wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz && \
     tar -xvf openmpi-4.1.5.tar.gz && \
     cd openmpi-4.1.5 && \
-    ./configure --prefix=$HOME/.local --with-pmix=internal --with-cuda=/usr/local/cuda && \
+    ./configure --prefix=$HOME/.local --enable-mpi-cxx  --with-pmix=internal --with-cuda=/usr/local/cuda && \
     make all -j && \
     make install
 
@@ -37,6 +37,11 @@ threads=$(($(nproc) / 2))
 export JULIA_NUM_THREADS=$threads
 rm Project.toml # cunumeric and legate are unregistered. we will build a Project.toml from scratch
 
+julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
+julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names=["/home/ubuntu/.local/lib/libmpi.so", "/home/ubuntu/.local/lib/libmpicxx.so"], extra_paths=["/home/ubuntu/.local/lib/"])'
+julia --project=. -e 'using Pkg; Pkg.add("CUDA")'
+julia --project=. -e "using CUDA; CUDA.set_runtime_version!(local_toolkit=true)"
+
 # Install Legate.jl and cuNumeric.jl
 julia --project=. -e 'using Pkg; Pkg.add(url = "https://github.com/JuliaLegate/Legate.jl", rev = "main")'
 julia --project=. -e 'using Pkg; Pkg.add(url = "https://github.com/JuliaLegate/cuNumeric.jl", rev = "cuda-jl-tasking")'
@@ -59,6 +64,6 @@ conda init bash && \
 # Setup implicit global grid
 cd $HOME/juliacon-benchmarking/models/diffeq
 julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
-julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names="/home/ubuntu/.local/lib/libmpi.so", extra_paths=["/home/ubuntu/.local/lib/"])'
+julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names=["/home/ubuntu/.local/lib/libmpi.so", "/home/ubuntu/.local/lib/libmpicxx.so"], extra_paths=["/home/ubuntu/.local/lib/"])'
 julia --project=. -e "using CUDA; CUDA.set_runtime_version!(local_toolkit=true)"
 julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate();'
