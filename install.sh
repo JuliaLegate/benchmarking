@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-
-sudo apt-get install libpmix2 libpmix-dev
+# sudo apt-get -y install libsz2
+sudo apt-get -y install libpmix2 libpmix-dev
 # Install Open MPI v4.1.5
 cd $HOME && \
     wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz && \
@@ -11,8 +11,6 @@ cd $HOME && \
     make all -j && \
     make install
 
-cd $HOME/.local/lib && \
-    ln -s libmpi_cxx.so libmpicxx.so
 
 # Install CMAKE v3.30
 cd $HOME && \
@@ -40,8 +38,8 @@ threads=$(($(nproc) / 2))
 export JULIA_NUM_THREADS=$threads
 rm Project.toml # cunumeric and legate are unregistered. we will build a Project.toml from scratch
 
-julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
-julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names=["/home/ubuntu/.local/lib/libmpi.so", "/home/ubuntu/.local/lib/libmpi_cxx.so"], extra_paths=["/home/ubuntu/.local/lib/"])'
+# julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
+# julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names=["/home/ubuntu/.local/lib/libmpi.so", "/home/ubuntu/.local/lib/libmpi_cxx.so"], extra_paths=["/home/ubuntu/.local/lib/"])'
 julia --project=. -e 'using Pkg; Pkg.add("CUDA")'
 julia --project=. -e "using CUDA; CUDA.set_runtime_version!(local_toolkit=true)"
 
