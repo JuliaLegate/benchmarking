@@ -38,7 +38,7 @@ export JULIA_NUM_THREADS=$threads
 rm Project.toml # cunumeric and legate are unregistered. we will build a Project.toml from scratch
 
 julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
-julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names=["/home/ubuntu/.local/lib/libmpi.so", "/home/ubuntu/.local/lib/libmpicxx.so"], extra_paths=["/home/ubuntu/.local/lib/"])'
+julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names=["/home/ubuntu/.local/lib/libmpi.so", "/home/ubuntu/.local/lib/libmpi_cxx.so"], extra_paths=["/home/ubuntu/.local/lib/"])'
 julia --project=. -e 'using Pkg; Pkg.add("CUDA")'
 julia --project=. -e "using CUDA; CUDA.set_runtime_version!(local_toolkit=true)"
 
@@ -64,6 +64,6 @@ conda init bash && \
 # Setup implicit global grid
 cd $HOME/juliacon-benchmarking/models/diffeq
 julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
-julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names=["/home/ubuntu/.local/lib/libmpi.so", "/home/ubuntu/.local/lib/libmpicxx.so"], extra_paths=["/home/ubuntu/.local/lib/"])'
+julia --project=. -e 'using MPIPreferences; MPIPreferences.use_system_binary(library_names=["/home/ubuntu/.local/lib/libmpi.so", "/home/ubuntu/.local/lib/libmpi_cxx.so"], extra_paths=["/home/ubuntu/.local/lib/"])'
 julia --project=. -e "using CUDA; CUDA.set_runtime_version!(local_toolkit=true)"
 julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate();'
