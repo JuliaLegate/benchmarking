@@ -42,6 +42,20 @@ julia --project=. -e 'using Pkg; Pkg.add(url = "https://github.com/JuliaLegate/L
 julia --project=. -e 'using Pkg; Pkg.add(url = "https://github.com/JuliaLegate/cuNumeric.jl", rev = "cuda-jl-tasking")'
 julia --project=. -e 'using Pkg; Pkg.build()'
 
+# conda install for cupynumeric
+mkdir -p ~/miniconda3 && \
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh --no-check-certificate && \
+    bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3 && \
+    rm ~/miniconda3/miniconda.sh && \
+    source ~/miniconda3/bin/activate
+# install cupynumeric
+conda init bash && \
+    source ~/.bashrc && \
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
+    CONDA_OVERRIDE_CUDA="12.4" conda create -n myenv -c conda-forge -c legate/label/rc cupynumeric=25.05.00.rc3 -y && \
+    conda activate myenv
+
 # Setup implicit global grid
 cd $HOME/juliacon-benchmarking/models/diffeq
 julia --project=. -e 'using Pkg; Pkg.add("MPIPreferences")'
