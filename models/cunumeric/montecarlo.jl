@@ -28,7 +28,7 @@ function mc_integration_cunumeric(N, n_samples, n_warmup)
             start_time = get_time_us()
         end
 
-        res = 10.0f0 * sum(integrand(A)) / N
+        res = (10.0f0/N) * sum(integrand(A))
     end
     total_time_μs = get_time_us() - start_time
     mean_time_ms = total_time_μs / (n_samples * 1e3)
