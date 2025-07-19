@@ -1,0 +1,19 @@
+1,2d0
+< using cuNumeric
+< 
+81,84c79,82
+<     u = cuNumeric.ones(dims)
+<     v = cuNumeric.zeros(dims)
+<     u_new = cuNumeric.zeros(dims)
+<     v_new = cuNumeric.zeros(dims)
+---
+>     u = ones(dims)
+>     v = zeros(dims)
+>     u_new = zeros(dims)
+>     v_new = zeros(dims)
+86,87c84,85
+<     u[1:150, 1:150] = cuNumeric.random(FT, (150, 150))
+<     v[1:150, 1:150] = cuNumeric.random(FT, (150, 150))
+---
+>     u[1:150, 1:150] = random(FT, (150, 150))
+>     v[1:150, 1:150] = random(FT, (150, 150))
