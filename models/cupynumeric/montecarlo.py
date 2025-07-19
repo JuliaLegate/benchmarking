@@ -29,7 +29,7 @@ def total_flops(N):
 gpus = int(sys.argv[1])
 N = int(sys.argv[2])
 n_samples = int(sys.argv[3])
-warmup=5
+warmup=2
 
 print(f"[cuPyNumeric] Monte-Carlo Integration benchmark on {N} elements for {n_samples} iterations")
 
