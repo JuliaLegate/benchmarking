@@ -6,7 +6,7 @@ using Printf
 get_time_us() = Legate.value(Legate.time_microseconds())
 
 function initialize_cunumeric(N)
-    A = cuNumeric.as_type(cuNumeric.rand(NDArray, N), Float32)
+    A = (5.0f0 * cuNumeric.as_type(cuNumeric.rand(NDArray, N), Float32)) - 10.0f0
     GC.gc() # remove the intermediate FP64 arrays
     return A
 end
@@ -28,7 +28,7 @@ function mc_integration_cunumeric(N, n_samples, n_warmup)
             start_time = get_time_us()
         end
 
-        res = mean(integrand(A))
+        res = 10.0f0 * sum(integrand(A)) / N
     end
     total_time_μs = get_time_us() - start_time
     mean_time_ms = total_time_μs / (n_samples * 1e3)

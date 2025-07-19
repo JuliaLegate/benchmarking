@@ -11,7 +11,7 @@ def integrand(x):
 
 def mc_integration(N, n_steps, n_warmup):
 
-    x = np.random.rand(N, dtype = np.float32)
+    x = (np.float32(5.0)*np.random.rand(N, dtype = np.float32)) - np.float32(10.0)
 
     for i in range(n_warmup):
         res = integrand(x)
