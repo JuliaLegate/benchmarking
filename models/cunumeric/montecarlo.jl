@@ -11,7 +11,7 @@ function initialize_cunumeric(N)
     return A
 end
 
-function total_flops(N, M)
+function total_flops(N)
     return N 
 end
 
@@ -19,7 +19,7 @@ function integrand(x)
     return exp(square(x))
 end
 
-function mc_integration_cunumeric(N, M, n_samples, n_warmup)
+function mc_integration_cunumeric(N, n_samples, n_warmup)
     A = initialize_cunumeric(N)
 
     start_time = nothing
@@ -32,7 +32,7 @@ function mc_integration_cunumeric(N, M, n_samples, n_warmup)
     end
     total_time_μs = get_time_us() - start_time
     mean_time_ms = total_time_μs / (n_samples * 1e3)
-    gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
+    gflops = total_flops(N) / (mean_time_ms * 1e6) # GFLOP is 1e9
 
     return mean_time_ms, gflops
 end
@@ -44,11 +44,11 @@ n_warmup = 2
 
 println("[cuNumeric.jl]  Monte-Carlo Integration benchmark on $(N) elements for $(n_samples) iterations, $(n_warmup) warmups")
 
-mean_time_ms, gflops = gemm_cunumeric(N, M, n_samples, n_warmup)
+mean_time_ms, gflops = mc_integration_cunumeric(N, n_samples, n_warmup)
 
 println("[cuNumeric.jl]  Mean Run Time: $(mean_time_ms) ms")
 println("[cuNumeric.jl]  FLOPS: $(gflops) GFLOPS")
 
 open("./montecarlo/mc.csv", "a") do io
-    @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cuNumeric.jl", gpus, N, M, mean_time_ms, gflops)
+    @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cuNumeric.jl", gpus, N, 1, mean_time_ms, gflops)
 end
