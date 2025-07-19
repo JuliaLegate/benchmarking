@@ -22,15 +22,19 @@ end
 function mc_integration_cunumeric(N, n_samples, n_warmup)
     A = initialize_cunumeric(N)
 
-    start_time = nothing
+    iter_start = nothing
     for idx in range(1, n_samples + n_warmup)
-        if idx == n_warmup + 1
-            start_time = get_time_us()
+        if idx > n_warmup
+            iter_start = get_time_us()
+        end
+        res = (10.0f0/N) * sum(integrand(A))
+
+        if idx > n_warmup
+            total_time_μs += get_time_us() - iter_start
         end
 
-        res = (10.0f0/N) * sum(integrand(A))
+        GC.gc() # We are not timing the GC.gc() time here
     end
-    total_time_μs = get_time_us() - start_time
     mean_time_ms = total_time_μs / (n_samples * 1e3)
     gflops = total_flops(N) / (mean_time_ms * 1e6) # GFLOP is 1e9
 
