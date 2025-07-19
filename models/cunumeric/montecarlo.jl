@@ -39,8 +39,8 @@ end
 
 gpus = parse(Int, ARGS[1])
 N = parse(Int, ARGS[2])
-n_samples = parse(Int, ARGS[4])
-n_warmup = parse(Int, ARGS[5])
+n_samples = parse(Int, ARGS[3])
+n_warmup = 2
 
 println("[cuNumeric.jl]  Monte-Carlo Integration benchmark on $(N) elements for $(n_samples) iterations, $(n_warmup) warmups")
 
