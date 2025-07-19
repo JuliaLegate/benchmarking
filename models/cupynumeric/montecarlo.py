@@ -7,11 +7,11 @@ import sys
 
 
 def integrand(x):
-    return np.mean(np.exp(np.square(x)))
+    return np.mean(np.exp(-np.square(x)))
 
 def mc_integration(N, n_steps, n_warmup):
 
-    x = (np.float32(5.0)*np.random.rand(N)) - np.float32(10.0)
+    x = (np.float32(10.0)*np.random.rand(N)) - np.float32(5.0)
 
     for i in range(n_warmup):
         res = integrand(x)

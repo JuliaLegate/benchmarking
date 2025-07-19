@@ -6,7 +6,7 @@ using Printf
 get_time_us() = Legate.value(Legate.time_microseconds())
 
 function initialize_cunumeric(N)
-    A = (5.0f0 * cuNumeric.as_type(cuNumeric.rand(NDArray, N), Float32)) - 10.0f0
+    A = (10.0f0 * cuNumeric.as_type(cuNumeric.rand(NDArray, N), Float32)) - 5.0f0
     GC.gc() # remove the intermediate FP64 arrays
     return A
 end
@@ -16,7 +16,7 @@ function total_flops(N)
 end
 
 function integrand(x)
-    return exp(square(x))
+    return exp(-square(x))
 end
 
 function mc_integration_cunumeric(N, n_samples, n_warmup)
