@@ -37,7 +37,7 @@ elapsed_time = mc_integration(N, n_samples, warmup)
 
 total_time_ms = elapsed_time/1000.0
 mean_time_ms = total_time_ms / n_samples
-gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
+gflops = total_flops(N) / (mean_time_ms * 1e6) # GFLOP is 1e9
 
 print(f"[cuPyNumeric] Mean Run Time: {mean_time_ms} ms")
 print(f"[cuPyNumeric] FLOPS: {gflops} GFLOPS")
