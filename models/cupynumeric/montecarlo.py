@@ -45,4 +45,4 @@ print(f"[cuPyNumeric] FLOPS: {gflops} GFLOPS")
 
 with open("./montecarlo/mc.csv", "a", newline="") as csvfile:
     writer = csv.writer(csvfile)
-    writer.writerow(["cuPyNumeric", gpus, N, M, f"{mean_time_ms:.6f}", f"{gflops:.6f}"])
+    writer.writerow(["cuPyNumeric", gpus, N, 1, f"{mean_time_ms:.6f}", f"{gflops:.6f}"])
