@@ -26,7 +26,7 @@ end
 function mc_integration_cunumeric(N, n_samples, n_warmup)
     A = initialize_cunumeric(N)
 
-    for idx in range(n_warmup)
+    for idx in range(1,n_warmup)
         do_work(A)
         GC.gc()
     end
