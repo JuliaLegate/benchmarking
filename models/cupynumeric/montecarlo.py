@@ -10,7 +10,8 @@ def do_work(x):
     # time in same scope to avoid GC overhead
     start_time = time()
     res = np.mean(np.exp(-np.square(x)))
-    return time() - start_time
+    end_time = time()
+    return end_time - start_time
 
 def mc_integration(N, n_steps, n_warmup):
 
