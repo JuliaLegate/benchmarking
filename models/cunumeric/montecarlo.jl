@@ -40,7 +40,7 @@ function mc_integration_cunumeric(N, n_samples, n_warmup)
         t1 = get_time_us()
         push!(times, t1 - t0)
     end
-    mean_time_ms = mean(times) / (n_samples * 1e3)
+    mean_time_ms = mean(times) / 1e3
     gflops = total_flops(N) / (mean_time_ms * 1e6) # GFLOP is 1e9
 
     return mean_time_ms, gflops
