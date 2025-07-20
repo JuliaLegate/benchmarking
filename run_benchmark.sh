@@ -9,7 +9,7 @@ MODEL=$1
 BENCHMARK=$2
 shift 2  # Move past MODEL and BENCHMARK
 
-MACHINE="dub"
+MACHINE="nvidia-brev"
 
 # Defaults
 GPUS=1
