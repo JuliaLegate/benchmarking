@@ -6,10 +6,10 @@ import csv
 import sys 
 
 
-def do_work(x):
+def do_work(x, N):
     # time in same scope to avoid GC overhead
     start_time = time()
-    res = np.mean(np.exp(-np.square(x)))
+    res = (np.float32(10.0) / N) * np.sum(np.exp(-np.square(x)))
     end_time = time()
     return end_time - start_time
 
@@ -18,11 +18,11 @@ def mc_integration(N, n_steps, n_warmup):
     x = (np.float32(10.0)*np.random.rand(N)) - np.float32(5.0)
 
     for i in range(n_warmup):
-        _ = do_work(x)
+        _ = do_work(x, N)
 
     times = []
     for i in range(n_steps):
-        times.append(do_work(x))
+        times.append(do_work(x, N))
 
     return np.sum(times)
 
