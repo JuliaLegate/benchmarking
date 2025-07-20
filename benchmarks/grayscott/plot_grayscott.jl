@@ -1,5 +1,5 @@
 using CSV, DataFrames, Plots
-include("../plotting.jl")
+include("../../plotting.jl")
 
 function large_params()
     csv = "grayscott/grayscott_large.csv"

@@ -1,6 +1,9 @@
 using CSV, DataFrames, Plots
 
 function make_efficiency_plot(csv, title, file)
+    csv = joinpath("benchmarks/", csv)
+    file = joinpath("benchmarks/", file)
+
     df = CSV.read(csv, DataFrame)
     sort!(df, [:model, :gpus])
 
@@ -42,6 +45,9 @@ end
 
 
 function make_weak_plot(csv, title, file)
+    csv = joinpath("benchmarks/", csv)
+    file = joinpath("benchmarks/", file)
+    
     df = CSV.read(csv, DataFrame)
     # Compute total problem size and per-GPU size
     df.size = df.n .* df.m
