@@ -7,6 +7,8 @@ const PINK = "#f03e62"
 const DARK_PINK = "#ed0534"
 const LIGHT_PINK = "#f08b9f"
 
+const ORANGE = "#ff8c00"
+const GOLD = "#ffca38"
 
 function make_efficiency_plot(csv, file, colors)
     df = CSV.read(csv, DataFrame)
@@ -208,11 +210,11 @@ function make_weak_plot_grayscott(csv, file, colors, markers; fp32_peak = 19500.
         push!(labels, g.model[1])
     end
 
-    axislegend(ax, plots[3:end],labels[3:end],  "cuNumeric.jl",
+    axislegend(ax, plots[4:end],labels[4:end],  "cuNumeric.jl",
          position = :lb, patchlabelgap = 12, labelsize = 30, framevisible = false,
          labelhalign = :center, colgap = 25, titlesize = 30)
 
-    axislegend(ax, reverse(plots[1:2]), reverse(labels[1:2]),
+    axislegend(ax, reverse(plots[1:3]), reverse(labels[1:3]),
         position = :rb, labelsize = 30, framevisible = false, patchlabelgap = 12)
 
     save(file, gflops_fig)
