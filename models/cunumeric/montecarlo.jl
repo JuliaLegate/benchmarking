@@ -20,7 +20,7 @@ function integrand(x)
     return exp(-square(x))
 end
 
-function do_work(x)
+function do_work(x, N)
     return (10.0f0/N) * sum(integrand(x))
 end
 
@@ -28,7 +28,7 @@ function mc_integration_cunumeric(N, n_samples, n_warmup)
     A = initialize_cunumeric(N)
 
     for idx in range(1,n_warmup)
-        do_work(A)
+        do_work(A, N)
         GC.gc()
     end
 
@@ -36,7 +36,7 @@ function mc_integration_cunumeric(N, n_samples, n_warmup)
     for idx in range(1, n_samples)
         GC.gc()
         t0 = get_time_us() # avoid timing GC as its not part of the algo
-        res = do_work(A)
+        res = do_work(A, N)
         t1 = get_time_us()
         push!(times, t1 - t0)
     end
