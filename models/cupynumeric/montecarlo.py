@@ -4,16 +4,16 @@ import cupynumeric as np
 from legate.timing import time
 import csv
 import sys 
+import gc
 
 
 def do_work(x, N):
     # time in same scope to avoid GC overhead
+    gc.disable()
     start_time = time()
-    square = np.square(x)
-    neg_square = -square
-    exp = np.exp(neg_square)
-    res = (np.float32(10.0) / N) * np.sum(exp)
+    res = (np.float32(10.0) / N) * np.sum(np.exp(-np.square(x)))
     end_time = time()
+    gc.enable()
     return end_time - start_time
 
 def mc_integration(N, n_steps, n_warmup):
