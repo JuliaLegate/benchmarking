@@ -6,7 +6,7 @@ BENCHMARK=grayscott
 FOLDER="benchmarks/$BENCHMARK"
 CSV="$FOLDER/$BENCHMARK.csv"
 
-CUNUMERIC_GRAY_GC="bash run_benchmark.sh cunumeric $BENCHMARK\_gc"
+CUNUMERIC_GRAY_GC="bash run_benchmark.sh cunumeric ${BENCHMARK}_gc"
 CUNUMERIC_GRAY="bash run_benchmark.sh cunumeric $BENCHMARK"
 CUPYNUMERIC_GRAY="bash run_benchmark.sh cupynumeric $BENCHMARK"
 DIFFEQ_GRAY="bash run_benchmark.sh diffeq $BENCHMARK --diffeq"
