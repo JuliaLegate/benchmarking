@@ -218,3 +218,106 @@ function make_weak_plot_grayscott(csv, file, colors, markers; fp32_peak = 19500.
     save(file, gflops_fig)
     println("Saved plot to $(file)")
 end
+
+
+function make_efficiency_plot_mc(csv, file, colors, markers)
+    df = CSV.read(csv, DataFrame)
+    sort!(df, [:model, :gpus])
+
+    # Compute efficiency = T(1) / T(Np) for each model
+    df_eff = DataFrame()
+    for g in groupby(df, :model)
+        t1 = g.mean_time_ms[g.gpus .== 1][1]
+        eff = t1 ./ g.mean_time_ms
+        df_tmp = DataFrame(model=g.model, gpus=g.gpus, efficiency=eff)
+        append!(df_eff, df_tmp)
+    end
+
+    size_in_inches = (3, 2.25)
+    dpi = 300
+    size_in_pixels = size_in_inches .* dpi
+
+    efficiency_fig = Figure(resolution = size_in_pixels);
+    ax = Axis(efficiency_fig[1,1], xlabel = "Number of GPUs", ylabel = "Parallel Efficiency",
+        ylabelsize = 40, xlabelsize = 40, yticklabelsize = 30, xticklabelsize = 30,
+        xticks = [1, 2, 4, 8], xgridvisible = false, ygridvisible = false, xscale = log2,
+        xticksmirrored = true, yticksmirrored = true, xticklabelpad = 4, xtickalign=1, ytickalign = 1)
+
+    ylims!(0, 1.2)
+
+    plots = []
+    labels = []
+
+    for (i,g) in enumerate(groupby(df_eff, :model))
+        sort!(g, :gpus)
+        label = g.model[1]
+        if label != "CUDA.jl" # no scaling for this one
+            marker = (label == "cuNumeric.jl") ? :star6 : markers[i]
+            fill_color = (label == "cuPyNumeric") ? :transparent : colors[i]
+            sz = (label == "cuPyNumeric") ? 26 : 40
+            overdraw = (label == "cuNumeric.jl") ? true : false
+            s = scatterlines!(g.gpus, g.efficiency, marker = marker, overdraw = overdraw, strokewidth = 2, linewidth = 2,
+                                markersize = sz, color = colors[i], strokecolor = :black)
+            push!(plots, s)
+            push!(labels, g.model[1])
+        end
+    end
+
+    axislegend(ax, plots, labels,
+         position = :lb, patchlabelgap = 12, labelsize = 30, framevisible = false,
+         labelhalign = :center, colgap = 25, titlesize = 30)
+
+
+    save(file, efficiency_fig)
+    
+    println("Saved weak scaling efficiency plot to $(file)")
+end
+
+
+function make_weak_plot_mc(csv, file, colors, markers)
+    df = CSV.read(csv, DataFrame)
+    # Compute total problem size and per-GPU size
+    df.size = df.n .* df.m
+    df.size_per_gpu = df.size ./ df.gpus
+    df.gflops_per_gpu = df.gflops ./ df.gpus
+
+    # Sort so GPUs increase left-to-right
+    sort!(df, [:model, :gpus])
+
+    size_in_inches = (3, 2.25)
+    dpi = 300
+    size_in_pixels = size_in_inches .* dpi
+
+    gflops_fig = Figure(resolution = size_in_pixels);
+    ax = Axis(gflops_fig[1,1], xlabel = "Number of GPUs", ylabel = "c ⨯ GFLOPs / GPU",
+        ylabelsize = 40, xlabelsize = 40, yticklabelsize = 30, xticklabelsize = 30,
+        xticks = sort(unique(df.gpus)), yticks = ([1e1, 1e2,1e3], ["10¹", "10²","10³"]),
+        xgridvisible = false, ygridvisible = false, xscale = log2,
+        yscale = log10, xticksmirrored = true, yticksmirrored = true, xticklabelpad = 4, xtickalign=1, ytickalign = 1)
+    ylims!(1,1e4)
+
+    plots = Any[]
+    labels = []
+
+
+    # Plot one line per model
+    for (i,g) in enumerate(groupby(df, :model))
+        label = g.model[1]
+        sort!(g, :gpus)
+
+        marker = (label == "cuNumeric.jl") ? :star6 : markers[i]
+        overdraw = (label == "cuNumeric.jl") ? true : false
+        sz = (label == "cuPyNumeric") ? 26 : 40
+
+        s = scatterlines!(g.gpus, g.gflops_per_gpu, marker = marker, overdraw = overdraw, strokewidth = 2, linewidth = 2,
+                            markersize = sz, color = colors[i], strokecolor = :black)
+        push!(plots, s)
+        push!(labels, g.model[1])
+    end
+
+    axislegend(ax, plots, labels, position = :rt,
+                 patchlabelgap = 12, labelsize = 30, framevisible = false)
+
+    save(file, gflops_fig)
+    println("Saved plot to $(file)")
+end
