@@ -24,7 +24,7 @@ for i in "${!GPUS_LIST[@]}"; do
     gpus="${GPUS_LIST[$i]}"
     read -r N M <<< "${SIZES[$i]}"
 
-    args=(--gpus "$gpus" "$N" "$M" "$NUM_ITERS")
+    args=(--gpus "$gpus" "$N" "$NUM_ITERS")
 
     $CUNUMERIC_FUSION "${args[@]}" 1 # use operator kernel fusion with legate+cuda.jl
     $CUNUMERIC_FUSION "${args[@]}" 0 # no fusion with cunumeric.jl
