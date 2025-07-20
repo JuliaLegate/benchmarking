@@ -3,7 +3,7 @@ using LinearAlgebra
 using BenchmarkTools
 using Printf
 
-include("matmul-multi.jl")
+include("gemm-multi.jl")
 
 function initialize_CUDA(N, M)
     A = CUDA.rand(Float32, N, M)
@@ -59,6 +59,6 @@ end
 println("[CUDA] Mean Run Time: $(mean_time_ms) ms")
 println("[CUDA] FLOPS: $(gflops) GFLOPS")
 
-open("./gemm/gemm.csv", "a") do io
+open("./benchmarks/gemm/gemm.csv", "a") do io
     @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cuda", gpus, N, M, mean_time_ms, gflops)
 end

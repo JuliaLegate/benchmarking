@@ -126,7 +126,7 @@ if use_fused
     println("[cuNumeric] Mean Run Time: $(mean_time_ms) ms")
     println("[cuNumeric] FLOPS: $(gflops) GFLOPS")
 
-    open("./cudalegate/fused.csv", "a") do io
+    open("./benchmarks/fusion/fusion.csv", "a") do io
         @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "Legate.jl + CUDA.jl (fused)", gpus, N, M, mean_time_ms, gflops)
     end
 else
@@ -136,7 +136,7 @@ else
     println("[cuNumeric] Mean Run Time: $(mean_time_ms) ms")
     println("[cuNumeric] FLOPS: $(gflops) GFLOPS")
 
-    open("./cudalegate/unfused.csv", "a") do io
+    open("./benchmarks/fusion/fusion.csv", "a") do io
         @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cuNumeric.jl (unfused)", gpus, N, M, mean_time_ms, gflops)
     end
 end

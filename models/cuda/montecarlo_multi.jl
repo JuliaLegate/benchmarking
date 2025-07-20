@@ -72,6 +72,6 @@ mean_time_ms, gflops = monte_carlo_integration(N, n_samples, n_warmup)
 println("[CUDA.jl]  Mean Run Time: $(mean_time_ms) ms")
 println("[CUDA.jl]  FLOPS: $(gflops) GFLOPS")
 
-open("./montecarlo/mc.csv", "a") do io
+open("./benchmarks/montecarlo/montecarlo.csv", "a") do io
     @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "CUDA.jl + Distributed.jl", gpus, N, M, mean_time_ms, gflops)
 end

@@ -1,11 +1,11 @@
 Only works from base project dir
 ```bash
-bash gemm/gemm.sh
+bash benchmarks/gemm/gemm.sh
 ```
 
 to plot
 ```julia
-julia --project=. gemm/plot_gemm.jl 
+julia --project=. benchmarks/gemm/plot_gemm.jl 
 ```
 
 ## Note

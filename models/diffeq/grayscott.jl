@@ -82,6 +82,6 @@ gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
 println("[DIFFEQ] Mean Run Time: $(mean_time_ms) ms")
 println("[DIFFEQ] FLOPS: $(gflops) GFLOPS")
 
-open("./grayscott/grayscott.csv", "a") do io
+open("./benchmarks/grayscott/grayscott.csv", "a") do io
     @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "diffeq", gpus, N, M, mean_time_ms, gflops)
 end

@@ -49,6 +49,6 @@ print(f"[cuPyNumeric] Mean Run Time: {mean_time_ms} ms")
 print(f"[cuPyNumeric] FLOPS: {gflops} GFLOPS")
 
 
-with open("./montecarlo/mc.csv", "a", newline="") as csvfile:
+with open("./benchmarks/montecarlo/montecarlo.csv", "a", newline="") as csvfile:
     writer = csv.writer(csvfile)
     writer.writerow(["cuPyNumeric", gpus, N, 1, f"{mean_time_ms:.6f}", f"{gflops:.6f}"])

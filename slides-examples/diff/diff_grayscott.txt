@@ -1,0 +1,19 @@
+[36m1,2d0[0m
+[31m< using cuNumeric[0m
+[31m< [0m
+[36m81,84c79,82[0m
+[31m<     u = cuNumeric.ones(dims)[0m
+[31m<     v = cuNumeric.zeros(dims)[0m
+[31m<     u_new = cuNumeric.zeros(dims)[0m
+[31m<     v_new = cuNumeric.zeros(dims)[0m
+---
+[32m>     u = ones(dims)[0m
+[32m>     v = zeros(dims)[0m
+[32m>     u_new = zeros(dims)[0m
+[32m>     v_new = zeros(dims)[0m
+[36m86,87c84,85[0m
+[31m<     u[1:150, 1:150] = cuNumeric.random(FT, (150, 150))[0m
+[31m<     v[1:150, 1:150] = cuNumeric.random(FT, (150, 150))[0m
+---
+[32m>     u[1:150, 1:150] = random(FT, (150, 150))[0m
+[32m>     v[1:150, 1:150] = random(FT, (150, 150))[0m

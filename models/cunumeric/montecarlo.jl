@@ -58,6 +58,6 @@ mean_time_ms, gflops = mc_integration_cunumeric(N, n_samples, n_warmup)
 println("[cuNumeric.jl]  Mean Run Time: $(mean_time_ms) ms")
 println("[cuNumeric.jl]  FLOPS: $(gflops) GFLOPS")
 
-open("./montecarlo/mc.csv", "a") do io
+open("./benchmarks/montecarlo/montecarlo.csv", "a") do io
     @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cuNumeric.jl", gpus, N, 1, mean_time_ms, gflops)
 end

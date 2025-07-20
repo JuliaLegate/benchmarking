@@ -122,6 +122,6 @@ gflops = total_flops(N, M) / (mean_time_ms * 1e6) # GFLOP is 1e9
 println("[cuNumeric] Mean Run Time: $(mean_time_ms) ms")
 println("[cuNumeric] FLOPS: $(gflops) GFLOPS")
 
-open("./grayscott/grayscott.csv", "a") do io
+open("./benchmarks/grayscott/grayscott.csv", "a") do io
     @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cunumeric", gpus, N, M, mean_time_ms, gflops)
 end
