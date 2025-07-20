@@ -92,7 +92,7 @@ function run_unfused(N, n_samples, n_warmup)
 
     for i in range(1, n_warmup)
         F_u, F_v = cuNumeric_unfused(u, v, f, k)
-        if n % gc_interval
+        if i % gc_interval
             GC.gc()
         end
     end
@@ -101,7 +101,7 @@ function run_unfused(N, n_samples, n_warmup)
     start_time = get_time_us()
     for i in range(1, n_samples)
         F_u, F_v = cuNumeric_unfused(u, v, f, k)
-        if n % gc_interval
+        if i % gc_interval
             GC.gc()
         end
     end
