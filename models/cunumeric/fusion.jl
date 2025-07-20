@@ -125,7 +125,7 @@ warmup=1
 
 threads = 512
 
-if use_fused
+if use_fused == true
     println("[cuNumeric] Fused kernel benchmark on $(N)x$(N) matricies for $(n_samples) iterations")
     mean_time_ms, gflops = run_fused(N, threads, n_samples, warmup)
     println("[cuNumeric] Mean Run Time: $(mean_time_ms) ms")
