@@ -1,3 +1,9 @@
+N = 10
+A = cuNumeric.rand(Float32, N, N)
+B = cuNumeric.rand(Float32, N, N)
+C = cuNumeric.zeros(Float32, N, N)
+mul!(C, A, B)
+
 integrand = (x) -> exp(-square(x))
 N = 1_000_000
 x_max = 5.0
@@ -5,7 +11,6 @@ domain = [-x_max, x_max]
 Ω = domain[2] - domain[1]
 samples = Ω*cuNumeric.rand(NDArray, N) - x_max
 estimate = (Ω/N) * sum(integrand(samples))
-
 
 
 N = 100

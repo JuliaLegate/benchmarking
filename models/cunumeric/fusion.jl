@@ -56,6 +56,8 @@ function run_fused(N, threads, n_steps, n_warmup)
 
     u = cuNumeric.random(Float32, (N, N))
     v = cuNumeric.random(Float32, (N, N))
+    F_u = cuNumeric.zeros(Float32, (N-2, N-2))
+    F_v = cuNumeric.zeros(Float32, (N-2, N-2))
 
     f = 0.03f0
     k = 0.06f0
@@ -63,18 +65,12 @@ function run_fused(N, threads, n_steps, n_warmup)
     task = cuNumeric.@cuda_task fused_kernel(u, v, F_u, F_v, UInt32(N), f, k)
 
     for i in range(n_warmup)
-        #* include allocs in both
-        F_u = cuNumeric.zeros(Float32, (N-2, N-2))
-        F_v = cuNumeric.zeros(Float32, (N-2, N-2))
         cuNumeric.@launch task=task threads=threads2d blocks=blocks2d inputs=(u, v) outputs=(F_u, F_v) scalars=(UInt32(N), f, k)
     end
 
     #* not sure what to do with scalars argument
     start_time = get_time_us()
     for i in range(n_steps)
-        #* include allocs in both
-        F_u = cuNumeric.zeros(Float32, (N-2, N-2))
-        F_v = cuNumeric.zeros(Float32, (N-2, N-2))
         cuNumeric.@launch task=task threads=threads blocks=blocks inputs=(u, v) outputs=(F_u, F_v) scalars=(UInt32(N), f, k)
     end
     end_time = get_time_us()
