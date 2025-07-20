@@ -64,13 +64,13 @@ function run_fused(N, threads, n_samples, n_warmup)
 
     task = cuNumeric.@cuda_task fused_kernel(u, v, F_u, F_v, UInt32(N), f, k)
 
-    for i in range(n_warmup)
+    for i in range(1, n_warmup)
         cuNumeric.@launch task=task threads=threads2d blocks=blocks2d inputs=(u, v) outputs=(F_u, F_v) scalars=(UInt32(N), f, k)
     end
 
     #* not sure what to do with scalars argument
     start_time = get_time_us()
-    for i in range(n_samples)
+    for i in range(1, n_samples)
         cuNumeric.@launch task=task threads=threads blocks=blocks inputs=(u, v) outputs=(F_u, F_v) scalars=(UInt32(N), f, k)
     end
     end_time = get_time_us()
@@ -89,13 +89,13 @@ function run_unfused(N, n_samples, n_warmup)
     f = 0.03f0
     k = 0.06f0
 
-    for i in range(n_warmup)
+    for i in range(1, n_warmup)
         F_u, F_v = cuNumeric_unfused(u, v, f, k)
     end
 
     #* not sure what to do with scalars argument
     start_time = get_time_us()
-    for i in range(n_samples)
+    for i in range(1, n_samples)
         F_u, F_v = cuNumeric_unfused(u, v, f, k)
     end
     end_time = get_time_us()
