@@ -83,7 +83,7 @@ function run_fused(N, threads, n_samples, n_warmup)
 end
 
 function run_unfused(N, n_samples, n_warmup)
-    gc_interval = 6
+    gc_interval = 4
     u = cuNumeric.random(Float32, (N, N))
     v = cuNumeric.random(Float32, (N, N))
 
