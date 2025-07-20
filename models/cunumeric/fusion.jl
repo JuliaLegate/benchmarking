@@ -132,7 +132,7 @@ if use_fused == true
     println("[cuNumeric] FLOPS: $(gflops) GFLOPS")
 
     open("./benchmarks/fusion/fusion.csv", "a") do io
-        @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "Legate.jl + CUDA.jl (fused)", gpus, N, M, mean_time_ms, gflops)
+        @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "Legate.jl + CUDA.jl (fused)", gpus, N, N, mean_time_ms, gflops)
     end
 else
     println("[cuNumeric] Unfused kernel benchmark on $(N)x$(N) matricies for $(n_samples) iterations")
@@ -142,6 +142,6 @@ else
     println("[cuNumeric] FLOPS: $(gflops) GFLOPS")
 
     open("./benchmarks/fusion/fusion.csv", "a") do io
-        @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cuNumeric.jl (unfused)", gpus, N, M, mean_time_ms, gflops)
+        @printf(io, "%s,%d,%d,%d,%.6f,%.6f\n", "cuNumeric.jl (unfused)", gpus, N, N, mean_time_ms, gflops)
     end
 end
