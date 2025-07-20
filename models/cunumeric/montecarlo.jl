@@ -2,6 +2,7 @@ using cuNumeric
 using Legate
 using LinearAlgebra
 using Printf
+using Statistics
 
 get_time_us() = Legate.value(Legate.time_microseconds())
 
