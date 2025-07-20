@@ -114,10 +114,12 @@ function run_unfused(N, n_samples, n_warmup)
     return mean_time_ms, gflops
 end
 
+use_fused = false
+
 gpus = parse(Int, ARGS[1])
 N = parse(Int, ARGS[2])
 n_samples = parse(Int, ARGS[3])
-use_fused = parse(Bool, ARGS[4])
+use_fused = ARGS[4] == "1"
 warmup=1
 
 
