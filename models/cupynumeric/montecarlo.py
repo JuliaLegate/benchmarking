@@ -9,7 +9,10 @@ import sys
 def do_work(x, N):
     # time in same scope to avoid GC overhead
     start_time = time()
-    res = (np.float32(10.0) / N) * np.sum(np.exp(-np.square(x)))
+    square = np.square(x)
+    neg_square = -square
+    exp = np.exp(neg_square)
+    res = (np.float32(10.0) / N) * np.sum(exp)
     end_time = time()
     return end_time - start_time
 
