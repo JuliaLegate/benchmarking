@@ -83,6 +83,7 @@ function run_fused(N, threads, n_samples, n_warmup)
 end
 
 function run_unfused(N, n_samples, n_warmup)
+    gc_interval = 6
     u = cuNumeric.random(Float32, (N, N))
     v = cuNumeric.random(Float32, (N, N))
 
@@ -91,12 +92,18 @@ function run_unfused(N, n_samples, n_warmup)
 
     for i in range(1, n_warmup)
         F_u, F_v = cuNumeric_unfused(u, v, f, k)
+        if n % gc_interval
+            GC.gc()
+        end
     end
 
     #* not sure what to do with scalars argument
     start_time = get_time_us()
     for i in range(1, n_samples)
         F_u, F_v = cuNumeric_unfused(u, v, f, k)
+        if n % gc_interval
+            GC.gc()
+        end
     end
     end_time = get_time_us()
 
