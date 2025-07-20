@@ -210,6 +210,10 @@ function make_weak_plot_grayscott(csv, file, colors, markers; fp32_peak = 19500.
         push!(labels, g.model[1])
     end
 
+    # axislegend(ax, plots, labels,
+    #      position = :lb, patchlabelgap = 12, labelsize = 30, framevisible = false,
+    #     colgap = 25, titlesize = 30)
+
     axislegend(ax, plots[3:end],labels[3:end],  "cuNumeric.jl",
          position = :lb, patchlabelgap = 12, labelsize = 30, framevisible = false,
          labelhalign = :center, colgap = 25, titlesize = 30)
@@ -322,4 +326,38 @@ function make_weak_plot_mc(csv, file, colors, markers)
 
     save(file, gflops_fig)
     println("Saved plot to $(file)")
+end
+
+
+function plot_rohan()
+    data_path = raw"./juliacon_plots/rohan_kernelfusion.csv"
+    df = CSV.read(data_path, DataFrame)
+
+
+    n_gpu = df.n
+    fused = df.fused
+    unfused = df.unfused
+
+     size_in_inches = (3, 2.25)
+    dpi = 300
+    size_in_pixels = size_in_inches .* dpi
+
+    fig = Figure(resolution = size_in_pixels);
+    ax = Axis(fig[1,1], xlabel = "Number of GPUs", ylabel = "Throughput (iterations / second)",
+        ylabelsize = 40, xlabelsize = 40, yticklabelsize = 30, xticklabelsize = 30,
+        xticks = sort(n_gpu), yticks = ([0, 20, 40, 60]),
+        xgridvisible = false, ygridvisible = false, xscale = log2, xticksmirrored = true, yticksmirrored = true, xticklabelpad = 4, xtickalign=1, ytickalign = 1)
+    ylims!(0,72)
+
+    s1 = scatterlines!(n_gpu, fused, marker = :cross, strokewidth = 2, linewidth = 2,
+                        markersize = 30, color = "#19d7fc", strokecolor = :black)
+
+    s2 = scatterlines!(n_gpu, unfused, marker = :star4, strokewidth = 2, linewidth = 2,
+                        markersize = 30, color = "#ff3b3b", strokecolor = :black)
+
+
+    axislegend(ax, [s1,s2], ["Fused", "Unfused"], position = :lb,
+                 patchlabelgap = 12, labelsize = 30, framevisible = false)
+
+    save(joinpath("./juliacon_plots/rohan_kernelfusion.svg"), fig)
 end
