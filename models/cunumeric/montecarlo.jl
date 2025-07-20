@@ -19,19 +19,27 @@ function integrand(x)
     return exp(-square(x))
 end
 
+function do_work(x)
+    return (10.0f0/N) * sum(integrand(x))
+end
+
 function mc_integration_cunumeric(N, n_samples, n_warmup)
     A = initialize_cunumeric(N)
 
-    start_time = nothing
-    for idx in range(1, n_samples + n_warmup)
-        if idx == n_warmup + 1
-            start_time = get_time_us()
-        end
-
-        res = (10.0f0/N) * sum(integrand(A))
+    for idx in range(n_warmup)
+        do_work(A)
+        GC.gc()
     end
-    total_time_μs = get_time_us() - start_time
-    mean_time_ms = total_time_μs / (n_samples * 1e3)
+
+    times = []
+    for idx in range(1, n_samples)
+        GC.gc()
+        t0 = get_time_us() # avoid timing GC as its not part of the algo
+        res = do_work(A)
+        t1 = get_time_us()
+        push!(times, t1 - t0)
+    end
+    mean_time_ms = mean(times) / (n_samples * 1e3)
     gflops = total_flops(N) / (mean_time_ms * 1e6) # GFLOP is 1e9
 
     return mean_time_ms, gflops
