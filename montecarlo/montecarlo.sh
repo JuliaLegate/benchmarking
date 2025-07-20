@@ -6,7 +6,7 @@ CUPYNUMERIC_MC="bash run_benchmark.sh cupynumeric montecarlo"
 
 GPUS_LIST=(1 2 4 8)
 
-BASE_SIZE=1000000000 # 1 billion
+BASE_SIZE=3000000000 # 1 billion
 SIZES=()
 
 # Loop through GPUS_LIST and calculate sizes
