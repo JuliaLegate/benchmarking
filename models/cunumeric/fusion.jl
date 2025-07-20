@@ -49,7 +49,7 @@ end
     return nothing
 end
 
-function run_fused(N, threads, n_steps, n_warmup)
+function run_fused(N, threads, n_samples, n_warmup)
     
     blocks2d = (cld(N, threads), cld(N, threads))
     threads2d = (threads, threads)
@@ -70,7 +70,7 @@ function run_fused(N, threads, n_steps, n_warmup)
 
     #* not sure what to do with scalars argument
     start_time = get_time_us()
-    for i in range(n_steps)
+    for i in range(n_samples)
         cuNumeric.@launch task=task threads=threads blocks=blocks inputs=(u, v) outputs=(F_u, F_v) scalars=(UInt32(N), f, k)
     end
     end_time = get_time_us()
@@ -82,7 +82,7 @@ function run_fused(N, threads, n_steps, n_warmup)
     return mean_time_ms, gflops
 end
 
-function run_unfused(N, n_steps, n_warmup)
+function run_unfused(N, n_samples, n_warmup)
     u = cuNumeric.random(Float32, (N, N))
     v = cuNumeric.random(Float32, (N, N))
 
@@ -95,7 +95,7 @@ function run_unfused(N, n_steps, n_warmup)
 
     #* not sure what to do with scalars argument
     start_time = get_time_us()
-    for i in range(n_steps)
+    for i in range(n_samples)
         F_u, F_v = cuNumeric_unfused(u, v, f, k)
     end
     end_time = get_time_us()
