@@ -6,22 +6,24 @@ import csv
 import sys 
 
 
-def integrand(x):
-    return np.mean(np.exp(-np.square(x)))
+def do_work(x):
+    # time in same scope to avoid GC overhead
+    start_time = time()
+    res = np.mean(np.exp(-np.square(x)))
+    return time() - start_time
 
 def mc_integration(N, n_steps, n_warmup):
 
     x = (np.float32(10.0)*np.random.rand(N)) - np.float32(5.0)
 
     for i in range(n_warmup):
-        res = integrand(x)
+        _ = do_work(x)
 
-    start_time = time()
+    times = []
     for i in range(n_steps):
-        res = integrand(x)
-    end_time = time()
+        times.append(do_work(x))
 
-    return end_time - start_time
+    return np.sum(times)
 
 def total_flops(N):
     return N    
