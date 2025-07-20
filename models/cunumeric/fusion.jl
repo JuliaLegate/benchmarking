@@ -6,8 +6,8 @@ using Printf
 
 get_time_us() = Legate.value(Legate.time_microseconds())
 
-function total_flops(N)
-    return N*N # missing pre-factor
+function total_flops(N, T)
+    return N*N*T # missing pre-factor
 end
 
 #* THIS WILL ALLOCATE FOR F_u and F_v
@@ -77,7 +77,7 @@ function run_fused(N, threads, n_samples, n_warmup)
 
     total_time_μs = end_time - start_time
     mean_time_ms = total_time_μs / (n_samples * 1e3)
-    gflops = total_flops(N) / (mean_time_ms * 1e6)
+    gflops = total_flops(N, n_samples) / (mean_time_ms * 1e6)
 
     return mean_time_ms, gflops
 end
@@ -109,7 +109,7 @@ function run_unfused(N, n_samples, n_warmup)
 
     total_time_μs = end_time - start_time
     mean_time_ms = total_time_μs / (n_samples * 1e3)
-    gflops = total_flops(N) / (mean_time_ms * 1e6)
+    gflops = total_flops(N, n_samples) / (mean_time_ms * 1e6)
 
     return mean_time_ms, gflops
 end
