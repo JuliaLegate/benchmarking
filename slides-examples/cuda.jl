@@ -14,8 +14,8 @@ N = 1024
 threads = 256
 blocks = cld(N, threads)
 
-a = cuNumeric.full(N, 1.0f0)
-b = cuNumeric.full(N, 2.0f0)
+a = cuNumeric.full((N,), 1.0f0)
+b = cuNumeric.full((N,), 2.0f0)
 c = cuNumeric.ones(Float32, N)
 
 task = cuNumeric.@cuda_task kernel_add(a, b, c, UInt32(1))
