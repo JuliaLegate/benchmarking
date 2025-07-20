@@ -1,0 +1,42 @@
+# Constants
+ITER_THRESHOLD = 3            # Max retries for allocation
+STATUS_SUCCESS = 0
+STATUS_ALLOC_FAILED = 1       # Cannot allocate after retries
+STATUS_OBJ_TOO_LARGE = 2      # Object size exceeds GPU free memory
+
+function maybe_collect(threshold):
+    for obj in last_touched_objects[0:threshold]:
+        attempt_free(obj)  # Try to free unused buffers first
+
+        status = allocate_with_retry(obj)
+        if status == STATUS_SUCCESS:
+            gpu_memory += obj.size
+        elif status == STATUS_OBJ_TOO_LARGE:
+            log("Skipping allocation: object size exceeds available GPU memory.")
+        else:
+            log("Allocation failed after retries.")
+
+
+function allocate_with_retry(obj):
+    # Check upfront if the object can ever fit
+    if obj.size > cuda_available_memory():
+        return STATUS_OBJ_TOO_LARGE
+
+    retries = 0
+    while retries <= ITER_THRESHOLD:
+        if cuda_try_malloc(obj.size):       # Attempt allocation
+            return STATUS_SUCCESS
+        else:
+            log("Out of memory, forcing GC and retrying...")
+            GC.collect()                    # Trigger garbage collection
+            retries += 1
+
+    return STATUS_ALLOC_FAILED
+
+
+function cuda_try_malloc(size):
+    try:
+        cuda_malloc(size)
+        return True
+    except OutOfMemoryError:
+        return False
