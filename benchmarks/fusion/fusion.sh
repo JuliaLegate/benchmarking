@@ -7,10 +7,12 @@ CSV="$FOLDER/$BENCHMARK.csv"
 CUNUMERIC_FUSION="bash run_benchmark.sh cunumeric $BENCHMARK"
 
 GPUS_LIST=(1 2 4 8)
+# GPUS_LIST=(1)
 
 julia $FOLDER/nval.jl > $FOLDER/nval.sh
 source $FOLDER/nval.sh
 
+# SIZES=("${test[@]}")  
 SIZES=("${small[@]}")  
 # SIZES=("${large[@]}")  
 

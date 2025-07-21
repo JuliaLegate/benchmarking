@@ -33,17 +33,19 @@ function cuNumeric_unfused(u, v, f, k)
 end
 
 
-@inbounds function fused_kernel(u, v, F_u, F_v, N, f::Float32, k::Float32)
+function fused_kernel(u, v, F_u, F_v, N::UInt32, f::Float32, k::Float32)
     
     i = (blockIdx().x - 1i32) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1i32) * blockDim().y + threadIdx().y
 
     if i <= N - 1 && j <= N - 1 # index from 2 --> end - 1
+        @inbounds begin
         u_ij = u[i + 1, j + 1] 
         v_ij = v[i + 1, j + 1]
         v_sq = v_ij * v_ij
         F_u[i,j] = -u_ij + v_sq + f*(1.0f0 - u_ij)
         F_v[i,j] = u_ij + v_sq + f*(1.0f0 - u_ij) - (f + k)*v_ij
+        end
     end
 
     return nothing
@@ -51,8 +53,11 @@ end
 
 function run_fused(N, threads, n_samples, n_warmup)
     
-    blocks2d = (cld(N, threads), cld(N, threads))
-    threads2d = (threads, threads)
+    # blocks2d = (cld(N, threads), cld(N, threads))
+    # threads2d = (threads, threads)
+
+    blocks = 256
+    threads = 1024
 
     u = cuNumeric.random(Float32, (N, N))
     v = cuNumeric.random(Float32, (N, N))
@@ -65,7 +70,7 @@ function run_fused(N, threads, n_samples, n_warmup)
     task = cuNumeric.@cuda_task fused_kernel(u, v, F_u, F_v, UInt32(N), f, k)
 
     for i in range(1, n_warmup)
-        cuNumeric.@launch task=task threads=threads2d blocks=blocks2d inputs=(u, v) outputs=(F_u, F_v) scalars=(UInt32(N), f, k)
+        cuNumeric.@launch task=task threads=threads blocks=blocks inputs=(u, v) outputs=(F_u, F_v) scalars=(UInt32(N), f, k)
     end
 
     #* not sure what to do with scalars argument

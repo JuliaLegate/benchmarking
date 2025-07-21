@@ -10,6 +10,7 @@ BENCHMARK=$2
 shift 2  # Move past MODEL and BENCHMARK
 
 MACHINE="nvidia-brev"
+# MACHINE="dubliner"
 
 # Defaults
 GPUS=1
