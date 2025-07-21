@@ -77,7 +77,7 @@ function grayscott(N, M, n_steps)
     dims = (N, M)
     FT = Float32
     args = Params()
-    garbage_interval = 1
+    # garbage_interval = 1
 
     u = cuNumeric.ones(dims)
     v = cuNumeric.zeros(dims)
@@ -94,9 +94,9 @@ function grayscott(N, M, n_steps)
         u, u_new = u_new, u
         v, v_new = v_new, v
 
-        if n % garbage_interval == 0
-            GC.gc()
-        end
+        # if n % garbage_interval == 0
+        #     GC.gc()
+        # end
     end
 end
 
@@ -110,6 +110,7 @@ M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
 warmup=5
 println("[cuNumeric] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
+# cuNumeric.disable_gc!()
 
 grayscott(N, M, warmup)
 
