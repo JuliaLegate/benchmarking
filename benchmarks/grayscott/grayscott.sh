@@ -34,9 +34,9 @@ for i in "${!GPUS_LIST[@]}"; do
 
     $CUPYNUMERIC_GRAY "${args[@]}"
     $CUNUMERIC_GRAY "${args[@]}"
-    # $DIFFEQ_GRAY "${args[@]}"
+    $DIFFEQ_GRAY "${args[@]}"
 
-    # for gc in "${GC_LIST[@]}"; do
-    #     $CUNUMERIC_GRAY_GC "${args[@]}" "${gc}"
-    # done
+    for gc in "${GC_LIST[@]}"; do
+        $CUNUMERIC_GRAY_GC "${args[@]}" "${gc}"
+    done
 done
