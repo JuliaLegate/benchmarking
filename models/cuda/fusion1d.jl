@@ -104,7 +104,7 @@ use_fused = ARGS[4] == "1"
 warmup=1
 
 
-threads = 256
+threads = 1024
 
 if use_fused == true
     println("[CUDA] Fused kernel benchmark on $(N) elements for $(n_samples) iterations")
