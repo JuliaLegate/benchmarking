@@ -188,6 +188,13 @@ function make_weak_plot_grayscott(csv, file, colors, markers; fp32_peak = 19500.
         yscale = log10, xticksmirrored = true, yticksmirrored = true, xticklabelpad = 4, xtickalign=1, ytickalign = 1)
     ylims!(1,5e5)
 
+    # ax = Axis(gflops_fig[1,1], xlabel = "Number of GPUs", ylabel = "GFLOPS / GPU",
+    #     ylabelsize = 40, xlabelsize = 40, yticklabelsize = 30, xticklabelsize = 30,
+    #     xticks = sort(unique(df.gpus)), yticks = ([1e2, 5e2, 1e3, 1e4, 1e5], ["100","500","1000","10000","100000"]),
+    #     xgridvisible = false, ygridvisible = false, xscale = log2,
+    #     yscale = identity, xticksmirrored = true, yticksmirrored = true, xticklabelpad = 4, xtickalign=1, ytickalign = 1)
+    # ylims!(1,1e3)
+
     plots = Any[]
     labels = []
 
@@ -214,12 +221,16 @@ function make_weak_plot_grayscott(csv, file, colors, markers; fp32_peak = 19500.
     #      position = :lb, patchlabelgap = 12, labelsize = 30, framevisible = false,
     #     colgap = 25, titlesize = 30)
 
-    axislegend(ax, plots[3:end],labels[3:end],  "cuNumeric.jl",
-         position = :lb, patchlabelgap = 12, labelsize = 30, framevisible = false,
-         labelhalign = :center, colgap = 25, titlesize = 30)
+    # axislegend(ax, plots[3:end],labels[3:end], 
+    #      position = :lb, patchlabelgap = 12, labelsize = 30, framevisible = false,
+    #      labelhalign = :center, colgap = 25, titlesize = 30)
 
-    axislegend(ax, reverse(plots[1:2]), reverse(labels[1:2]),
-        position = :rb, labelsize = 30, framevisible = false, patchlabelgap = 12)
+    axislegend(ax, plots,labels, 
+         position = :lb, patchlabelgap = 12, labelsize = 30, framevisible = false,
+         labelhalign = :left, colgap = 25, titlesize = 30)
+
+    # axislegend(ax, reverse(plots[1:2]), reverse(labels[1:2]),
+    #     position = :rb, labelsize = 30, framevisible = false, patchlabelgap = 12)
 
     save(file, gflops_fig)
     println("Saved plot to $(file)")
