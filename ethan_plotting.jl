@@ -372,3 +372,75 @@ function plot_rohan()
 
     save(joinpath("./juliacon_plots/rohan_kernelfusion.svg"), fig)
 end
+
+
+function make_bar_chart(csv, file, colors; fp32_peak = 19_500.0)
+    df = CSV.read(csv, DataFrame)
+
+    # Basic derived columns (some now trivial but kept for consistency/debug)
+    df.size           = df.n .* df.m
+    df.size_per_gpu   = df.size ./ df.gpus
+    df.gflops_per_gpu = df.gflops ./ df.gpus
+
+    # We now expect exactly 1 GPU in the dataset.
+    @assert all(df.gpus .== 1) "make_bar_chart(): expected only 1-GPU rows in input data."
+
+    # Sort by model so bars are in a predictable order.
+    sort!(df, :model)
+
+    # X positions are categorical: 1..N mapped to model names via xticks.
+    xs      = 1:nrow(df)
+    heights = df.gflops_per_gpu
+    heights_log = log10.(heights)
+    labels  = String.(df.model)
+
+    size_in_inches = (4, 2.25)
+    dpi            = 300
+    size_in_pixels = size_in_inches .* dpi
+
+    fig = Figure(resolution = size_in_pixels)
+
+    ax = Axis(
+        fig[1, 1];
+        # xlabel = "Model",
+        # ylabel = "GFLOPS",
+        xlabelsize = 30,
+        ylabelsize = 30,
+        xticklabelsize = 25,
+        yticklabelsize = 30,
+        xticks = (xs, labels),
+        yticks = ([2,3,4,5], ["10²","10³", "10⁴", "10⁵"]),
+        yscale = identity,
+        xgridvisible = false,
+        ygridvisible = false,
+        xticksmirrored = true,
+        yticksmirrored = true,
+        xticklabelpad = 4,
+    )
+
+    # Bars: supply at least as many colors as models.
+    if length(colors) < length(xs)
+        error("make_bar_chart(): need at least $(length(xs)) colors; got $(length(colors)).")
+    end
+    barplot!(ax, xs, heights_log; color = colors[1:length(xs)], gap = 0.5)
+
+    # FP32 peak reference line.
+    hlines!(ax, log10(fp32_peak); color = :black, linestyle = (:dash, :loose), linewidth = 3)
+    text!(
+        ax,
+        minimum(xs) + 1, log10(fp32_peak) - 0.1;
+        text = "FP32 Theoretical Peak",
+        align = (:left, :center),
+        fontsize = 25,
+    )
+
+    # Optional: force some headroom above the tallest thing (bar or fp32 line).
+    ymax = max(maximum(heights_log), log10(fp32_peak)) * 1.1
+
+    ylims!(1, ymax)
+
+
+    save(file, fig)
+    println("Saved plot to $(file)")
+    return fig
+end
