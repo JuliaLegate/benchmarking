@@ -110,7 +110,7 @@ M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
 warmup=5
 println("[cuNumeric] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
-cuNumeric.disable_gc!()
+# cuNumeric.disable_gc!()
 
 grayscott(N, M, warmup)
 
