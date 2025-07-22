@@ -1,0 +1,4 @@
+Legate.jl + CUDA.jl (fused),1,1000,1000,0.144557,6.917686
+cuNumeric.jl (unfused),1,1000,1000,4.704978,0.212541
+Legate.jl + CUDA.jl (fused),1,1000,1000,0.193053,5.179925
+CUDA.jl (fused),1,1000,1000,0.009474,105.551508

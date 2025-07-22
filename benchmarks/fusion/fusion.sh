@@ -4,7 +4,7 @@ BENCHMARK=fusion
 FOLDER="benchmarks/$BENCHMARK"
 CSV="$FOLDER/$BENCHMARK.csv"
 
-CUNUMERIC_FUSION="bash run_benchmark.sh cunumeric $BENCHMARK"
+CUNUMERIC_FUSION="bash run_benchmark.sh cunumeric ${BENCHMARK}1d"
 
 GPUS_LIST=(1 2 4 8)
 # GPUS_LIST=(1)
