@@ -72,8 +72,8 @@ end
 
 
 function run_unfused(N, n_samples, n_warmup)
-    u = cuNumeric.as_type(cuNumeric.rand(NDArray, N), Float32)
-    v = cuNumeric.as_type(cuNumeric.rand(NDArray, N), Float32)
+    u = CUDA.rand(Float32, N)
+    v = CUDA.rand(Float32, N)
 
     f = 0.03f0
     k = 0.06f0
