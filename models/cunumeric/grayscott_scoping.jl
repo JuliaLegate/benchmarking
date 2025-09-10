@@ -80,13 +80,13 @@ function grayscott(N, M, n_steps)
     FT = Float32
     args = Params()
 
-    u = cuNumeric.ones(dims)
-    v = cuNumeric.zeros(dims)
-    u_new = cuNumeric.zeros(dims)
-    v_new = cuNumeric.zeros(dims)
+    u = cuNumeric.ones(FT, dims)
+    v = cuNumeric.zeros(FT, dims)
+    u_new = cuNumeric.zeros(FT, dims)
+    v_new = cuNumeric.zeros(FT, dims)
 
-    u[1:150, 1:150] = cuNumeric.random(FT, (150, 150))
-    v[1:150, 1:150] = cuNumeric.random(FT, (150, 150))
+    u[1:150, 1:150] = cuNumeric.as_type(cuNumeric.rand(NDArray, (150, 150)), FT)
+    v[1:150, 1:150] = cuNumeric.as_type(cuNumeric.rand(NDArray, (150, 150)), FT)
 
     for n in 1:n_steps
         step(u, v, u_new, v_new, args)
