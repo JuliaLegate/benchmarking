@@ -3,12 +3,12 @@ using Legate
 using Printf
 
 struct Params
-    dx::Float64
-    dt::Float64
-    c_u::Float64
-    c_v::Float64
-    f::Float64
-    k::Float64
+    dx::Float32
+    dt::Float32
+    c_u::Float32
+    c_v::Float32
+    f::Float32
+    k::Float32
 
     function Params(dx=1, c_u=1.0, c_v=0.3, f=0.03, k=0.06)
         new(dx, dx/5, c_u, c_v, f, k)
@@ -77,15 +77,14 @@ function grayscott(N, M, n_steps)
     dims = (N, M)
     FT = Float32
     args = Params()
-    # garbage_interval = 1
 
-    u = cuNumeric.ones(dims)
-    v = cuNumeric.zeros(dims)
-    u_new = cuNumeric.zeros(dims)
-    v_new = cuNumeric.zeros(dims)
+    u = cuNumeric.ones(FT, dims)
+    v = cuNumeric.zeros(FT, dims)
+    u_new = cuNumeric.zeros(FT, dims)
+    v_new = cuNumeric.zeros(FT, dims)
 
-    u[1:150, 1:150] = cuNumeric.random(FT, (150, 150))
-    v[1:150, 1:150] = cuNumeric.random(FT, (150, 150))
+    u[1:150, 1:150] = cuNumeric.as_type(cuNumeric.rand(NDArray, (150, 150)), FT)
+    v[1:150, 1:150] = cuNumeric.as_type(cuNumeric.rand(NDArray, (150, 150)), FT)
 
     for n in 1:n_steps
         step(u, v, u_new, v_new, args)
@@ -93,10 +92,6 @@ function grayscott(N, M, n_steps)
         # this doesn't copy, this switching references 
         u, u_new = u_new, u
         v, v_new = v_new, v
-
-        # if n % garbage_interval == 0
-        #     GC.gc()
-        # end
     end
 end
 
@@ -110,7 +105,6 @@ M = parse(Int, ARGS[3])
 n_samples = parse(Int, ARGS[4])
 warmup=5
 println("[cuNumeric] GrayScott benchmark on $(N)x$(M) matricies for $(n_samples) iterations")
-# cuNumeric.disable_gc!()
 
 grayscott(N, M, warmup)
 

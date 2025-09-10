@@ -42,16 +42,16 @@ def greyScottSys(u, v, dx, dt, c_u, c_v, f, k):
 
 def grayscott(N, M, n_steps):
     dx = 1
-    dt = dx/5
+    dt = np.float32(dx/5)
     u = np.ones((N,M))
     v = np.zeros((N,M))
     u[:150,:150] = np.random.rand(150,150)
     v[:150,:150] = np.random.rand(150,150)
 
-    c_u = 1
-    c_v = 0.3
-    f = 0.03
-    k = 0.06
+    c_u = np.float32(1.0)
+    c_v = np.float32(0.3)
+    f = np.float32(0.03)
+    k = np.float32(0.06)
 
     for i in range(n_steps):
         greyScottSys(u, v, dx, dt, c_u, c_v, f, k)
