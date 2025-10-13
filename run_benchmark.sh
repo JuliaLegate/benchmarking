@@ -73,7 +73,7 @@ fi
 if [[ "$MODEL" == "cunumeric" || "$MODEL" == "cupynumeric" ]]; then
     export LEGATE_AUTO_CONFIG=0
     if [[ "$MACHINE" == "nvidia-brev" ]]; then 
-        export LEGATE_CONFIG="--cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=8 --sysmem=774026  --numamem=0 --fbmem=76596 --zcmem=128 --regmem=0"
+        export LEGATE_CONFIG="--profile --cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=8 --sysmem=774026  --numamem=0 --fbmem=76596 --zcmem=128 --regmem=0"
     else
         export LEGATE_CONFIG="--cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=2 --sysmem=256 --numamem=19029 --fbmem=7569 --zcmem=128 --regmem=0"
     fi 

@@ -35,13 +35,15 @@ for i in "${!GPUS_LIST[@]}"; do
 
     args=(--gpus "$gpus" "$N" "$M" "$NUM_ITERS")
 
-    # $CUPYNUMERIC_GRAY "${args[@]}"
+    $CUPYNUMERIC_GRAY "${args[@]}"
+    mv legate_0.prof $FOLDER/legate_cupy_${gpus}gpus_${N}x${M}.prof
     $CUNUMERIC_GRAY "${args[@]}"
+    mv legate_0.prof $FOLDER/legate_cunumeric_${gpus}gpus_${N}x${M}.prof    
     # $DIFFEQ_GRAY "${args[@]}"
-
     $CUNUMERIC_GRAY_SCOPE "${args[@]}"
+    mv legate_0.prof $FOLDER/legate_cunumeric_scoping_${gpus}gpus_${N}x${M}.prof
 
-    for gc in "${GC_LIST[@]}"; do
-        $CUNUMERIC_GRAY_GC "${args[@]}" "${gc}"
-    done
+    # for gc in "${GC_LIST[@]}"; do
+    #     $CUNUMERIC_GRAY_GC "${args[@]}" "${gc}"
+    # done
 done
