@@ -9,6 +9,9 @@ end
 name(::NASFourierTransform) = "nas_ft"
 dims(b::NASFourierTransform) = (b.N, b.M)
 allowed_types(::Type{<:NASFourierTransform}) = Float64
+# Self-verifies against analytic NPB checksums, not CUDA.jl; lets the CUDA.jl
+# backend run its own check instead of skipping.
+correctness_uses_cpu(::NASFourierTransform) = true
 
 function data(b::NASFourierTransform)
     p = nas_ft_parameters(b.class)
