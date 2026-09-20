@@ -49,7 +49,7 @@ jobs:
 
           echo "base=$base_image" >> "$GITHUB_OUTPUT"
           echo "immutable=${registry_image}:${commit}-benchmark-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
-          echo "rolling=${registry_image}:dev-benchmark" >> "$GITHUB_OUTPUT"
+          echo "rolling=${registry_image}:latest" >> "$GITHUB_OUTPUT"
 
       - name: Log in to registry
         uses: docker/login-action@v3
