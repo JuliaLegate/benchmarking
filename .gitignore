@@ -1,2 +1,12 @@
-Manifest.toml
-nval.sh
+*Manifest.toml
+*LocalPreferences.toml
+__pycache__/
+*.pyc
+*.log*
+*.err*
+*.prof
+results*/
+plots*/
+.vscode/
+.agents/
+.codex/

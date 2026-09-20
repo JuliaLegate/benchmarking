@@ -1,0 +1,14 @@
+.git
+**/.git
+.agents
+.codex
+.vscode
+**/Manifest.toml
+**/LocalPreferences.toml
+**/__pycache__
+**/*.pyc
+**/*.log*
+**/*.err*
+**/*.prof
+results*
+plots*

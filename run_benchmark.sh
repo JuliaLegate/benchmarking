@@ -1,87 +1,85 @@
 #!/bin/bash
 
-if [[ $# -lt 2 ]]; then
-    echo "Usage: $0 <programming_model> <benchmark> [--gpus <num_gpus>] [--cpus <num_cpus>] [--config-as-args] [extra_args...]"
-    exit 1
-fi
-FILEEXT=".jl"
-MODEL=$1
-BENCHMARK=$2
-shift 2  # Move past MODEL and BENCHMARK
+set -euo pipefail
 
-MACHINE="nvidia-brev"
-# MACHINE="dubliner"
+MODEL=""
+GPUS=""
+CPUS=""
+VERBOSE=0
 
-# Defaults
-GPUS=1
-CPUS=1
-CONFIG_AS_ARGS=0
-EXTRA_ARGS=()
-
-# Parse optional flags and extra arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --gpus)
-            GPUS=$2
-            shift 2
+        --model=*)
+            MODEL=${1#*=}
+            shift
             ;;
-        --cpus)
-            CPUS=$2
-            shift 2
+        --gpus=*)
+            GPUS=${1#*=}
+            shift
             ;;
-        --diffeq)
-            DIFFEQ_CONDITION=1
-            shift 1
+        --cpus=*)
+            CPUS=${1#*=}
+            shift
+            ;;
+        --verbose)
+            VERBOSE=1
+            shift
+            ;;
+        --)
+            shift
+            break
             ;;
         *)
-            EXTRA_ARGS+=("$1")
-            shift
+            echo "Error: unknown runner option '$1'." >&2
+            exit 2
             ;;
     esac
 done
 
-if [[ $DIFFEQ_CONDITION -eq 1 ]]; then
-    DIFFEQ="mpiexec -n $GPUS"
+if [[ -z $MODEL || -z $GPUS || -z $CPUS || $# -eq 0 ]]; then
+    echo "Usage: $0 --model=<name> --gpus=<n> --cpus=<n> [--verbose] -- <command> [args...]" >&2
+    exit 2
 fi
 
-RUNNER="julia --project='models/$MODEL'"
-
-
-if [[ "$MODEL" == "cupynumeric" ]]; then
-    FILEEXT=".py"
-    RUNNER=python3
+if ! [[ $GPUS =~ ^[1-9][0-9]*$ ]]; then
+    echo "Error: GPUs must be a positive integer; got '$GPUS'." >&2
+    exit 2
 fi
 
-# Check for script existence
-if [[ ! -f "models/$MODEL/$BENCHMARK$FILEEXT" ]]; then
-    echo "Error: File $MODEL/$BENCHMARK$FILEEXT does not exist."
-    exit 1
+if ! [[ $CPUS =~ ^[0-9]+$ ]]; then
+    echo "Error: CPUs must be a nonnegative integer; got '$CPUS'." >&2
+    exit 2
 fi
 
-# Validate CPU and GPU inputs
-if [[ $GPUS -lt 0 ]]; then
-    echo "Invalid GPU count: $GPUS"
-    exit 1
-fi
-
-if [[ $CPUS -lt 0 ]]; then
-    echo "Invalid CPU count: $CPUS"
-    exit 1
-fi
-
-# Configure runtime
-if [[ "$MODEL" == "cunumeric" || "$MODEL" == "cupynumeric" ]]; then
-    export LEGATE_AUTO_CONFIG=0
-    if [[ "$MACHINE" == "nvidia-brev" ]]; then 
-        export LEGATE_CONFIG="--profile --cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=8 --sysmem=774026  --numamem=0 --fbmem=76596 --zcmem=128 --regmem=0"
+if [[ $MODEL == jacc || $MODEL == dagger ]]; then
+    if [[ -z ${CUDA_VISIBLE_DEVICES:-} ]]; then
+        CUDA_VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
     else
-        export LEGATE_CONFIG="--cpus=$CPUS --gpus=$GPUS --omps=0 --ompthreads=0 --utility=2 --sysmem=256 --numamem=19029 --fbmem=7569 --zcmem=128 --regmem=0"
-    fi 
-    export LEGATE_SHOW_CONFIG=0
+        CUDA_VISIBLE_DEVICES=$(cut -d, -f1-"$GPUS" <<< "$CUDA_VISIBLE_DEVICES")
+    fi
+    export CUDA_VISIBLE_DEVICES
 fi
 
-printf "\n"
-echo "Running: $MODEL/$BENCHMARK$FILEEXT with $CPUS CPUs and $GPUS GPUs"
-CMD="$DIFFEQ $RUNNER models/$MODEL/$BENCHMARK$FILEEXT $GPUS ${EXTRA_ARGS[@]}"
-printf "Running: %s\n" "$CMD"
-eval "$CMD"
+# A worker process has exactly one execution-model identity. Reject nested or
+# accidentally reused launch environments instead of allowing a worker to load
+# a second model under a misleading result label.
+if [[ -n ${CUNUMERIC_BENCH_ACTIVE_MODEL:-} && $CUNUMERIC_BENCH_ACTIVE_MODEL != "$MODEL" ]]; then
+    echo "Error: refusing to launch model '$MODEL' inside model '$CUNUMERIC_BENCH_ACTIVE_MODEL'." >&2
+    exit 2
+fi
+export CUNUMERIC_BENCH_ACTIVE_MODEL=$MODEL
+export CUNUMERIC_BENCH_GPUS=$GPUS
+export CUNUMERIC_BENCH_CPUS=$CPUS
+export CUNUMERIC_BENCH_VERBOSE=$VERBOSE
+
+# Do not allow system CUDA/Legate library paths to override the artifacts or
+# libraries selected by an isolated model environment.
+unset LD_LIBRARY_PATH
+
+if [[ $VERBOSE == 1 ]]; then
+    printf 'Running [%s]:' "$MODEL"
+    printf ' %q' "$@"
+    printf '\n'
+fi
+
+exec "$@"
