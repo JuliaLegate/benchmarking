@@ -21,13 +21,13 @@ struct DaggerNASFT{S,P}
     processors::P
 end
 
-struct DaggerNASFTState{A,H,T}
-    u0::A
-    u1::A
-    twiddle::T
-    mask::T
+struct DaggerNASFTState{U,M,H,BL,AS}
+    u1::U
+    mask::M
     host_initial::H
     host_twiddle::Array{Float64,3}
+    blocks::BL
+    assignment::AS
 end
 
 function dagger_nas_ft_chunk_checksum(values, mask)
@@ -73,14 +73,13 @@ function model_initialize(b::DaggerNASFT)
     blocks = Dagger.Blocks(p.nx, p.ny, cld(p.nz, b.gpus))
     assignment = reshape(copy(b.processors), 1, 1, b.gpus)
     return Dagger.with_options(; scope=b.scope) do
-        u0 = Dagger.DArray(zeros(ComplexF64, shape), blocks, assignment)
+        # u1/mask persist; u0/twiddle are rebuilt from host each run.
         u1 = Dagger.DArray(zeros(ComplexF64, shape), blocks, assignment)
-        twiddle = Dagger.DArray(zeros(Float64, shape), blocks, assignment)
         mask = Dagger.DArray(nas_ft_checksum_mask(p), blocks, assignment)
-        foreach(wait_for_darray, (u0, u1, twiddle, mask))
+        foreach(wait_for_darray, (u1, mask))
         return DaggerNASFTState(
-            u0, u1, twiddle, mask, Array{ComplexF64}(undef, shape),
-            Array{Float64}(undef, shape),
+            u1, mask, Array{ComplexF64}(undef, shape),
+            Array{Float64}(undef, shape), blocks, assignment,
         )
     end
 end
@@ -90,13 +89,16 @@ function model_run!(b::DaggerNASFT, s::DaggerNASFTState)
     nas_ft_initial_conditions!(s.host_initial)
     nas_ft_twiddle!(s.host_twiddle)
     return Dagger.with_options(; scope=b.scope) do
-        copyto!(s.u0, s.host_initial)
-        copyto!(s.twiddle, s.host_twiddle)
-        fft!(s.u0, (1, 2, 3); decomp=:slab)
+        # Stage host->GPU via the DArray constructor (the timed transfer), like
+        # every other backend. copyto!(::DArray, ::Array) drives a cross-space
+        # datadeps copy Dagger mishandles.
+        u0 = Dagger.DArray(s.host_initial, s.blocks, s.assignment)
+        twiddle = Dagger.DArray(s.host_twiddle, s.blocks, s.assignment)
+        fft!(u0, (1, 2, 3); decomp=:slab)
         checksums = Vector{Dagger.DTask}[]
         for _ in 1:p.niter
-            s.u0 .*= s.twiddle
-            copyto!(s.u1, s.u0)
+            u0 .*= twiddle
+            copyto!(s.u1, u0)
             ifft!(s.u1, (1, 2, 3); decomp=:slab)
             push!(checksums, dagger_nas_ft_checksum_tasks(b, s))
         end

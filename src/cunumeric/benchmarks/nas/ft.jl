@@ -49,7 +49,8 @@ function run!(b::NASFourierTransform, s::CuNumericNASFTState)
     s.twiddle .= exp.(ap .* (s.ix2 .+ s.iy2 .+ s.iz2))
     fft!(s.u0)
     empty!(s.checksums)
-    for _ in 1:p.niter
+    # ComplexF64 .* Float64 (twiddle, mask): intended widening, opt in.
+    cuNumeric.@allowpromotion for _ in 1:p.niter
         s.u0 .*= s.twiddle
         copyto!(s.u1, s.u0)
         ifft!(s.u1)
