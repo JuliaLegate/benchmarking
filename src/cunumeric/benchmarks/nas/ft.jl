@@ -6,11 +6,12 @@
 # reduction, rather than a 1024-element gather, with an extra product array.
 # ifft! normalizes the full array. These are material comparison limitations.
 
-struct CuNumericNASFTState{A,T,M,X,Y,Z,H,C}
+struct CuNumericNASFTState{A,M,X,Y,Z,H,C}
     u0::A
     u1::A
-    twiddle::T
+    twiddle::A
     mask::M
+    product::A
     ix2::X
     iy2::Y
     iz2::Z
@@ -27,13 +28,17 @@ function initialize(b::NASFourierTransform{Float64}; mod=cuNumeric)
     shape = (p.nx, p.ny, p.nz)
     u0 = mod.zeros(ComplexF64, shape)
     u1 = mod.zeros(ComplexF64, shape)
-    twiddle = mod.zeros(Float64, shape)
-    mask = mod.NDArray(nas_ft_checksum_mask(p))
+    # twiddle/mask are ComplexF64 so the per-iteration multiplies stay same-type:
+    # ComplexF64 .* Float64 would promote the real operand to a fresh full-volume
+    # copy every iteration, which at large classes exhausts GPU memory.
+    twiddle = mod.zeros(ComplexF64, shape)
+    mask = mod.NDArray(ComplexF64.(nas_ft_checksum_mask(p)))
+    product = mod.zeros(ComplexF64, shape)
     ix2 = mod.NDArray(reshape(cunumeric_nas_ft_frequency_squares(p.nx), p.nx, 1, 1))
     iy2 = mod.NDArray(reshape(cunumeric_nas_ft_frequency_squares(p.ny), 1, p.ny, 1))
     iz2 = mod.NDArray(reshape(cunumeric_nas_ft_frequency_squares(p.nz), 1, 1, p.nz))
     host = Array{ComplexF64}(undef, shape)
-    return (CuNumericNASFTState(u0, u1, twiddle, mask, ix2, iy2, iz2, host, Any[]),)
+    return (CuNumericNASFTState(u0, u1, twiddle, mask, product, ix2, iy2, iz2, host, Any[]),)
 end
 
 function run!(b::NASFourierTransform, s::CuNumericNASFTState)
@@ -46,15 +51,18 @@ function run!(b::NASFourierTransform, s::CuNumericNASFTState)
     copyto!(s.u0, initial)
     cuNumeric.destroy!(initial)
     ap = -4.0*NAS_FT_ALPHA*pi^2
-    s.twiddle .= exp.(ap .* (s.ix2 .+ s.iy2 .+ s.iz2))
+    # One-time real->ComplexF64 store of the twiddle exponent.
+    cuNumeric.@allowpromotion s.twiddle .= exp.(ap .* (s.ix2 .+ s.iy2 .+ s.iz2))
     fft!(s.u0)
     empty!(s.checksums)
-    # ComplexF64 .* Float64 (twiddle, mask): intended widening, opt in.
-    cuNumeric.@allowpromotion for _ in 1:p.niter
+    # No per-iteration allocation: twiddle/mask are ComplexF64 (no promotion) and
+    # the masked product reuses a preallocated buffer.
+    for _ in 1:p.niter
         s.u0 .*= s.twiddle
         copyto!(s.u1, s.u0)
         ifft!(s.u1)
-        push!(s.checksums, sum(s.u1 .* s.mask))
+        s.product .= s.u1 .* s.mask
+        push!(s.checksums, sum(s.product))
     end
     return s.checksums
 end
