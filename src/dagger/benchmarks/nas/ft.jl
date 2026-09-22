@@ -72,14 +72,17 @@ function model_initialize(b::DaggerNASFT)
     shape = (p.nx, p.ny, p.nz)
     blocks = Dagger.Blocks(p.nx, p.ny, cld(p.nz, b.gpus))
     assignment = reshape(copy(b.processors), 1, 1, b.gpus)
+    host_initial = Array{ComplexF64}(undef, shape)
+    host_twiddle = Array{Float64}(undef, shape)
+    CUDA.pin(host_initial)
+    CUDA.pin(host_twiddle)
     return Dagger.with_options(; scope=b.scope) do
         # u1/mask persist; u0/twiddle are rebuilt from host each run.
         u1 = Dagger.DArray(zeros(ComplexF64, shape), blocks, assignment)
         mask = Dagger.DArray(nas_ft_checksum_mask(p), blocks, assignment)
         foreach(wait_for_darray, (u1, mask))
         return DaggerNASFTState(
-            u1, mask, Array{ComplexF64}(undef, shape),
-            Array{Float64}(undef, shape), blocks, assignment,
+            u1, mask, host_initial, host_twiddle, blocks, assignment,
         )
     end
 end

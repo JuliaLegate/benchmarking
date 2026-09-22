@@ -14,6 +14,8 @@ model_synchronize(b::ModelTimingProbe) = push!(b.events, :sync)
 const TimingProbes = Union{TimingProbe,GrayScottTimingProbe}
 initialize(b::TimingProbes; mod=Base) = (push!(b.events, :initialize); ())
 run!(b::TimingProbes) = push!(b.events, :run)
+cleanup!(b::TimingProbes) = push!(b.events, :cleanup)
+cleanup_result!(b::TimingProbes, result, state...) = push!(b.events, :result_cleanup)
 total_flops(::TimingProbes) = 6000
 name(::TimingProbes) = "timing probe"
 
@@ -30,8 +32,8 @@ name(::TimingProbes) = "timing probe"
         synchronize() = push!(events, :sync)
         gs = GlobalSettings(; n_warmup=warmup, n_iter=3)
         step = fence_each_iteration(b) ? [:run, :sync] : [:run]
-        expected = vcat([:initialize], repeat(step, warmup), [:clock],
-            repeat(step, 3), [:clock])
+        expected = vcat([:initialize], repeat(vcat(step, [:result_cleanup]), warmup), [:clock],
+            repeat(vcat(step, [:result_cleanup]), 3), [:clock, :cleanup])
         # Also exercises forwarding the backend callback through run_benchmark.
         result = run_benchmark(b, gs; mod=Base, clock, synchronize)
         @test events == expected
@@ -63,4 +65,14 @@ end
     ]
     @test time_ms == 2.0
     @test gflops == 0.003
+end
+
+@testset "Trial cleanup on failure" begin
+    events = Symbol[]
+    b = TimingProbe(events)
+    gs = GlobalSettings(; n_warmup=1, n_iter=1)
+    @test_throws ErrorException _trial(b, gs; mod=Base,
+        clock=()->error("unexpected timing"),
+        synchronize=()->error("simulated execution failure"))
+    @test events == [:initialize, :run, :cleanup]
 end

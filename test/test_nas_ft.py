@@ -1,4 +1,5 @@
 """NAS FT adapter checks with NumPy as an independent CPU execution backend."""
+import re
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,6 +14,27 @@ except ImportError:
 
 @unittest.skipIf(np is None, "NumPy is required for CPU FT verification")
 class NASFTTests(unittest.TestCase):
+    def test_reference_checksums_match_julia_for_every_class(self):
+        with patch.dict("sys.modules", {
+            "cupynumeric": np,
+            "core": SimpleNamespace(register_benchmark=lambda *args: None),
+        }):
+            ft = load(SOURCE / "benchmarks" / "nas" / "ft.py")
+        # Verify the shared tables without running large classes.
+        source = (SOURCE.parent / "nas" / "ft.jl").read_text()
+        for cls, checksums in ft.CHECKSUMS.items():
+            with self.subTest(cls=cls):
+                block = re.search(
+                    rf'"{cls}" => ComplexF64\[(.*?)\n    \]', source, re.S
+                ).group(1)
+                reference = [complex(float(re_part), float(im_part))
+                             for re_part, im_part in re.findall(
+                                 r"([\d.e+-]+) \+ ([\d.e+-]+)im", block)]
+                self.assertEqual(len(checksums), ft.CLASSES[cls][3])
+                self.assertEqual(checksums, reference)
+        self.assertEqual(ft.CHECKSUMS["B"][15],
+                         512.6064276004 + 511.4218460548j)
+
     def test_sparse_checksum_and_official_verification(self):
         with patch.dict("sys.modules", {
             "cupynumeric": np,

@@ -36,6 +36,10 @@ abstract type AbstractBenchmark{T} end
 fence_each_iteration(::AbstractBenchmark) = true
 benchmark_synchronize() = cuNumeric.issue_execution_fence(; block=true)
 
+# Cleanup hooks.
+cleanup!(::AbstractBenchmark, state...) = nothing
+cleanup_result!(::AbstractBenchmark, result, state...) = nothing
+
 # True when this file is included after `using cuNumeric` (the worker). The
 # orchestrator includes the same kernel files for types / `total_space` /
 # `estimate_scaling` without loading Legion; those files skip `@accelerate`
@@ -240,25 +244,31 @@ function _trial(
 )
     GC.gc(true)
     state = initialize(b; mod=mod)
-    fence_each = fence_each_iteration(b)
+    try
+        fence_each = fence_each_iteration(b)
 
-    for _ in 1:gs.n_warmup
-        reset!(b, state...)
-        run!(b, state...)
-        fence_each && synchronize()
+        for _ in 1:gs.n_warmup
+            reset!(b, state...)
+            result = run!(b, state...)
+            fence_each && synchronize()
+            cleanup_result!(b, result, state...)
+        end
+        reset!(b, state...) && synchronize()
+
+        start_time = clock()
+        for _ in 1:gs.n_iter
+            result = run!(b, state...)
+            fence_each && synchronize()
+            cleanup_result!(b, result, state...)
+        end
+        total_time_μs = clock() - start_time
+
+        mean_time_ms = total_time_μs / (gs.n_iter * 1e3)
+        gflops = total_flops(b) / (mean_time_ms * 1e6)
+        return mean_time_ms, gflops
+    finally
+        cleanup!(b, state...)
     end
-    reset!(b, state...) && synchronize()
-
-    start_time = clock()
-    for _ in 1:gs.n_iter
-        run!(b, state...)
-        fence_each && synchronize()
-    end
-    total_time_μs = clock() - start_time
-
-    mean_time_ms = total_time_μs / (gs.n_iter * 1e3)
-    gflops = total_flops(b) / (mean_time_ms * 1e6)
-    return mean_time_ms, gflops
 end
 
 # Run `n_trial` independent trials and collect their per-trial measurements.

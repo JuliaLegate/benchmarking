@@ -88,15 +88,23 @@ CUDA/JACC gather 1024 samples (JACC reduces real/imaginary parts separately);
 cuPyNumeric uses native `take`. cuNumeric and Dagger currently scan a full-volume
 mask, a significant extra cost. Dagger only reduces within each slab during
 timing, so it also omits the cross-GPU aggregation paid by other adapters.
-All adapters use normalized inverse FFTs instead of NPB's unnormalized inverse
-and checksum-only scaling. Host RNG, transfers, FFT scratch/temporary allocation
-and planning performed inside `run` remain charged to that model. In particular,
-cuPyNumeric's serial Python RNG should not be mistaken for FFT runtime cost.
+cuNumeric uses NPB's unnormalized inverse with a pre-scaled checksum mask. The
+other adapters use normalized inverse FFTs. Host RNG, transfers, FFT scratch,
+temporary allocation, and planning inside `run` remain charged to that model.
+In particular, cuPyNumeric's serial Python RNG is included in its runtime.
 
 Run class S across all models with:
 
 ```sh
 julia --project=. run.jl --config=benchmarks_nas_ft.toml
+```
+
+The cuNumeric FT GPU regression covers repeated S/W/B runs with a 12 GiB
+framebuffer cap (class B previously exhausted even a 24 GiB GPU):
+
+```sh
+LEGATE_AUTO_CONFIG=0 LEGATE_CONFIG="--gpus=1 --cpus=1 --fbmem=12288" \
+  julia --project=environments/cunumeric test/nas_ft_gpu.jl
 ```
 
 ## MG execution contract

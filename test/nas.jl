@@ -71,7 +71,10 @@ end
     )
     @test Set(r.model for r in runs) ==
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
-    @test all(r.N == 64 && r.M == 64 && r.spec.n_iter == 1 for r in runs)
+    @test all(runs) do r
+        p = nas_ft_parameters(get(r.spec.kwargs, :class, "S"))
+        (r.N, r.M) == (p.nx, p.ny) && r.spec.n_iter == 1
+    end
 end
 
 @testset "NAS MG contract" begin

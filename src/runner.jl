@@ -82,6 +82,13 @@ function prepare_backend(fusion, verbose)
     return verbose ? run(cmd) : run(pipeline(cmd; stdout=devnull, stderr=devnull))
 end
 
+function worker_failure_message(e::ProcessFailedException)
+    # Signals can report an exit code of zero; preserve the signal status.
+    statuses = [p.termsignal == 0 ? "exit code $(p.exitcode)" :
+        "signal $(p.termsignal) (exit code $(p.exitcode))" for p in e.procs]
+    return "Worker failed: " * join(statuses, ", ")
+end
+
 function execute_plan(runs, gs, opts, budget, raw; launch=run, prepare=prepare_backend,
     results_root=normpath(joinpath(@__DIR__, "..", "results")), preflight=preflight_models)
     preflight(runs)
@@ -124,7 +131,7 @@ function execute_plan(runs, gs, opts, budget, raw; launch=run, prepare=prepare_b
             # ProcessFailedException prints inherited environment variables.
             # Report exit codes without copying that environment into logs.
             message = if e isa ProcessFailedException
-                "Worker exited with code(s) " * join((p.exitcode for p in e.procs), ", ")
+                worker_failure_message(e)
             else
                 sprint(showerror, e)
             end

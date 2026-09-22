@@ -1,10 +1,5 @@
-# LIMITATION: cuNumeric has no NPB 46-bit RNG primitive, so exact initial
-# conditions are generated on the host during each timed run and copied into a
-# Legate array (host RNG and transfer are timed). The FFT auto task broadcasts
-# transformed axes: a full 3-D FFT cannot partition across GPUs; other array
-# operations may distribute. Checksum sampling uses a full-volume masked
-# reduction, rather than a 1024-element gather, with an extra product array.
-# ifft! normalizes the full array. These are material comparison limitations.
+# Initial conditions are generated on the host. Full 3-D FFTs do not partition.
+# Checksums use a masked reduction whose scale accounts for `bfft!`.
 
 struct CuNumericNASFTState{A,M,X,Y,Z,H,C}
     u0::A
@@ -19,6 +14,12 @@ struct CuNumericNASFTState{A,M,X,Y,Z,H,C}
     checksums::C
 end
 
+function cleanup_result!(::NASFourierTransform, result, s::CuNumericNASFTState)
+    foreach(cuNumeric.destroy!, result)
+    empty!(s.checksums)
+    return nothing
+end
+
 function cunumeric_nas_ft_frequency_squares(n)
     return Float64[((i + n÷2) % n - n÷2)^2 for i in 0:(n - 1)]
 end
@@ -28,11 +29,9 @@ function initialize(b::NASFourierTransform{Float64}; mod=cuNumeric)
     shape = (p.nx, p.ny, p.nz)
     u0 = mod.zeros(ComplexF64, shape)
     u1 = mod.zeros(ComplexF64, shape)
-    # twiddle/mask are ComplexF64 so the per-iteration multiplies stay same-type:
-    # ComplexF64 .* Float64 would promote the real operand to a fresh full-volume
-    # copy every iteration, which at large classes exhausts GPU memory.
+    # Matching element types avoid promoted temporaries.
     twiddle = mod.zeros(ComplexF64, shape)
-    mask = mod.NDArray(ComplexF64.(nas_ft_checksum_mask(p)))
+    mask = mod.NDArray(ComplexF64.(nas_ft_checksum_mask(p)) ./ prod(shape))
     product = mod.zeros(ComplexF64, shape)
     ix2 = mod.NDArray(reshape(cunumeric_nas_ft_frequency_squares(p.nx), p.nx, 1, 1))
     iy2 = mod.NDArray(reshape(cunumeric_nas_ft_frequency_squares(p.ny), 1, p.ny, 1))
@@ -44,33 +43,36 @@ end
 function run!(b::NASFourierTransform, s::CuNumericNASFTState)
     p = nas_ft_parameters(b.class)
     nas_ft_initial_conditions!(s.host_initial)
-    # `copyto!(::NDArray, ::Array)` falls back to Base's scalar-indexing path.
-    # Upload through an NDArray staging store so the actual copy is a native
-    # Legate array operation.
-    initial = cuNumeric.NDArray(s.host_initial)
-    copyto!(s.u0, initial)
-    cuNumeric.destroy!(initial)
+    copyto!(s.u0, s.host_initial)
     ap = -4.0*NAS_FT_ALPHA*pi^2
-    # One-time real->ComplexF64 store of the twiddle exponent.
     cuNumeric.@allowpromotion s.twiddle .= exp.(ap .* (s.ix2 .+ s.iy2 .+ s.iz2))
     fft!(s.u0)
-    empty!(s.checksums)
-    # No per-iteration allocation: twiddle/mask are ComplexF64 (no promotion) and
-    # the masked product reuses a preallocated buffer.
     for _ in 1:p.niter
-        s.u0 .*= s.twiddle
+        map!(*, s.u0, s.u0, s.twiddle)
         copyto!(s.u1, s.u0)
-        ifft!(s.u1)
-        s.product .= s.u1 .* s.mask
+        bfft!(s.u1)
+        map!(*, s.product, s.u1, s.mask)
         push!(s.checksums, sum(s.product))
     end
     return s.checksums
+end
+
+function cleanup!(::NASFourierTransform, s::CuNumericNASFTState)
+    foreach(cuNumeric.destroy!, s.checksums)
+    empty!(s.checksums)
+    foreach(cuNumeric.destroy!,
+        (s.u0, s.u1, s.twiddle, s.mask, s.product, s.ix2, s.iy2, s.iz2))
+    return nothing
 end
 
 function check_benchmark_correctness(
     b::NASFourierTransform, gs::GlobalSettings; mod=cuNumeric
 )
     state = only(initialize(b; mod))
-    got = ComplexF64[cuNumeric.@allowscalar(x[]) for x in run!(b, state)]
-    return nas_ft_verified(b.class, got) ? "pass" : "fail"
+    try
+        got = ComplexF64[cuNumeric.@allowscalar(x[]) for x in run!(b, state)]
+        return nas_ft_verified(b.class, got) ? "pass" : "fail"
+    finally
+        cleanup!(b, state)
+    end
 end

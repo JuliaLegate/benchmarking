@@ -411,6 +411,13 @@ end
 end
 
 @testset "Execution isolation and failure status" begin
+    for (command, expected) in ((`sh -c 'exit 7'`, "exit code 7"),
+        (`sh -c 'kill -TERM $$'`, "signal 15"))
+        process = run(ignorestatus(command))
+        message = worker_failure_message(ProcessFailedException([process]))
+        @test occursin(expected, message)
+        @test !occursin("PATH=", message)
+    end
     gs = GlobalSettings(; n_warmup=1, n_iter=1)
     runs = plan_runs(
         [spec("montecarlo"; T=T) for T in ("Float32", "Float64")], gs, RAW, GROUPS, 1_000_000
