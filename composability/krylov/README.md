@@ -18,19 +18,19 @@ extension is currently on
 [`codex/cg-benchmark-reproducer`](https://github.com/JuliaLegate/cuNumeric.jl/tree/codex/cg-benchmark-reproducer):
 
 ```sh
-julia --project=composability -e 'using Pkg; Pkg.develop(path="/path/to/cuNumeric.jl"); Pkg.instantiate()'
+julia --project=composability/krylov -e 'using Pkg; Pkg.develop(path="/path/to/cuNumeric.jl"); Pkg.instantiate()'
 ```
 
 If your cuNumeric installation uses local backend-library preferences, copy its
-`LocalPreferences.toml` into `composability/`. On dubliner, that was necessary
+`LocalPreferences.toml` into `composability/krylov/`. On dubliner, that was necessary
 to select the installed Legate and cuPyNumeric libraries. Keep the generated
 `Manifest.toml` and preference file with your run record; neither is committed.
 
 Run from the repository root, specifying one or more matrix dimensions:
 
 ```sh
-BENCH_ELTYPE=Float32 bash composability/run.sh 8192 16384 32768
-BENCH_ELTYPE=Float64 BENCH_BACKENDS=cuNumeric bash composability/run.sh 8192
+BENCH_ELTYPE=Float32 bash composability/krylov/run.sh 8192 16384 32768
+BENCH_ELTYPE=Float64 BENCH_BACKENDS=cuNumeric bash composability/krylov/run.sh 8192
 ```
 
 The launcher runs each backend, solver, and mode in a fresh process and writes
