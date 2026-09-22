@@ -1,5 +1,11 @@
 # JuliaLegate benchmarks
 
+## Composability
+
+The [OrdinaryDiffEq heat-equation example and benchmark](composability/ordinarydiffeq/README.md)
+run independently of the benchmark orchestrator. They compare an actual
+SciML ODE solver on cuNumeric and CUDA.jl arrays.
+
 This directory runs the same GPU benchmarks across cuNumeric.jl, cuPyNumeric,
 CUDA.jl, JACC.jl, and Dagger.jl. Each model runs in an isolated process and
 environment. Runs include correctness checks, trial progress, mean time, and
