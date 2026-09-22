@@ -55,6 +55,14 @@ end
     initial = Array{ComplexF64}(undef, 2, 2, 1)
     nas_ft_initial_conditions!(initial)
     @test initial[1] ≈ 0.7945219111887383 + 0.8690652738745399im
+    for cls in ("S", "W")
+        p = nas_ft_parameters(cls)
+        reference = nas_ft_initial_conditions(p)
+        fast = similar(reference)
+        scratch = Vector{UInt64}(undef, 1 << 16)
+        nas_ft_initial_conditions_uint64!(fast, scratch)
+        @test fast == reference
+    end
     @test_throws ErrorException validate_nas_ft(
         NASFourierTransform{Float32}(; N=64, M=64, class="S")
     )

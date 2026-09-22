@@ -20,7 +20,7 @@ class TimingTests(unittest.TestCase):
         for gray_scott in (False, True):
             for warmup in (0, 2):
                 with self.subTest(gray_scott=gray_scott, warmup=warmup):
-                    events, ticks = [], iter((6000, 12000))
+                    events, ticks = [], iter((6_000_000, 12_000_000))
 
                     def clock():
                         events.append("clock")
@@ -34,10 +34,10 @@ class TimingTests(unittest.TestCase):
                         "cupynumeric": SimpleNamespace(float32=float, float64=float),
                         "legate.core": SimpleNamespace(get_legate_runtime=lambda:
                             SimpleNamespace(issue_execution_fence=fence)),
-                        "legate.timing": SimpleNamespace(time=clock),
                     }
                     with patch.dict("sys.modules", mocks):
                         core = load(SOURCE / "core.py")
+                        core.perf_counter_ns = clock
                         with patch.dict("sys.modules", {"core": core}):
                             gs = load(SOURCE / "benchmarks" / "grayscott.py")
 
@@ -55,7 +55,8 @@ class TimingTests(unittest.TestCase):
                     result = core.trial(bench, warmup, 3, 6000)
                     step = ["run"] if gray_scott else ["run", "sync"]
                     self.assertEqual(events, ["initialize"] + step * warmup
-                                     + ["clock"] + step * 3 + ["clock"])
+                                     + ["sync", "clock"] + step * 3
+                                     + ["sync", "clock"])
                     self.assertEqual(result, (2.0, 0.003))
 
 

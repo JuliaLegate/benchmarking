@@ -208,6 +208,35 @@ function nas_ft_initial_conditions!(out::Array{ComplexF64,3})
     return out
 end
 
+# The NPB generator is multiplication modulo 2^46. UInt64 multiplication may
+# wrap at 2^64 because its low 46 bits are unchanged. Chunking bounds scratch
+# memory while preserving the exact stream across chunk boundaries.
+function nas_ft_initial_conditions_uint64!(
+    out::Array{ComplexF64,3}, scratch::Vector{UInt64}
+)
+    chunk = length(scratch) ÷ 2
+    chunk > 0 || throw(ArgumentError("FT RNG scratch must hold at least two states"))
+    flat = vec(out)
+    state = UInt64(NAS_FT_SEED)
+    multiplier = UInt64(NAS_FT_MULTIPLIER)
+    mask = (UInt64(1) << 46) - 1
+    scale = 2.0^-46
+    for offset in 0:chunk:(length(flat) - 1)
+        count = min(chunk, length(flat) - offset)
+        states = @view scratch[1:2count]
+        fill!(states, multiplier)
+        accumulate!(*, states, states)
+        @inbounds for i in eachindex(states)
+            states[i] = (states[i] * state) & mask
+        end
+        @inbounds for i in 1:count
+            flat[offset + i] = ComplexF64(states[2i - 1]*scale, states[2i]*scale)
+        end
+        state = states[end]
+    end
+    return out
+end
+
 function nas_ft_initial_conditions(p)
     return nas_ft_initial_conditions!(Array{ComplexF64}(undef, p.nx, p.ny, p.nz))
 end

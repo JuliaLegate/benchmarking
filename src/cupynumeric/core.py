@@ -1,10 +1,10 @@
 # Shared cuPyNumeric benchmark protocol.
 import os
 import math
+from time import perf_counter_ns
 
 import cupynumeric as np
 from legate.core import get_legate_runtime
-from legate.timing import time  # blocks on preceding legate ops; returns microseconds
 
 MOD = "cupynumeric"
 RESULTS_DIR = os.environ.get("CUNUMERIC_BENCH_RESULTS_DIR", os.path.join(os.path.dirname(__file__), "..", "results"))
@@ -56,14 +56,15 @@ def trial(bench, n_warmup, n_iter, flops):
             synchronize(block=True)
     if reset is not None:
         reset(state)
-        synchronize(block=True)
+    synchronize(block=True)
 
-    start = time()
+    start = perf_counter_ns()
     for _ in range(n_iter):
         bench.run(state)
         if fence_each:
             synchronize(block=True)
-    total_us = time() - start
+    synchronize(block=True)
+    total_us = (perf_counter_ns() - start) / 1e3
 
     mean_time_ms = total_us / (n_iter * 1e3)
     gflops = flops / (mean_time_ms * 1e6)

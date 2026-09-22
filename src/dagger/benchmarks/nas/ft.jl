@@ -21,13 +21,40 @@ struct DaggerNASFT{S,P}
     processors::P
 end
 
-struct DaggerNASFTState{U,M,H,BL,AS}
+struct DaggerNASFTState{U,M,H,BL,AS,F}
     u1::U
     mask::M
     host_initial::H
     host_twiddle::Array{Float64,3}
+    rng_scratch::Vector{UInt64}
+    frequency_squares::F
     blocks::BL
     assignment::AS
+end
+
+function dagger_nas_ft_twiddle!(out, frequency_squares)
+    ix2, iy2, iz2 = frequency_squares
+    ap = -4.0*NAS_FT_ALPHA*pi^2
+    Threads.@threads for k in eachindex(iz2)
+        z = iz2[k]
+        @inbounds for j in eachindex(iy2), i in eachindex(ix2)
+            out[i, j, k] = exp(ap*(ix2[i] + iy2[j] + z))
+        end
+    end
+    return out
+end
+
+function dagger_nas_ft_upload(b::DaggerNASFT, s::DaggerNASFTState, host)
+    if b.gpus != 1
+        return Dagger.DArray(host, s.blocks, s.assignment)
+    end
+    # DArray(host, ...) slices and copies the entire host array before moving
+    # its one tile to the GPU. Make that tile directly on the GPU instead.
+    task = Dagger.@spawn scope=Dagger.ExactScope(only(b.processors)) CUDA.CuArray(host)
+    result = Dagger.DArray(eltype(host), s.u1.domain, s.u1.subdomains,
+        reshape([task], size(s.u1.chunks)), s.u1.partitioning)
+    wait_for_darray(result)
+    return result
 end
 
 function dagger_nas_ft_chunk_checksum(values, mask)
@@ -74,6 +101,10 @@ function model_initialize(b::DaggerNASFT)
     assignment = reshape(copy(b.processors), 1, 1, b.gpus)
     host_initial = Array{ComplexF64}(undef, shape)
     host_twiddle = Array{Float64}(undef, shape)
+    scratch = Vector{UInt64}(undef, min(2length(host_initial), 1 << 20))
+    frequency_squares = ntuple(d -> Float64[
+        ((i + shape[d]÷2) % shape[d] - shape[d]÷2)^2 for i in 0:(shape[d] - 1)
+    ], 3)
     CUDA.pin(host_initial)
     CUDA.pin(host_twiddle)
     return Dagger.with_options(; scope=b.scope) do
@@ -82,21 +113,22 @@ function model_initialize(b::DaggerNASFT)
         mask = Dagger.DArray(nas_ft_checksum_mask(p), blocks, assignment)
         foreach(wait_for_darray, (u1, mask))
         return DaggerNASFTState(
-            u1, mask, host_initial, host_twiddle, blocks, assignment,
+            u1, mask, host_initial, host_twiddle, scratch, frequency_squares,
+            blocks, assignment,
         )
     end
 end
 
 function model_run!(b::DaggerNASFT, s::DaggerNASFTState)
     p = nas_ft_parameters(b.class)
-    nas_ft_initial_conditions!(s.host_initial)
-    nas_ft_twiddle!(s.host_twiddle)
+    nas_ft_initial_conditions_uint64!(s.host_initial, s.rng_scratch)
+    dagger_nas_ft_twiddle!(s.host_twiddle, s.frequency_squares)
     return Dagger.with_options(; scope=b.scope) do
-        # Stage host->GPU via the DArray constructor (the timed transfer), like
-        # every other backend. copyto!(::DArray, ::Array) drives a cross-space
-        # datadeps copy Dagger mishandles.
-        u0 = Dagger.DArray(s.host_initial, s.blocks, s.assignment)
-        twiddle = Dagger.DArray(s.host_twiddle, s.blocks, s.assignment)
+        # Keep host->GPU staging inside the timed run. The one-GPU path avoids
+        # DArray(host)'s extra full-volume host copy; the distributed path uses
+        # Dagger's constructor to place each slab on its assigned processor.
+        u0 = dagger_nas_ft_upload(b, s, s.host_initial)
+        twiddle = dagger_nas_ft_upload(b, s, s.host_twiddle)
         fft!(u0, (1, 2, 3); decomp=:slab)
         checksums = Vector{Dagger.DTask}[]
         for _ in 1:p.niter

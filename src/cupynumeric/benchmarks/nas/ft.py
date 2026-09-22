@@ -1,8 +1,8 @@
 """NAS FT using cuPyNumeric's full 3-D FFT.
 
 LIMITATION: cuPyNumeric has no NPB 46-bit RNG primitive, so the exact initial
-field is generated on the host during every timed run and copied to Legate.
-That serial Python RNG and transfer are timed, unlike CUDA/JACC's device RNG.
+field is generated with compiled NumPy operations and copied to Legate.
+Host generation and transfer are timed, unlike CUDA/JACC's device RNG.
 The FFT auto task broadcasts transformed axes: a full 3-D FFT cannot partition
 across GPUs, though other array operations may distribute. Native take gathers
 the prescribed 1024 checksum samples. ifftn normalizes the full array; FFT and
@@ -16,6 +16,9 @@ from core import register_benchmark
 
 SEED, MULTIPLIER, ALPHA = 314159265.0, 1220703125.0, 1.0e-6
 CHECKSUM_SAMPLES = 1024
+RNG_MASK = host_np.uint64((1 << 46) - 1)
+RNG_SCALE = 2.0**-46
+RNG_SCRATCH_STATES = 1 << 20
 CLASSES = {
     "S": (64, 64, 64, 6), "W": (128, 128, 32, 6),
     "A": (256, 256, 128, 6), "B": (512, 256, 256, 20),
@@ -94,35 +97,22 @@ CHECKSUMS = {
     ],
 }
 
-def randlc(x, a=MULTIPLIER):
-    r23, t23, r46, t46 = 2.0**-23, 2.0**23, 2.0**-46, 2.0**46
-    a1 = int(r23*a); a2 = a-t23*a1
-    x1 = int(r23*x); x2 = x-t23*x1
-    t1 = a1*x2+a2*x1; z = t1-t23*int(r23*t1)
-    t3 = t23*z+a2*x2; x = t3-t46*int(r46*t3)
-    return x, r46*x
-
-def ipow46(a, exponent):
-    if exponent == 0:
-        return 1.0
-    q, r, n = a, 1.0, exponent
-    while n > 1:
-        n2 = n//2
-        if 2*n2 == n:
-            q, _ = randlc(q, q); n = n2
-        else:
-            r, _ = randlc(r, q); n -= 1
-    return randlc(r, q)[0]
-
-def initial_conditions(out):
-    nz, ny, nx = out.shape
-    jump, start, flat, plane = ipow46(MULTIPLIER, 2*nx*ny), SEED, out.reshape(-1), nx*ny
-    for k in range(nz):
-        x = start
-        for i in range(plane):
-            x, re = randlc(x); x, im = randlc(x)
-            flat[k*plane+i] = re + 1j*im
-        start, _ = randlc(start, jump)
+def initial_conditions(out, scratch):
+    flat = out.reshape(-1)
+    chunk = len(scratch) // 2
+    state = host_np.uint64(int(SEED))
+    multiplier = host_np.uint64(int(MULTIPLIER))
+    for offset in range(0, len(flat), chunk):
+        count = min(chunk, len(flat)-offset)
+        states = scratch[:2*count]
+        states.fill(multiplier)
+        host_np.multiply.accumulate(states, out=states)
+        host_np.multiply(states, state, out=states)
+        host_np.bitwise_and(states, RNG_MASK, out=states)
+        values = flat[offset:offset+count]
+        values.real = states[0::2] * RNG_SCALE
+        values.imag = states[1::2] * RNG_SCALE
+        state = states[-1]
 
 def frequency_squares(n):
     return host_np.asarray([((i+n//2) % n-n//2)**2 for i in range(n)])
@@ -150,10 +140,14 @@ class NASFourierTransform:
             "iy2": np.asarray(frequency_squares(ny)).reshape(1, ny, 1),
             "iz2": np.asarray(frequency_squares(nz)).reshape(nz, 1, 1),
             "host_initial": host_np.empty(shape, dtype=host_np.complex128),
+            "rng_scratch": host_np.empty(
+                min(2*host_np.prod(shape), RNG_SCRATCH_STATES),
+                dtype=host_np.uint64,
+            ),
         }
     def run(self, state):
         niter = CLASSES[self.class_name][3]
-        initial_conditions(state["host_initial"])
+        initial_conditions(state["host_initial"], state["rng_scratch"])
         u0 = np.asarray(state["host_initial"])
         twiddle = np.exp((-4.0*ALPHA*math.pi**2) *
             (state["ix2"]+state["iy2"]+state["iz2"]))

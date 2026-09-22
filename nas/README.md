@@ -84,6 +84,13 @@ axes. Their full 3-D transform therefore has no partitionable batch axis and
 is not a distributed FFT. See `src/ndarray/detail/fft.jl` in the parent package
 and cuPyNumeric's `DeferredArray.fft`.
 
+All five workers use a monotonic host clock around one completed `run` for each
+timed sample. They allocate reusable buffers and perform warmup outside the
+clock, then synchronize before starting it and after the final run. Initial
+field generation, transfer, index-map computation, FFTs, evolution, and
+checksums are inside the clock. Result destruction and official verification
+are outside it. The workers synchronize after each FT run, including warmups.
+
 CUDA/JACC gather 1024 samples (JACC reduces real/imaginary parts separately);
 cuPyNumeric uses native `take`. cuNumeric and Dagger currently scan a full-volume
 mask, a significant extra cost. Dagger only reduces within each slab during
@@ -91,7 +98,14 @@ timing, so it also omits the cross-GPU aggregation paid by other adapters.
 cuNumeric uses NPB's unnormalized inverse with a pre-scaled checksum mask. The
 other adapters use normalized inverse FFTs. Host RNG, transfers, FFT scratch,
 temporary allocation, and planning inside `run` remain charged to that model.
-In particular, cuPyNumeric's serial Python RNG is included in its runtime.
+cuPyNumeric's compiled NumPy host RNG and transfer are included in its runtime.
+cuNumeric uses a chunked UInt64 host RNG and attaches the initial field in
+reversed axis order, avoiding a full-volume host transpose during upload. Its
+checksum still scans the full volume rather than gathering 1024 samples.
+Dagger uses the same exact chunked host RNG and computes the index map across
+CPU threads. On one GPU it creates each DArray input tile directly on the GPU,
+avoiding the full host tile copy in `DArray(host, ...)`; its multi-GPU path
+still uses Dagger's distributed constructor.
 
 Run class S across all models with:
 

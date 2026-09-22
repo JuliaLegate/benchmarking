@@ -32,14 +32,28 @@ name(::TimingProbes) = "timing probe"
         synchronize() = push!(events, :sync)
         gs = GlobalSettings(; n_warmup=warmup, n_iter=3)
         step = fence_each_iteration(b) ? [:run, :sync] : [:run]
-        expected = vcat([:initialize], repeat(vcat(step, [:result_cleanup]), warmup), [:clock],
-            repeat(vcat(step, [:result_cleanup]), 3), [:clock, :cleanup])
+        expected = vcat([:initialize], repeat(vcat(step, [:result_cleanup]), warmup),
+            [:sync, :clock], repeat(vcat(step, [:result_cleanup]), 2), step,
+            [:sync, :clock, :result_cleanup, :cleanup])
         # Also exercises forwarding the backend callback through run_benchmark.
         result = run_benchmark(b, gs; mod=Base, clock, synchronize)
         @test events == expected
         @test result.times_ms == [2.0]
         @test result.gflops == [0.003]
     end
+end
+
+@testset "Single FT-style sample excludes final result cleanup" begin
+    events = Symbol[]
+    b = TimingProbe(events)
+    clock() = (push!(events, :clock); length(filter(==(:clock), events)) * 1000)
+    synchronize() = push!(events, :sync)
+    gs = GlobalSettings(; n_warmup=0, n_iter=1)
+    _trial(b, gs; mod=Base, clock, synchronize)
+    @test events == [
+        :initialize, :sync, :clock, :run, :sync, :sync, :clock,
+        :result_cleanup, :cleanup,
+    ]
 end
 
 @testset "Native model timing boundaries" begin

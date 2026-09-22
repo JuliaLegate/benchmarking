@@ -12,7 +12,7 @@ assert_models_not_loaded(("JACC", "Dagger"))
 function array_backend_entry()
     return (
         id=:cunumeric, mod=cuNumeric, label="cuNumeric", save_as="cunumeric",
-        clock=get_time_microseconds,
+        clock=benchmark_clock_us,
         synchronize=benchmark_synchronize,
         fused=()->cuNumeric.FUSE_BROADCAST_EXPRS,
     )

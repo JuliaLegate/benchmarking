@@ -35,6 +35,7 @@ abstract type AbstractBenchmark{T} end
 # Independent problems must finish before the next repetition is submitted.
 fence_each_iteration(::AbstractBenchmark) = true
 benchmark_synchronize() = cuNumeric.issue_execution_fence(; block=true)
+benchmark_clock_us() = time_ns() / 1e3
 
 # Cleanup hooks.
 cleanup!(::AbstractBenchmark, state...) = nothing
@@ -240,10 +241,12 @@ end
 # One timed trial: warmup, then time `n_iter` iterations of `run!`.
 function _trial(
     b::AbstractBenchmark, gs::GlobalSettings;
-    mod=cuNumeric, clock=get_time_microseconds, synchronize=benchmark_synchronize,
+    mod=cuNumeric, clock=benchmark_clock_us, synchronize=benchmark_synchronize,
 )
     GC.gc(true)
     state = initialize(b; mod=mod)
+    final_result = nothing
+    final_result_pending = false
     try
         fence_each = fence_each_iteration(b)
 
@@ -253,21 +256,40 @@ function _trial(
             fence_each && synchronize()
             cleanup_result!(b, result, state...)
         end
-        reset!(b, state...) && synchronize()
+        reset!(b, state...)
+        # All initialization, warmup, and reset work must finish before timing.
+        synchronize()
 
         start_time = clock()
-        for _ in 1:gs.n_iter
+        for iter in 1:gs.n_iter
             result = run!(b, state...)
             fence_each && synchronize()
-            cleanup_result!(b, result, state...)
+            if iter == gs.n_iter
+                final_result = result
+                final_result_pending = true
+            else
+                cleanup_result!(b, result, state...)
+            end
         end
+        # A batch-fenced benchmark must also finish before reading the clock.
+        synchronize()
         total_time_μs = clock() - start_time
+
+        final_result_pending = false
+        cleanup_result!(b, final_result, state...)
 
         mean_time_ms = total_time_μs / (gs.n_iter * 1e3)
         gflops = total_flops(b) / (mean_time_ms * 1e6)
         return mean_time_ms, gflops
     finally
-        cleanup!(b, state...)
+        try
+            if final_result_pending
+                final_result_pending = false
+                cleanup_result!(b, final_result, state...)
+            end
+        finally
+            cleanup!(b, state...)
+        end
     end
 end
 
@@ -275,7 +297,7 @@ end
 # Correctness (if enabled) runs once before timing, not per trial/iteration.
 function run_benchmark(
     b::AbstractBenchmark, gs::GlobalSettings;
-    mod=cuNumeric, clock=get_time_microseconds, synchronize=benchmark_synchronize,
+    mod=cuNumeric, clock=benchmark_clock_us, synchronize=benchmark_synchronize,
 )
     verbose = get(ENV, "CUNUMERIC_BENCH_VERBOSE", "0") == "1"
     correctness = "skipped"
