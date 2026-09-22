@@ -15,6 +15,10 @@ Pkg.add([
     PackageSpec(name="OrdinaryDiffEqLowStorageRK"),
     PackageSpec(name="SciMLBase"),
     PackageSpec(name="CUDA", version="6.4.0"),
+    PackageSpec(name="Plots"),
 ])
+if get(ENV, "ODE_INSTALL_DAGGER", "0") == "1"
+    Pkg.add(PackageSpec(name="Dagger", version="0.22.5"))
+end
 Pkg.precompile()
 Pkg.status()

@@ -6,10 +6,13 @@ equation with `OrdinaryDiffEqLowStorageRK.CarpenterKennedy2N54`. There is no
 explicit synchronization or garbage collection in the example.
 
 [`benchmark_heat.jl`](benchmark_heat.jl) compares the same RHS and solver on
-`Array`, `CuArray`, and `NDArray`. Its initial state is a discrete sine
+`Array`, `CuArray`, and `NDArray`, with an optional Dagger `DArray` probe. Its
+initial state is a discrete sine
 eigenmode, so the final state has an independent exact reference. It asserts
 that the solution keeps its input array backend and reports median, minimum,
-maximum, and relative error.
+maximum, and relative error. [`run_benchmark.sh`](run_benchmark.sh) runs each
+backend and size in a fresh Julia process, saves logs and CSV results, and
+uses [`plot_results.jl`](plot_results.jl) to make a PNG comparison plot.
 
 Status: the Julia files parse, and the stencil's discrete eigenmode identity
 was checked on CPU. An OrdinaryDiffEq solve and the GPU backends have not yet
@@ -40,26 +43,47 @@ unset CUBLAS_WORKSPACE_CONFIG
 julia --startup-file=no --project="$ODE_PROJECT" composability/ordinarydiffeq/heat.jl
 ```
 
-To compare GPU backends after the example works:
+To compare single-GPU CUDA.jl and cuNumeric after the example works, pass the
+grid dimensions you want to test (each problem has `N × N` elements):
 
 ```sh
-for backend in CuArray cuNumeric; do
-  julia --startup-file=no --project="$ODE_PROJECT" \
-    composability/ordinarydiffeq/benchmark_heat.jl "$backend" 128 1024 4096
-done
+bash composability/ordinarydiffeq/run_benchmark.sh 128 1024 4096
 ```
 
-The benchmark also accepts `cpu` for a host baseline, for example at `N=128`.
-Run each backend in its own Julia process. `ODE_ELTYPE=Float64`, `ODE_STEPS=20`,
-and `ODE_SAMPLES=5` control precision, fixed time steps, and timed solves.
-Transfers and initial-state construction are outside timing. The benchmark uses
-`cuNumeric.get_time_nanoseconds()` for cuNumeric; that clock blocks on preceding
-Legate work, so it needs no separate execution fence. It synchronizes CUDA
-before reading the host clock for the CuArray case. A timing includes solver
-setup and cache allocation. The work
-is stencil and broadcast based, so no GEMV/cuBLAS result
-from the CG benchmark should be extrapolated to it. If changing the workspace
-for diagnostics, use the same setting for every backend in a comparison.
+The launcher writes `results.csv`, `timings.png`, `metadata.txt`, and one log
+per case under a timestamped `composability/ordinarydiffeq/results-*` directory.
+Set `ODE_OUTPUT=/path/to/results` to choose the directory. The plot shows
+complete solve time against N, with median of the timed solves and min/max
+error bars. It includes every backend that produced a valid result. The
+launcher exits nonzero if any requested case fails and keeps its log.
+
+The default backends are `CuArray cuNumeric`. For an optional single-GPU
+Dagger `DArray` check and comparison, install Dagger into the same environment
+and request it explicitly:
+
+```sh
+ODE_INSTALL_DAGGER=1 CUNUMERIC_SOURCE=/path/to/cuNumeric.jl \
+  julia --startup-file=no composability/ordinarydiffeq/setup.jl "$ODE_PROJECT"
+ODE_BACKENDS="CuArray cuNumeric Dagger" \
+  bash composability/ordinarydiffeq/run_benchmark.sh 128 1024 4096
+```
+
+The Dagger run uses one CUDA worker and one GPU chunk. It is a composability
+probe: an unmodified OrdinaryDiffEq solve must complete, retain GPU-backed
+`DArray` storage, and pass the same numerical check before it contributes a
+CSV row. This path has not been run on a GPU yet. `ODE_BACKENDS="cpu CuArray
+cuNumeric"` adds a host baseline; use small N for `cpu`.
+
+`ODE_ELTYPE=Float64`, `ODE_STEPS=20`, and `ODE_SAMPLES=5` control precision,
+fixed time steps, and timed solves. Transfers and initial-state construction
+are outside timing. Each measurement is a complete `solve` call, including
+solver setup and cache allocation, which can take multiple internal stages
+per time step. The cuNumeric clock, `cuNumeric.get_time_nanoseconds()`, blocks
+on preceding Legate work. The CuArray and Dagger paths synchronize before
+reading the host clock. The stencil does not use GEMV, so the A30 CG cuBLAS
+workspace result does not predict this benchmark. Start with the default
+workspace on H100; if you change it for diagnostics, use one setting across
+the backends in each comparison.
 
 Start with the `128` correctness case before large allocations. Any solver
 failure or host storage fallback exits nonzero; retain the error and package

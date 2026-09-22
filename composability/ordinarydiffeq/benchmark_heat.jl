@@ -1,12 +1,12 @@
-# The same OrdinaryDiffEq solver and heat-equation RHS run on Array, CuArray,
-# and NDArray. Each backend belongs in a separate Julia process.
+# The same OrdinaryDiffEq solver and heat-equation RHS run on each array backend.
+# Each backend belongs in a separate Julia process.
 import OrdinaryDiffEqLowStorageRK
 using OrdinaryDiffEqLowStorageRK: CarpenterKennedy2N54
 using SciMLBase: ODEProblem, solve, successful_retcode
 using Statistics: median
 using LinearAlgebra: transpose
 
-length(ARGS) >= 1 || error("Usage: julia benchmark_heat.jl {cpu|CuArray|cuNumeric} [N ...]")
+length(ARGS) >= 1 || error("Usage: julia benchmark_heat.jl {cpu|CuArray|cuNumeric|Dagger} [N ...]")
 backend = ARGS[1]
 const T = get(ENV, "ODE_ELTYPE", "Float32") == "Float64" ? Float64 : Float32
 const KAPPA = T(0.2)
@@ -18,23 +18,41 @@ SAMPLES > 0 || error("ODE_SAMPLES must be positive")
 
 if backend == "cpu"
     make_state(a) = a
-    synchronized_time_ns() = time_ns()
+    synchronized_time_ns(_=nothing) = time_ns()
     host_state(a) = a
     correct_storage(a) = a isa Matrix{T}
 elseif backend == "CuArray"
     using CUDA
     CUDA.allowscalar(false)
     make_state(a) = CUDA.CuArray(a)
-    synchronized_time_ns() = (CUDA.synchronize(); time_ns())
+    synchronized_time_ns(_=nothing) = (CUDA.synchronize(); time_ns())
     host_state(a) = Array(a)
     correct_storage(a) = a isa CUDA.CuArray{T,2}
 elseif backend == "cuNumeric"
     using cuNumeric
     cuNumeric.allowscalar(false)
     make_state(a) = NDArray(a)
-    synchronized_time_ns() = cuNumeric.get_time_nanoseconds()
+    synchronized_time_ns(_=nothing) = cuNumeric.get_time_nanoseconds()
     host_state(a) = Array(a)
     correct_storage(a) = a isa NDArray{T,2}
+elseif backend == "Dagger"
+    using Dagger, CUDA
+    CUDA.allowscalar(false)
+    dagger_scope = Dagger.scope(; cuda_gpus=[1])
+    function make_state(a)
+        state = Dagger.distribute(a, Dagger.Blocks(size(a)...))
+        wait(state)
+        correct_storage(state) || error("Dagger initial state is not a single CUDA chunk")
+        return state
+    end
+    function synchronized_time_ns(a=nothing)
+        a === nothing || foreach(wait, a.chunks)
+        Dagger.gpu_synchronize(:CUDA)
+        return time_ns()
+    end
+    host_state(a) = collect(a)
+    correct_storage(a) = a isa Dagger.DArray && length(a.chunks) == 1 &&
+        fetch(only(a.chunks); raw=true) isa Dagger.Chunk{<:CUDA.CuArray}
 else
     error("Unknown backend $backend")
 end
@@ -74,7 +92,7 @@ function run_case(n)
 
     for _ in 1:2
         sol = do_solve()
-        synchronized_time_ns()
+        synchronized_time_ns(sol.u[end])
         @assert successful_retcode(sol)
         @assert correct_storage(sol.u[end]) "solver returned host-backed state"
     end
@@ -83,7 +101,7 @@ function run_case(n)
     for _ in 1:SAMPLES
         started = synchronized_time_ns()
         sol = do_solve()
-        push!(elapsed_ms, (synchronized_time_ns() - started) / 1e6)
+        push!(elapsed_ms, (synchronized_time_ns(sol.u[end]) - started) / 1e6)
         @assert successful_retcode(sol)
         @assert correct_storage(sol.u[end]) "solver returned host-backed state"
     end
@@ -104,4 +122,10 @@ println("workspace=", get(ENV, "CUBLAS_WORKSPACE_CONFIG", "<default>"),
         " OrdinaryDiffEqLowStorageRK=", pkgversion(OrdinaryDiffEqLowStorageRK))
 flush(stdout)
 sizes = length(ARGS) > 1 ? parse.(Int, ARGS[2:end]) : [128, 1024, 4096]
-foreach(run_case, sizes)
+if backend == "Dagger"
+    Dagger.with_options(; scope=dagger_scope) do
+        foreach(run_case, sizes)
+    end
+else
+    foreach(run_case, sizes)
+end
