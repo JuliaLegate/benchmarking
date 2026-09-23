@@ -7,6 +7,10 @@ if [[ $# -eq 0 ]]; then
 fi
 : "${INTOPT_PROJECT:?Set INTOPT_PROJECT to the environment created by setup.jl}"
 
+# Match CUDA.jl's single-GPU run by default. Callers can override either setting.
+export LEGATE_AUTO_CONFIG="${LEGATE_AUTO_CONFIG:-0}"
+export LEGATE_CONFIG="${LEGATE_CONFIG:---gpus 1 --cpus 4}"
+
 for n in "$@"; do
     if ! [[ $n =~ ^[1-9][0-9]*$ ]] || (( 10#$n < 4 )); then
         echo "Each N must be an integer at least 4; got '$n'" >&2
@@ -41,6 +45,8 @@ done
         "${INTOPT_ITERS:-40}" "${INTOPT_SAMPLES:-3}" \
         "${INTOPT_RATE:-0.05}" "${INTOPT_NOISE:-0.001}"
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\n' "${CUBLAS_WORKSPACE_CONFIG:-<default>}"
+    printf 'LEGATE_AUTO_CONFIG=%s\n' "$LEGATE_AUTO_CONFIG"
+    printf 'LEGATE_CONFIG=%s\n' "$LEGATE_CONFIG"
     printf 'backends=%s\nsizes=%s\n' "${backends[*]}" "$*"
     if command -v nvidia-smi >/dev/null 2>&1; then
         nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true

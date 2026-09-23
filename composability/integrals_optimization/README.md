@@ -53,6 +53,11 @@ unset CUBLAS_WORKSPACE_CONFIG
 bash composability/integrals_optimization/run_benchmark.sh 32 256 1024
 ```
 
+The launcher sets `LEGATE_AUTO_CONFIG=0` and
+`LEGATE_CONFIG="--gpus 1 --cpus 4"` by default, so cuNumeric and CUDA.jl
+both use one GPU. Override either variable for a different machine setup;
+the effective settings are recorded in `metadata.txt`.
+
 The shell arguments are image dimensions `N`; each case has `N × N` pixels.
 Start with `32` for correctness before larger allocations. The launcher
 writes `results.csv`, `timings.png`, `metadata.txt`, and per-case logs under a
