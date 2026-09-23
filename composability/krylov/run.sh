@@ -28,20 +28,22 @@ echo 'experiment,base_n,backend,solver,mode,eltype,gpus,n,iterations,median_ms,m
     git -C "$script_dir" rev-parse HEAD || true
     "$julia_bin" --version
     nvidia-smi
-    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=%s\nBENCH_CPUS=%s\nBENCH_FBMEM=%s\nBENCH_SYSMEM=%s\nBENCH_ZCMEM=%s\n' \
+    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=%s\nBENCH_CPUS=%s\nBENCH_FBMEM=%s\nBENCH_SYSMEM=%s\nBENCH_ZCMEM=%s\nBENCH_TIMEOUT=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "${BENCH_SOLVERS:-cg bicgstab}" "${BENCH_CPUS:-2}" \
-        "${BENCH_FBMEM:-22000}" "${BENCH_SYSMEM:-65536}" "${BENCH_ZCMEM:-1024}"
+        "${BENCH_FBMEM:-22000}" "${BENCH_SYSMEM:-65536}" "${BENCH_ZCMEM:-1024}" "${BENCH_TIMEOUT:-<none>}"
     "$julia_bin" --startup-file=no --project="$project" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/environment.txt" 2>&1
 
 failed=0
 run_case() {
     local backend=$1 solver=$2 mode=$3 n=$4 gpus=$5
+    local -a time_limit=()
+    [[ -z ${BENCH_TIMEOUT:-} ]] || time_limit=(timeout --signal=TERM --kill-after=30s "$BENCH_TIMEOUT")
     local log="$output/$BENCH_ELTYPE-$backend-$solver-$mode-$gpus-$n.log"
     export BENCH_GPUS=$gpus
     export LEGATE_CONFIG="--gpus $gpus --cpus ${BENCH_CPUS:-2} --fbmem ${BENCH_FBMEM:-22000} --sysmem ${BENCH_SYSMEM:-65536} --zcmem ${BENCH_ZCMEM:-1024}"
     echo "Running $backend $solver $mode: G=$gpus N=$n"
-    if "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
+    if "${time_limit[@]}" "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
         "$script_dir/krylov.jl" "$backend" "$solver" "$mode" "$n" > "$log" 2>&1; then
         if [[ $(grep -c '^RESULT,' "$log") == 1 ]]; then
             sed -n "s/^RESULT,/$experiment,${base_n:-},/p" "$log" >> "$csv"

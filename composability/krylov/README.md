@@ -52,6 +52,9 @@ default runs both. Set `BENCH_OUTPUT` for a fixed output directory; its
 already-instantiated equivalent environment (the default is this directory).
 Set `JULIA`, `BENCH_THREADS`,
 `BENCH_CPUS`, `BENCH_FBMEM`, `BENCH_SYSMEM`, or `BENCH_ZCMEM` for the machine.
+Set `BENCH_TIMEOUT` to an optional per-case duration accepted by GNU `timeout`
+(for example `10m`). Failed or timed-out cases keep their logs; completed CSV
+rows remain plottable without hiding other backends or sizes.
 `BENCH_FBMEM` is MiB per GPU and defaults to 22000; adjust it to the device.
 The runner sets `LEGATE_CONFIG` separately for every GPU count. Set
 `CUBLAS_WORKSPACE_CONFIG` externally, if desired, so every backend sees the same
