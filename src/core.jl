@@ -355,13 +355,15 @@ function save_result(br::BenchmarkResult, gpus; mod::String="cunumeric")
     N, M = dims(br.benchmark)
     results = get(ENV, "CUNUMERIC_BENCH_RESULTS_DIR", joinpath(@__DIR__, "..", "results"))
     path = joinpath(results, "$(name(br.benchmark))_$(mod).csv")
+    trial_offset = parse(Int, get(ENV, "CUNUMERIC_BENCH_TRIAL_OFFSET", "0"))
+    trial_offset >= 0 || error("CUNUMERIC_BENCH_TRIAL_OFFSET must be nonnegative")
     mkpath(dirname(path))
     open(path, "a") do io
         for trial in eachindex(br.times_ms)
             # correctness is per-config; repeated on each trial row for CSV joins
             @printf(
                 io, "%s,%d,%d,%d,%d,%.6f,%.6f,%s\n",
-                mod, gpus, N, M, trial,
+                mod, gpus, N, M, trial + trial_offset,
                 br.times_ms[trial], br.gflops[trial], br.correctness,
             )
         end

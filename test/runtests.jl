@@ -455,6 +455,32 @@ end
         @test manifest["runs"][1]["status"]=="failed"
         @test manifest["runs"][2]["status"]=="complete"
     end
+    ep_config = joinpath(@__DIR__, "..", "benchmarks_nas_ep.toml")
+    ep_gs, ep_specs = parse_config(ep_config; models_override=[:cunumeric])
+    ep_raw = TOML.parsefile(ep_config)
+    ep_runs = plan_runs(
+        ep_specs, ep_gs, ep_raw, parse_plot_groups(ep_config), 24_000_000_000
+    )
+    for (impl, expected_workers) in (("mapped", 1), ("recurrence", 3))
+        withenv("CUNUMERIC_NAS_EP_IMPL"=>impl) do
+            mktempdir() do dir
+                calls = Cmd[]
+                launch(cmd) = (push!(calls, cmd); nothing)
+                @test execute_plan(
+                    ep_runs, ep_gs, cli_options(["--config=$ep_config"]),
+                    24_000_000_000, ep_raw; launch, prepare=(f, v)->nothing,
+                    results_root=dir, preflight=runs->nothing,
+                ) == 0
+                workers = filter(c -> !occursin("plot_results.jl", join(c.exec)), calls)
+                @test length(workers) == expected_workers
+                if impl == "recurrence"
+                    @test all(occursin(
+                        "CUNUMERIC_BENCH_TRIAL_OFFSET=$i", join(workers[i+1].env)
+                    ) for i in 0:2)
+                end
+            end
+        end
+    end
 end
 
 include("cg.jl")

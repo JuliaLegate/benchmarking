@@ -17,7 +17,7 @@ Do not interpret throughput differences as runtime overhead alone.
 
 | Benchmark | Shared work | Material differences still included in results |
 | --- | --- | --- |
-| EP | Exact RNG sequence, MK=8, Gaussian transform, histogram/sum partials | cuNumeric/cuPyNumeric traverse arrays at each recurrence step and evaluate masked rejected-pair math; CUDA/JACC/Dagger keep each stream local. Global aggregation is untimed for all. |
+| EP | Exact RNG sequence, MK=8, Gaussian transform, histogram/sum partials | cuNumeric uses standard mapped reductions, evaluating each stream locally three times. cuPyNumeric uses array skip-ahead powers to process pairs in parallel, materializing larger intermediates; its optional recurrence path traverses arrays at every pair step. CUDA/JACC/Dagger keep each stream local once. Global aggregation is untimed for all. |
 | FT | Exact initial field, forward FFT, fixed evolve/inverse/checksum iterations | Host RNG in cuNumeric/cuPyNumeric/Dagger versus device RNG in CUDA/JACC; native FFT implementations and checksum strategies differ. Dagger leaves global checksum aggregation untimed. |
 | MG | Exact RHS, hierarchy, operators, fixed V-cycles and L2 verification | Direct kernels versus separable transfers/temporaries; Dagger restriction computes extra fine-grid stencil outputs and leaves global norm aggregation untimed. |
 
@@ -48,15 +48,32 @@ Skip-ahead masks/constants and output reset are setup; random samples and
 Gaussian transforms remain timed. The reference also aggregates partials after
 its kernel timer, but uses a different partial/block layout.
 
-cuNumeric and cuPyNumeric implement the LCG as Float64 array algebra because
-they have no NPB RNG primitive. CUDA.jl and JACC evaluate the same scalar stream
-function directly. Dagger maps that function over its device-resident chunks
-without a hand-written CUDA kernel. JACC and Dagger partition streams across
-the requested GPUs; CUDA.jl remains the single-GPU baseline.
+Default cuNumeric uses three mapped reductions over a singleton axis. Each
+mapping computes a complete scalar stream; two return packed per-stream
+histogram bins (nine bits per bin) and one returns complex `sx`/`sy` partials.
+All mapping, output allocation, and task submission are timed. Set
+`CUNUMERIC_NAS_EP_IMPL=recurrence` to run the original cuNumeric Float64 array
+recurrence, which traverses the stream arrays at each pair step. cuPyNumeric
+uses its standard array API to compute exact pair seeds from timed skip-ahead
+powers, process up to `2^24` pair values in each slab, and reduce per-stream
+histogram and sum partials. Power generation, transfer, all array operations,
+and slab synchronization are timed. Set `CUPYNUMERIC_NAS_EP_IMPL=recurrence`
+for its original stepwise array implementation. CUDA.jl and JACC evaluate the
+scalar stream function directly. Dagger maps that function over its
+device-resident chunks without a hand-written CUDA kernel.
+JACC and Dagger partition streams across the requested GPUs; CUDA.jl remains
+the single-GPU baseline.
 
 Use `n_iter = 1`; use `n_trial` for independent complete runs. The common
 throughput value follows NAS EP and counts random numbers generated rather than
 floating-point instructions.
+
+The optional cuNumeric recurrence path creates fresh arrays for each RNG pair
+step. Its current Legate path retains native framebuffer allocations after a
+completed run, even after the Julia arrays are destroyed. The harness runs
+each recurrence trial in a fresh worker process. Each worker still performs
+the same correctness check and warmup before its timed sample, and the CSV
+retains the requested trial numbers. Process startup remains outside timing.
 
 Run class S across all models with:
 

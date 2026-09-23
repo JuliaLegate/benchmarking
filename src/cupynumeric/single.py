@@ -67,7 +67,7 @@ def main():
     supports_correctness = hasattr(bench, "check_correctness")
     if verbose and check_correctness and supports_correctness:
         print(
-            "Correctness check: reference=CPU, "
+            f"Correctness check: reference={getattr(bench, 'correctness_reference', 'CPU')}, "
             f"dimensions={bench.correctness_dims()[0]}×{bench.correctness_dims()[1]}"
         )
     correctness = (
