@@ -46,8 +46,9 @@ BENCH_ELTYPE=Float64 BENCH_OUTPUT=results/krylov-weak-f64 bash composability/kry
 python composability/krylov/plot.py weak results/krylov-weak-f64/results.csv --output weak.png
 ```
 
-Set `BENCH_OUTPUT` for a fixed output directory; its `results.csv`, per-case
-logs, and `environment.txt` are kept together. `BENCH_PROJECT` can point to an
+Set `BENCH_SOLVERS=cg` or `BENCH_SOLVERS=bicgstab` to run one solver; the
+default runs both. Set `BENCH_OUTPUT` for a fixed output directory; its
+`results.csv`, per-case logs, and `environment.txt` are kept together. `BENCH_PROJECT` can point to an
 already-instantiated equivalent environment (the default is this directory).
 Set `JULIA`, `BENCH_THREADS`,
 `BENCH_CPUS`, `BENCH_FBMEM`, `BENCH_SYSMEM`, or `BENCH_ZCMEM` for the machine.

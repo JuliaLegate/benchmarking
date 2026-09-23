@@ -28,8 +28,8 @@ echo 'experiment,base_n,backend,solver,mode,eltype,gpus,n,iterations,median_ms,m
     git -C "$script_dir" rev-parse HEAD || true
     "$julia_bin" --version
     nvidia-smi
-    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_CPUS=%s\nBENCH_FBMEM=%s\nBENCH_SYSMEM=%s\nBENCH_ZCMEM=%s\n' \
-        "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "${BENCH_CPUS:-2}" \
+    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=%s\nBENCH_CPUS=%s\nBENCH_FBMEM=%s\nBENCH_SYSMEM=%s\nBENCH_ZCMEM=%s\n' \
+        "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "${BENCH_SOLVERS:-cg bicgstab}" "${BENCH_CPUS:-2}" \
         "${BENCH_FBMEM:-22000}" "${BENCH_SYSMEM:-65536}" "${BENCH_ZCMEM:-1024}"
     "$julia_bin" --startup-file=no --project="$project" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/environment.txt" 2>&1
@@ -63,7 +63,8 @@ for value in "$@"; do
         n=$(awk -v base="$base_n" -v g="$gpus" 'BEGIN { printf "%.0f", base * sqrt(g) }')
     fi
     (( n > 1 )) || usage
-    for solver in cg bicgstab; do
+    for solver in ${BENCH_SOLVERS:-"cg bicgstab"}; do
+        [[ $solver == cg || $solver == bicgstab ]] || { echo "Invalid solver: $solver" >&2; exit 2; }
         if [[ $experiment == single ]]; then
             run_case CuArray "$solver" stock "$n" "$gpus"
         fi
