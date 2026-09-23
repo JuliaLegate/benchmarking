@@ -4,8 +4,8 @@
 to `ODEProblem`, and call SciML's `solve`. It solves a five-point 2D heat
 equation with `OrdinaryDiffEqLowStorageRK.CarpenterKennedy2N54`. There is no
 explicit synchronization or garbage collection in the example.
-The example and benchmark both include [`heat_rhs.jl`](heat_rhs.jl), so they
-use the same stencil implementation.
+The example, benchmark, and integrator smoke check all include
+[`heat_rhs.jl`](heat_rhs.jl) and use the same stencil implementation.
 The grid spacing is fixed at `DX = 1`, so a case with grid dimension `N`
 represents the physical square `[0, (N-1)DX]²`. The five-point Laplacian
 includes the `1/DX²` factor for the second spatial derivatives. Increasing
@@ -40,7 +40,7 @@ The stencil computes `du/dt = κ Δ_h u`; the explicit integrator evaluates
 this RHS at its stage states and advances it through 20 time steps by default.
 This benchmark does not exercise an implicit integrator or its linear solves.
 
-On a Linux GPU host with cuNumeric installed, use Julia 1.12 and create an
+On a Linux GPU host with cuNumeric installed, use Julia 1.13 and create an
 environment outside the benchmarking repository:
 
 ```sh
@@ -104,3 +104,23 @@ the backends in each comparison.
 Start with the `128` correctness case before large allocations. Any solver
 failure or host storage fallback exits nonzero; retain the error and package
 versions. There is no cuNumeric-specific extension in this experiment.
+
+## Changing the time integrator
+
+[`integrator_smoke.jl`](integrator_smoke.jl) runs the same cuNumeric heat problem
+with RK4, Tsit5, and Vern7. It checks the returned NDArray and the final state
+against the discrete eigenmode solution. This is a correctness probe, not a
+timed backend comparison. All three passed at N=128 on one H100 with both
+fixed and adaptive steps (Float32, Julia 1.13). Install the additional solvers in the ODE environment:
+
+```sh
+ODE_INSTALL_INTEGRATORS=1 CUNUMERIC_SOURCE=/path/to/cuNumeric.jl \
+  julia --startup-file=no composability/ordinarydiffeq/setup.jl "$ODE_PROJECT"
+julia --project="$ODE_PROJECT" composability/ordinarydiffeq/integrator_smoke.jl 128
+ODE_ADAPTIVE=1 julia --project="$ODE_PROJECT" \
+  composability/ordinarydiffeq/integrator_smoke.jl 128
+```
+
+The adaptive case scopes `cuNumeric.allowautofetch()` around `solve`, because
+the step-size controller makes host-side scalar decisions. The timed benchmark
+above continues to use the fixed-step CarpenterKennedy2N54 method.
