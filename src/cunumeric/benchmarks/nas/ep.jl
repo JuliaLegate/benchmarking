@@ -1,54 +1,33 @@
-# cuNumeric maps the shared scalar EP stream over batch indices. mapreduce
-# needs a scalar result, so each histogram bin and the sx/sy pair is mapped
-# separately. Every map, allocation, and reduction is included in timing.
+# Each field of a batch partial has NDArray storage. The StructArray broadcast
+# writes those fields on the GPU; timing ends at per-batch partials.
 
-struct CuNumericNASEPState{A,F}
-    indices::A
-    maps::F
+benchmark_backend_label(::NASEmbarrassinglyParallel, backend::String, default::String) =
+    backend == "cunumeric" ? "cuNumeric (StructArray broadcast)" : default
+
+benchmark_backend_save_as(::NASEmbarrassinglyParallel, backend::String, default::String) =
+    backend == "cunumeric" ? "cunumeric_structarray" : default
+
+struct CuNumericNASEPState{I,P}
+    indices::I
+    partials::P
 end
 
 function cunumeric_nas_ep_state(mod, n)
     indices = mod.NDArray(reshape(collect(Int64, 0:(n - 1)), n, 1))
-    jump = nas_ep_batch_jump()
-    bins = ntuple(NAS_EP_NQ) do bin
-        i -> getfield(nas_ep_batch(i, jump), bin)
-    end
-    sums = let jump=jump
-        i -> begin
-            p = nas_ep_batch(i, jump)
-            ComplexF64(p.sx, p.sy)
-        end
-    end
-    return CuNumericNASEPState(indices, (bins..., sums))
+    fields = ntuple(_ -> mod.zeros(Float64, n, 1), fieldcount(NASEPPartial))
+    partials = StructArray{NASEPPartial}(NamedTuple{fieldnames(NASEPPartial)}(fields))
+    return CuNumericNASEPState(indices, partials)
 end
 
 reset!(::NASEmbarrassinglyParallel, ::CuNumericNASEPState) = true
 
 function run!(::NASEmbarrassinglyParallel, s::CuNumericNASEPState)
-    outputs = Any[]
-    try
-        for bin in 1:NAS_EP_NQ
-            push!(outputs, mapreduce(s.maps[bin], +, s.indices; dims=2, init=0.0))
-        end
-        sums = cuNumeric.@allowpromotion mapreduce(
-            s.maps[end], +, s.indices; dims=2, init=ComplexF64(0, 0)
-        )
-        push!(outputs, sums)
-        return outputs
-    catch
-        foreach(cuNumeric.destroy!, outputs)
-        rethrow()
-    end
-end
-
-function cleanup_result!(
-    ::NASEmbarrassinglyParallel, result, ::CuNumericNASEPState
-)
-    foreach(cuNumeric.destroy!, result)
-    return nothing
+    s.partials .= nas_ep_batch.(s.indices, Ref(nas_ep_batch_jump()))
+    return s.partials
 end
 
 function cleanup!(::NASEmbarrassinglyParallel, s::CuNumericNASEPState)
+    foreach(cuNumeric.destroy!, Tuple(StructArrays.components(s.partials)))
     cuNumeric.destroy!(s.indices)
     return nothing
 end
@@ -62,13 +41,12 @@ function check_benchmark_correctness(
     b::NASEmbarrassinglyParallel, gs::GlobalSettings; mod=cuNumeric
 )
     state = only(initialize(b; mod))
-    result = nothing
     try
-        reset!(b, state)
         result = run!(b, state)
-        z = only(Array(sum(result[end])))
-        sx, sy = real(z), imag(z)
-        q = [Array(result[bin]) for bin in 1:NAS_EP_NQ]
+        sx = only(Array(sum(result.sx)))
+        sy = only(Array(sum(result.sy)))
+        names = fieldnames(NASEPPartial)[1:NAS_EP_NQ]
+        q = [vec(Array(getproperty(result, name))) for name in names]
         samples = (1, 2, cld(length(q[1]), 2), length(q[1]))
         histogram_ok = all(samples) do i
             p = nas_ep_batch(i - 1)
@@ -76,7 +54,6 @@ function check_benchmark_correctness(
         end
         return histogram_ok && nas_ep_verified(b.class, sx, sy) ? "pass" : "fail"
     finally
-        !isnothing(result) && cleanup_result!(b, result, state)
         cleanup!(b, state)
     end
 end

@@ -172,7 +172,8 @@ end
 # Both groups perform the same workload under the same timing contract.
 function ep_series(results_dir, category)
     entries = if category == :high_level
-        (("cunumeric", "cuNumeric.jl (mapreduce)", COLOR_CUNUMERIC, MARKER_CUNUMERIC),
+        (("cunumeric_structarray", "cuNumeric.jl (StructArray broadcast)",
+          COLOR_CUNUMERIC, MARKER_CUNUMERIC),
          ("dagger", "Dagger.jl (map!)", COLOR_DAGGER, MARKER_DAGGER),
          ("cupynumeric", "cuPyNumeric (array skip-ahead)", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC),
          ("CUDA.jl_broadcast", "CUDA.jl (broadcast)", COLOR_CUDA, MARKER_CUDA),
