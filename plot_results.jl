@@ -168,6 +168,28 @@ function group_series(results_dir, group, members)
     return filter(!isnothing, series)
 end
 
+# Separate EP's high-level API paths from explicitly written stream kernels.
+# Both groups perform the same workload under the same timing contract.
+function ep_series(results_dir, category)
+    entries = if category == :high_level
+        (("cunumeric", "cuNumeric.jl (mapreduce)", COLOR_CUNUMERIC, MARKER_CUNUMERIC),
+         ("dagger", "Dagger.jl (map!)", COLOR_DAGGER, MARKER_DAGGER),
+         ("cupynumeric", "cuPyNumeric (array skip-ahead)", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC),
+         ("CUDA.jl_broadcast", "CUDA.jl (broadcast)", COLOR_CUDA, MARKER_CUDA),
+         ("jacc_broadcast", "JACC.jl (array broadcast)", COLOR_JACC, MARKER_JACC),
+         ("cupynumeric_recurrence", "cuPyNumeric (array recurrence)", COLOR_CUPYNUMERIC, :diamond))
+    else
+        (("CUDA.jl", "CUDA.jl (kernel)", COLOR_CUDA, MARKER_CUDA),
+         ("jacc", "JACC.jl (kernel)", COLOR_JACC, MARKER_JACC))
+    end
+    series = []
+    for (key, label, color, marker) in entries
+        s = load_csv_series(results_dir, "nas_ep", key, label, color, marker, :solid)
+        s === nothing || push!(series, s)
+    end
+    return series
+end
+
 function addline!(p, s, y; kw...)
     return plot!(p, getfield.(s.agg, :gpus), y; color=s.color,
         lw=2.6, ls=s.ls, marker=s.marker, ms=7, msc=s.color, markerstrokewidth=0.7,
@@ -213,12 +235,18 @@ function series_ymax(series, yfield, efield)
     return m
 end
 
+function series_ymin_positive(series, yfield, efield)
+    values = [max(eps(Float64), getfield(x, yfield) - getfield(x, efield))
+              for s in series for x in s.agg]
+    return minimum(values)
+end
+
 function positive_ylim(hi; pad=0.18)
     hi > 0 || return (0, 1)
     return (0, hi * (1 + pad))
 end
 
-function weak_scaling_figure(series; plot_title)
+function weak_scaling_figure(series; plot_title, log_values=false)
     common = (
         xscale=:log2, xticks=([1, 2, 4, 8], ["1", "2", "4", "8"]), xlabel="GPUs",
         framestyle=:box, grid=false, gridalpha=0, gridlinewidth=0, minorgrid=false,
@@ -234,14 +262,24 @@ function weak_scaling_figure(series; plot_title)
         top_margin=5Plots.mm, bottom_margin=10Plots.mm,
     )
 
-    p1 = plot(; ylabel="Throughput", title="Throughput",
-        ylims=positive_ylim(series_ymax(series, :h, :hsd); pad=0.28), common...)
+    throughput_limits = log_values ?
+        (series_ymin_positive(series, :h, :hsd) / 1.5,
+         series_ymax(series, :h, :hsd) * 1.5) :
+        positive_ylim(series_ymax(series, :h, :hsd); pad=0.28)
+    time_limits = log_values ?
+        (series_ymin_positive(series, :t, :tsd) / 1.5,
+         series_ymax(series, :t, :tsd) * 1.5) :
+        positive_ylim(series_ymax(series, :t, :tsd); pad=0.28)
+    p1 = plot(; ylabel=log_values ? "Throughput (log scale)" : "Throughput",
+        title="Throughput", yscale=log_values ? :log10 : :identity,
+        ylims=throughput_limits, common...)
     for s in series
         addline!(p1, s, getfield.(s.agg, :h); yerror=getfield.(s.agg, :hsd))
     end
 
-    p2 = plot(; ylabel="Time / step (ms)", title="Time per step",
-        ylims=positive_ylim(series_ymax(series, :t, :tsd); pad=0.28),
+    p2 = plot(; ylabel=log_values ? "Time / step (ms, log scale)" : "Time / step (ms)",
+        title="Time per step", yscale=log_values ? :log10 : :identity,
+        ylims=time_limits,
         common..., left_margin=28Plots.mm, yguidefontsize=15)
     for s in series
         addline!(p2, s, getfield.(s.agg, :t); yerror=getfield.(s.agg, :tsd))
@@ -292,6 +330,23 @@ function main(args=ARGS)
 
     mkpath(cfg.out_dir)
     for (group, members) in parse_plot_groups(cfg.config)
+        if group == "nas_ep" && members == ["nas_ep"]
+            for (category, title) in ((:high_level, "High-level APIs"),
+                                      (:explicit_kernels, "Explicit stream kernels"))
+                series = ep_series(cfg.results_dir, category)
+                isempty(series) && continue
+                validate_series_sizes(series)
+                fig = weak_scaling_figure(
+                    series; plot_title="NAS EP — $title — weak scaling",
+                    log_values=category == :high_level
+                )
+                out = joinpath(cfg.out_dir,
+                    "nas_ep_$(category)_weak_scaling$(cfg.output_suffix).png")
+                savefig(fig, out)
+                println("wrote $out")
+            end
+            continue
+        end
         series = group_series(cfg.results_dir, group, members)
         isempty(series) && continue
         validate_series_sizes(series)

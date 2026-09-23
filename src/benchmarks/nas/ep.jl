@@ -4,6 +4,7 @@ Base.@kwdef struct NASEmbarrassinglyParallel{T} <: AbstractBenchmark{T}
     N::Int
     M::Int
     class::String = "S"
+    implementation::String = "default"
 end
 
 name(::NASEmbarrassinglyParallel) = "nas_ep"

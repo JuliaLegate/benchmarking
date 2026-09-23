@@ -38,6 +38,16 @@
     @test Set(r.model for r in runs) ==
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
     @test all(r.N == 33_554_432 && r.M == 1 && r.spec.n_iter == 1 for r in runs)
+    compare_config = joinpath(@__DIR__, "..", "benchmarks_nas_ep_compare.toml")
+    compare_settings, compare_specs = parse_config(compare_config)
+    compare_runs = plan_runs(
+        compare_specs, compare_settings, TOML.parsefile(compare_config),
+        parse_plot_groups(compare_config), 10^12
+    )
+    @test length(compare_runs) == 7
+    @test length(unique(results_subdir(r.spec) for r in compare_runs)) == 1
+    @test count(r -> get(r.spec.kwargs, :implementation, "default") == "broadcast",
+                compare_runs) == 2
 end
 
 @testset "NAS FT contract" begin

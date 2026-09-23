@@ -127,6 +127,8 @@ class NASEmbarrassinglyParallel:
         self.impl = os.environ.get("CUPYNUMERIC_NAS_EP_IMPL", "vectorized")
         if self.impl not in ("vectorized", "recurrence"):
             raise ValueError("CUPYNUMERIC_NAS_EP_IMPL must be vectorized or recurrence")
+        self.save_as = ("cupynumeric_recurrence" if self.impl == "recurrence"
+                        else "cupynumeric")
 
     def dims(self):
         return self.N, self.M

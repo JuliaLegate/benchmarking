@@ -42,6 +42,7 @@ nas_ep_random_numbers(p) = Int(1) << (p.m + 1)
 end
 
 function nas_ep_ipow46(a::Float64, exponent::Integer)
+    # Compute a^exponent modulo 2^46 using repeated squaring.
     exponent == 0 && return 1.0
     q, r, n = a, 1.0, Int(exponent)
     while n > 1
@@ -57,7 +58,9 @@ function nas_ep_ipow46(a::Float64, exponent::Integer)
     return first(nas_ep_randlc(r, q))
 end
 
-nas_ep_batch_jump() = nas_ep_ipow46(NAS_EP_MULTIPLIER, 2nas_ep_pairs_per_batch())
+# One batch has 256 pairs, or 512 RNG draws. Multiplying a seed by this
+# factor skips exactly one batch without generating its random numbers.
+nas_ep_batch_jump() = nas_ep_ipow46(NAS_EP_MULTIPLIER, 2 * nas_ep_pairs_per_batch())
 
 struct NASEPPartial
     q0::Float64
@@ -77,6 +80,7 @@ end
 NASEPPartial() = NASEPPartial(ntuple(_ -> 0.0, 12)...)
 
 @inline function nas_ep_start_seed(batch::Integer, jump::Float64)
+    # Advance the initial seed by `batch` whole batches via binary exponentiation.
     seed, power, k = NAS_EP_SEED, jump, batch
     while true
         half = k ÷ 2

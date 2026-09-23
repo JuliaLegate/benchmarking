@@ -104,7 +104,8 @@ def main():
         f"{getattr(bench, 'throughput_label', 'GFLOP/s')} (trial SD)"
     )
 
-    save_result(bench.name, bench.dims(), gpus, times_ms, gflops, correctness)
+    save_result(bench.name, bench.dims(), gpus, times_ms, gflops, correctness,
+                save_as=getattr(bench, "save_as", None))
 
 
 if __name__ == "__main__":

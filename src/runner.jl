@@ -120,27 +120,10 @@ function execute_plan(runs, gs, opts, budget, raw; launch=run, prepare=prepare_b
                 correctness, correct_iters, Float64(total_flops(b)), s.kwargs,
             )
             results = joinpath(dir, results_subdir(s))
-            # The older cuNumeric EP recurrence path retains native Legate
-            # stores across runs; isolate its trials in fresh runtimes.
-            split_trials = s.name == "nas_ep" && r.model == :cunumeric &&
-                get(ENV, "CUNUMERIC_NAS_EP_IMPL", "mapped") == "recurrence"
-            for trial in 1:(split_trials ? s.n_trial : 1)
-                worker_request = split_trials ? WorkerRequest(
-                    request.gpus, request.cpus, request.name, request.T,
-                    request.N, request.M, request.n_iter, request.n_warmup, 1,
-                    request.check_correctness, request.n_correctness_iter,
-                    request.flops, request.kwargs,
-                ) : request
-                cmd = wrapped_worker_command(
-                    model, worker_request, root; verbose=opts.verbose
-                )
-                model_env = model_environment(model, worker_request, opts.verbose)
-                model_env["CUNUMERIC_BENCH_RESULTS_DIR"] = results
-                if split_trials
-                    model_env["CUNUMERIC_BENCH_TRIAL_OFFSET"] = string(trial - 1)
-                end
-                launch(addenv(Cmd(cmd; dir=root), model_env))
-            end
+            cmd = wrapped_worker_command(model, request, root; verbose=opts.verbose)
+            model_env = model_environment(model, request, opts.verbose)
+            model_env["CUNUMERIC_BENCH_RESULTS_DIR"] = results
+            launch(addenv(Cmd(cmd; dir=root), model_env))
             manifest["runs"][i]["status"] = "complete"
         catch e
             failed = true

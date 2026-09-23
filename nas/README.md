@@ -17,7 +17,7 @@ Do not interpret throughput differences as runtime overhead alone.
 
 | Benchmark | Shared work | Material differences still included in results |
 | --- | --- | --- |
-| EP | Exact RNG sequence, MK=8, Gaussian transform, histogram/sum partials | cuNumeric uses standard mapped reductions, evaluating each stream locally three times. cuPyNumeric uses array skip-ahead powers to process pairs in parallel, materializing larger intermediates; its optional recurrence path traverses arrays at every pair step. CUDA/JACC/Dagger keep each stream local once. Global aggregation is untimed for all. |
+| EP | Exact RNG sequence, MK=8, Gaussian transform, histogram/sum partials | cuNumeric uses standard mapped reductions, evaluating each stream locally once per output. cuPyNumeric uses array skip-ahead powers to process pairs in parallel, materializing larger intermediates; its optional recurrence path traverses arrays at every pair step. CUDA/JACC/Dagger keep each stream local once. Global aggregation is untimed for all. |
 | FT | Exact initial field, forward FFT, fixed evolve/inverse/checksum iterations | Host RNG in cuNumeric/cuPyNumeric/Dagger versus device RNG in CUDA/JACC; native FFT implementations and checksum strategies differ. Dagger leaves global checksum aggregation untimed. |
 | MG | Exact RHS, hierarchy, operators, fixed V-cycles and L2 verification | Direct kernels versus separable transfers/temporaries; Dagger restriction computes extra fine-grid stencil outputs and leaves global norm aggregation untimed. |
 
@@ -48,12 +48,10 @@ Skip-ahead masks/constants and output reset are setup; random samples and
 Gaussian transforms remain timed. The reference also aggregates partials after
 its kernel timer, but uses a different partial/block layout.
 
-Default cuNumeric uses three mapped reductions over a singleton axis. Each
-mapping computes a complete scalar stream; two return packed per-stream
-histogram bins (nine bits per bin) and one returns complex `sx`/`sy` partials.
-All mapping, output allocation, and task submission are timed. Set
-`CUNUMERIC_NAS_EP_IMPL=recurrence` to run the original cuNumeric Float64 array
-recurrence, which traverses the stream arrays at each pair step. cuPyNumeric
+cuNumeric uses eleven mapped reductions over a singleton axis. Each mapping
+computes a complete scalar stream; ten return one histogram bin each and one
+returns complex `sx`/`sy` partials.
+All mapping, output allocation, and task submission are timed. cuPyNumeric
 uses its standard array API to compute exact pair seeds from timed skip-ahead
 powers, process up to `2^24` pair values in each slab, and reduce per-stream
 histogram and sum partials. Power generation, transfer, all array operations,
@@ -68,18 +66,31 @@ Use `n_iter = 1`; use `n_trial` for independent complete runs. The common
 throughput value follows NAS EP and counts random numbers generated rather than
 floating-point instructions.
 
-The optional cuNumeric recurrence path creates fresh arrays for each RNG pair
-step. Its current Legate path retains native framebuffer allocations after a
-completed run, even after the Julia arrays are destroyed. The harness runs
-each recurrence trial in a fresh worker process. Each worker still performs
-the same correctness check and warmup before its timed sample, and the CSV
-retains the requested trial numbers. Process startup remains outside timing.
-
 Run class S across all models with:
 
 ```sh
 julia --project=. run.jl --config=benchmarks_nas_ep.toml
 ```
+
+EP plots use two comparison groups. `nas_ep_high_level_weak_scaling.png`
+contains cuNumeric `mapreduce`, Dagger `map!`, cuPyNumeric array algebra, and
+the CUDA.jl and JACC array broadcast paths and cuPyNumeric's optional recurrence
+path when measured. The JACC array broadcast path currently supports one GPU.
+On the CUDA backend it uses JACC arrays and Julia broadcasting, which dispatches
+to CUDA.jl's array implementation; JACC.Multi has no map or broadcast API.
+`nas_ep_explicit_kernels_weak_scaling.png` contains the CUDA.jl and JACC
+per-stream kernels. This groups implementations by the API used to express EP,
+not by speed or a claim of optimality. Both plots use the same EP class and
+timing contract; each vertical axis scales to its group.
+The optional cuPyNumeric recurrence saves to `nas_ep_cupynumeric_recurrence.csv`
+so it remains separate from its default path. Only measured implementations
+appear in each plot.
+Run `julia --project=. run.jl --config=benchmarks_nas_ep_compare.toml` to
+measure both kernel and high level variants of CUDA.jl and JACC in one sweep.
+Each high level variant broadcasts over independent stream indices and saves
+to a separate CSV from its explicit kernel path. The same variants can also be
+selected individually with `CUDA_NAS_EP_IMPL=broadcast` or
+`JACC_NAS_EP_IMPL=broadcast`.
 
 ## FT execution contract
 
