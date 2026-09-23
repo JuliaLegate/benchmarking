@@ -28,8 +28,8 @@ Each backend and size runs in its own Julia process. The same model, initial
 image, data generation, quadrature, iteration count, and correctness checks
 are used for both. The optional `cpu` backend is useful for small smoke tests.
 Dagger is not included because an `Optimization.jl` array-state path has not
-been validated for it. The H100 is unavailable, so only the CPU API path has
-been tested so far; no GPU timing or speedup is claimed.
+been validated for it. GPU validation status is summarized below; no
+speedup is claimed.
 
 ## Setup and run
 
@@ -50,7 +50,7 @@ both backends in a comparison:
 
 ```sh
 unset CUBLAS_WORKSPACE_CONFIG
-bash composability/integrals_optimization/run_benchmark.sh 32 256 1024
+bash composability/integrals_optimization/run_benchmark.sh 32 128 256
 ```
 
 The launcher sets `LEGATE_AUTO_CONFIG=0` and
@@ -94,5 +94,19 @@ on every step. cuNumeric implements `all` for a Boolean `NDArray` but not that
 two-argument predicate call. [`benchmark.jl`](benchmark.jl) includes one
 explicit prototype method that broadcasts `isfinite` and reduces the result;
 this must be moved into cuNumeric and tested there before presenting GPU
-numbers as unmodified package composability. The `NDArray` path and optimizer
-moment storage still need a GPU validation run.
+numbers as unmodified package composability. The `NDArray` solve path passed
+on an A30X; optimizer moment storage has not been directly inspected.
+
+## A30X validation (2026-09-23)
+
+On dubliner, both CUDA.jl and cuNumeric passed single-sample Float32 runs at
+`N=32`, `128`, and `256` with four spectral bands, order-12 quadrature, and
+40 Adam iterations. Their final losses and recovered images agreed. Nsight
+Systems recorded CUDA kernels from the cuNumeric solve, confirming that its
+Legate tasks executed on the GPU. These exploratory timings are not sufficient
+for a paper performance claim; cuNumeric was slower at all three sizes.
+
+The CUDA.jl `N=1024` case finished, but the cuNumeric case was interrupted
+after more than five minutes without a result. The interrupt stack was inside
+`Integrals.jl`'s Gauss-Legendre path during the optimizer gradient. Investigate
+this scaling problem before using large image sizes or claiming a GPU win.
