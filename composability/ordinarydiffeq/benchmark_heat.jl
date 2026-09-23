@@ -2,7 +2,7 @@
 # Each backend belongs in a separate Julia process.
 import OrdinaryDiffEqLowStorageRK
 using OrdinaryDiffEqLowStorageRK: CarpenterKennedy2N54
-using SciMLBase: ODEProblem, solve, successful_retcode
+using SciMLBase: ODEProblem, solve, successful_retcode, FullSpecialize
 using Statistics: median
 using LinearAlgebra: transpose
 
@@ -85,11 +85,15 @@ function run_case(n)
     n >= 4 || error("N must be at least 4")
     host_u0, k = initial_state(n)
     u0 = make_state(host_u0)
-    prob = ODEProblem(heat!, u0, (zero(T), T_END), KAPPA)
+    prob = ODEProblem{true,FullSpecialize}(heat!, u0, (zero(T), T_END), KAPPA)
     dt = T_END / NSTEPS
+    # The benchmark checks the final state below; skip SciML's per-step
+    # instability scan, which otherwise scalar-iterates custom array types.
     do_solve() = solve(prob, ALG; dt, adaptive=false,
-                       save_everystep=false, save_start=false, dense=false)
+                       save_everystep=false, save_start=false, dense=false,
+                       unstable_check=(dt, u, p, t) -> false)
 
+    local sol
     for _ in 1:2
         sol = do_solve()
         synchronized_time_ns(sol.u[end])

@@ -14,15 +14,21 @@ maximum, and relative error. [`run_benchmark.sh`](run_benchmark.sh) runs each
 backend and size in a fresh Julia process, saves logs and CSV results, and
 uses [`plot_results.jl`](plot_results.jl) to make a PNG comparison plot.
 
-Status: the Julia files parse, and the stencil's discrete eigenmode identity
-was checked on CPU. An OrdinaryDiffEq solve and the GPU backends have not yet
-run; no speedup is claimed until those results exist.
+Status: the `heat.jl` N=128 cuNumeric example completed on one H100 with
+Julia 1.13 and returned an `NDArray{Float32,2}`. The N=128 CuArray benchmark
+also completed. The cuNumeric benchmark and larger comparisons remain unrun;
+no speedup is claimed.
 
 The [SciML solver documentation](https://docs.sciml.ai/OrdinaryDiffEq/stable/explicit/LowStorageRK/)
 describes this as a fixed-step, fourth-order low-storage method. We set
 `williamson_condition=false` because its fused RHS optimization only supports
 ordinary `Array` storage. cuNumeric's existing sliced-broadcast tests exercise
 the stencil operations used here.
+The problem uses `FullSpecialize` so SciML accepts both the initial NDArray
+and solver work arrays when their storage-parent types differ. This fixed-step
+example disables SciML's per-step instability scan, which scalar-iterates
+custom arrays; the benchmark independently checks the final state against
+the heat equation's known eigenmode solution.
 
 On a Linux GPU host with cuNumeric installed, use Julia 1.12 and create an
 environment outside the benchmarking repository:

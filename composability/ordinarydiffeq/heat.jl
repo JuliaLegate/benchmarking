@@ -1,5 +1,6 @@
 using cuNumeric
-using OrdinaryDiffEqLowStorageRK
+using OrdinaryDiffEqLowStorageRK: CarpenterKennedy2N54
+using SciMLBase: ODEProblem, solve, FullSpecialize
 
 # A two-dimensional heat equation with zero boundary values.
 function heat!(du, u, diffusion, t)
@@ -16,8 +17,9 @@ n = 128
 s = Float32.(sin.(range(0, pi; length=n)))
 s[1] = s[end] = 0f0
 u0 = NDArray(s * transpose(s))
-problem = ODEProblem(heat!, u0, (0f0, 1f0), 0.2f0)
+problem = ODEProblem{true,FullSpecialize}(heat!, u0, (0f0, 1f0), 0.2f0)
 solution = solve(problem, CarpenterKennedy2N54(williamson_condition=false);
-                 dt=0.05f0, save_everystep=false)
+                 dt=0.05f0, save_everystep=false,
+                 unstable_check=(dt, u, p, t) -> false)
 
 @show typeof(solution.u[end])
