@@ -4,6 +4,10 @@
 to `ODEProblem`, and call SciML's `solve`. It solves a five-point 2D heat
 equation with `OrdinaryDiffEqLowStorageRK.CarpenterKennedy2N54`. There is no
 explicit synchronization or garbage collection in the example.
+The grid spacing is fixed at `DX = 1`, so a case with grid dimension `N`
+represents the physical square `[0, (N-1)DX]²`. The five-point Laplacian
+includes the `1/DX²` factor for the second spatial derivatives. Increasing
+`N` expands the domain at fixed resolution, diffusivity, and final time.
 
 [`benchmark_heat.jl`](benchmark_heat.jl) compares the same RHS and solver on
 `Array`, `CuArray`, and `NDArray`, with an optional Dagger `DArray` probe. Its
@@ -30,6 +34,9 @@ and solver work arrays when their storage-parent types differ. This fixed-step
 example disables SciML's per-step instability scan, which scalar-iterates
 custom arrays; the benchmark independently checks the final state against
 the heat equation's known eigenmode solution.
+The stencil computes `du/dt = κ Δ_h u`; the explicit integrator evaluates
+this RHS at its stage states and advances it through 20 time steps by default.
+This benchmark does not exercise an implicit integrator or its linear solves.
 
 On a Linux GPU host with cuNumeric installed, use Julia 1.12 and create an
 environment outside the benchmarking repository:

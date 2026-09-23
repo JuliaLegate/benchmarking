@@ -10,6 +10,7 @@ length(ARGS) >= 1 || error("Usage: julia benchmark_heat.jl {cpu|CuArray|cuNumeri
 backend = ARGS[1]
 const T = get(ENV, "ODE_ELTYPE", "Float32") == "Float64" ? Float64 : Float32
 const KAPPA = T(0.2)
+const DX = T(1) # Fixed grid spacing; the physical domain grows with N.
 const T_END = T(1)
 const NSTEPS = parse(Int, get(ENV, "ODE_STEPS", "20"))
 const SAMPLES = parse(Int, get(ENV, "ODE_SAMPLES", "5"))
@@ -57,12 +58,13 @@ else
     error("Unknown backend $backend")
 end
 
-# Zero Dirichlet boundaries and a five-point finite-difference Laplacian.
+# Zero Dirichlet boundaries and a five-point finite-difference Laplacian
+# on [0, (N - 1) * DX]^2. Each second derivative contributes 1 / DX^2.
 # All state operations use whole-array or slice broadcasts; no scalar indexing.
 function heat!(du, u, κ, t)
     n = size(u, 1)
     fill!(du, zero(eltype(du)))
-    @views du[2:(n - 1), 2:(n - 1)] .= κ .* (
+    @views du[2:(n - 1), 2:(n - 1)] .= (κ / DX^2) .* (
         u[3:n, 2:(n - 1)] .+ u[1:(n - 2), 2:(n - 1)] .+
         u[2:(n - 1), 3:n] .+ u[2:(n - 1), 1:(n - 2)] .-
         4 .* u[2:(n - 1), 2:(n - 1)]
@@ -111,7 +113,7 @@ function run_case(n)
     end
 
     theta = pi * k / (n - 1)
-    eigenvalue = 4 * Float64(KAPPA) * (cos(theta) - 1)
+    eigenvalue = 4 * Float64(KAPPA) / Float64(DX)^2 * (cos(theta) - 1)
     reference = exp(eigenvalue * Float64(T_END)) .* host_u0
     actual = host_state(sol.u[end])
     error_rel = maximum(abs.(actual .- reference)) / maximum(abs.(reference))
@@ -121,7 +123,7 @@ function run_case(n)
     flush(stdout)
 end
 
-println("backend=$backend eltype=$T steps=$NSTEPS Julia=$VERSION threads=$(Threads.nthreads())")
+println("backend=$backend eltype=$T dx=$DX steps=$NSTEPS Julia=$VERSION threads=$(Threads.nthreads())")
 println("workspace=", get(ENV, "CUBLAS_WORKSPACE_CONFIG", "<default>"),
         " OrdinaryDiffEqLowStorageRK=", pkgversion(OrdinaryDiffEqLowStorageRK))
 flush(stdout)
