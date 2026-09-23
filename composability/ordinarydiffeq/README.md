@@ -4,6 +4,8 @@
 to `ODEProblem`, and call SciML's `solve`. It solves a five-point 2D heat
 equation with `OrdinaryDiffEqLowStorageRK.CarpenterKennedy2N54`. There is no
 explicit synchronization or garbage collection in the example.
+The example and benchmark both include [`heat_rhs.jl`](heat_rhs.jl), so they
+use the same stencil implementation.
 The grid spacing is fixed at `DX = 1`, so a case with grid dimension `N`
 represents the physical square `[0, (N-1)DX]²`. The five-point Laplacian
 includes the `1/DX²` factor for the second spatial derivatives. Increasing

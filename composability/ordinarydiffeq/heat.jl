@@ -2,18 +2,7 @@ using cuNumeric
 using OrdinaryDiffEqLowStorageRK: CarpenterKennedy2N54
 using SciMLBase: ODEProblem, solve, FullSpecialize
 
-const DX = 1f0 # Fixed grid spacing; the physical domain is [0, (n - 1) * DX]^2.
-
-# A two-dimensional heat equation with zero boundary values.
-function heat!(du, u, diffusion, t)
-    fill!(du, 0f0)
-    @views du[2:end-1, 2:end-1] .= (diffusion / DX^2) .* (
-        u[3:end, 2:end-1] .+ u[1:end-2, 2:end-1] .+
-        u[2:end-1, 3:end] .+ u[2:end-1, 1:end-2] .-
-        4 .* u[2:end-1, 2:end-1]
-    )
-    return nothing
-end
+include(joinpath(@__DIR__, "heat_rhs.jl"))
 
 n = 128
 s = Float32.(sin.(range(0, pi; length=n)))
