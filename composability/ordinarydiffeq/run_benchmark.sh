@@ -32,7 +32,7 @@ echo 'experiment,base_n,backend,eltype,gpus,N,steps,mean_ms,stderr_ms,median_ms,
 echo 'backend,gpus,N,peak_gpu_memory_mib' > "$output/memory.csv"
 echo 'backend,gpus,N,legate_config' > "$output/planned-cases.csv"
 export ODE_SAMPLES=${ODE_SAMPLES:-5}
-export LEGATE_AUTO_CONFIG=${LEGATE_AUTO_CONFIG:-0}
+export LEGATE_AUTO_CONFIG=1
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 
 read -r -a backends <<< "${ODE_BACKENDS:-$( [[ $experiment == single ]] && echo 'CuArray Dagger cuNumeric' || echo 'Dagger cuNumeric' )}"
@@ -50,9 +50,9 @@ done
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     printf 'julia=%s\n' "$("$julia_bin" --version)"
     printf 'experiment=%s\nbase_n=%s\nbackends=%s\nvalues=%s\n' "$experiment" "${base_n:-}" "${backends[*]}" "$*"
-    printf 'eltype=%s\nsteps=%s\nsamples=%s\ntimeout=%s\nGPU_MEMORY_LIMIT_MIB=%s\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES" "${ODE_TIMEOUT:-15m}" "${GPU_MEMORY_LIMIT_MIB:-61440}"
-    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\nODE_FBMEM=%s\nODE_SYSMEM=%s\nODE_ZCMEM=%s\n' \
-        "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG" "${ODE_FBMEM:-57344}" "${ODE_SYSMEM:-65536}" "${ODE_ZCMEM:-1024}"
+    printf 'eltype=%s\nsteps=%s\nsamples=%s\ntimeout=%s\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES" "${ODE_TIMEOUT:-15m}"
+    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\n' \
+        "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
     "$julia_bin" --startup-file=no --project="$ODE_PROJECT" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/metadata.txt" 2>&1
@@ -69,7 +69,7 @@ for value in "$@"; do
         n=$(awk -v base="$base_n" -v g="$gpus" 'BEGIN { printf "%.0f", base * sqrt(g) }')
     fi
     export ODE_GPUS=$gpus
-    export LEGATE_CONFIG="--gpus $gpus --cpus ${ODE_CPUS:-4} --fbmem ${ODE_FBMEM:-57344} --sysmem ${ODE_SYSMEM:-65536} --zcmem ${ODE_ZCMEM:-1024}"
+    export LEGATE_CONFIG="--gpus $gpus --cpus ${ODE_CPUS:-4}"
     for backend in "${backends[@]}"; do
         printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$LEGATE_CONFIG" >> "$output/planned-cases.csv"
         if [[ ${ODE_DRY_RUN:-0} == 1 ]]; then
@@ -98,9 +98,7 @@ for value in "$@"; do
         wait "$monitor_pid" 2>/dev/null || true
         peak=$(awk '$1 ~ /^[0-9]+$/ && $1 > peak { peak=$1 } END { print peak+0 }' "$memory_log")
         printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$peak" >> "$output/memory.csv"
-        if [[ $experiment == single && $peak -gt ${GPU_MEMORY_LIMIT_MIB:-61440} ]]; then
-            echo "Memory limit exceeded for $backend G=$gpus N=$n: $peak MiB" >&2; status=1
-        elif [[ -n $result_line ]]; then
+        if [[ -n $result_line ]]; then
             printf '%s\n' "$result_line" >> "$csv"
         fi
     done

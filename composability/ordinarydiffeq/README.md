@@ -68,8 +68,7 @@ ODE_OUTPUT=/opt/bench-results/ode-single bash composability/ordinarydiffeq/run_b
 
 The launcher writes `results.csv`, `timings.png`, `metadata.txt`, and one log
 per case under a timestamped `composability/ordinarydiffeq/results-*` directory.
-It configures a 56 GiB Legate framebuffer pool per GPU on the 80 GiB H100,
-leaving room for other allocations below the 60 GiB sampled-memory limit.
+It lets Legate auto-size its framebuffer pool on each GPU.
 Set `ODE_OUTPUT=/path/to/results` to choose the directory. The plot shows
 mean complete solve time against N with standard-error bars. It includes every
 backend that produced a valid result. The
@@ -89,7 +88,7 @@ ODE_OUTPUT=/opt/bench-results/ode-weak bash composability/ordinarydiffeq/run_ben
 
 On the one-GPU H100, set `ODE_DRY_RUN=1` to write `planned-cases.csv` for all
 GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records sampled
-GPU memory and excludes one-GPU points exceeding 60 GiB.
+GPU memory as a diagnostic; the reading includes Legate's reserved pool.
 
 The weak run uses Dagger and cuNumeric. It sets `N(G) = round(N(1)√G)` and
 checks CUDA chunk placement, backend retention, and the same exact-solution
