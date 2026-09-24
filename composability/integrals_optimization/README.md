@@ -52,12 +52,14 @@ unset CUBLAS_WORKSPACE_CONFIG
 bash composability/integrals_optimization/run_benchmark.sh 32 128 256
 ```
 
-The launcher sets `LEGATE_AUTO_CONFIG=1` and
-`LEGATE_CONFIG="--gpus 1 --cpus 4"` by default. Both backends use one GPU,
-and Legate sizes its memory pools for the machine. Override either variable
-for a different setup; the effective settings are recorded in `metadata.txt`.
-If you disable auto configuration, specify `--fbmem` and `--sysmem` in MiB.
-Legate's minimal manual defaults can cause excessive cuNumeric collections.
+The launcher sets `LEGATE_AUTO_CONFIG=0` and
+`LEGATE_CONFIG="--gpus 1 --cpus 4 --fbmem 3072 --sysmem 4096"` by
+default. Both backends use one GPU; Legate reserves a 3 GiB GPU framebuffer
+pool and a separate 4 GiB host memory pool. The smaller framebuffer leaves
+room for CUDA runtime and library allocations. Override either setting for
+a different machine; the effective values are recorded in `metadata.txt`.
+`--fbmem` and `--sysmem` are in MiB. Omitting them with manual configuration
+can cause excessive cuNumeric collections.
 
 The shell arguments are image dimensions `N`; each case has `N × N` pixels.
 Start with `32` for correctness. The launcher writes `results.csv`,
@@ -97,8 +99,7 @@ The initial `N=1024` cuNumeric run timed out after 180 seconds because its
 manual Legate configuration reserved only 256 MiB of framebuffer memory on
 the 24 GiB A30X. cuNumeric's 80% memory threshold then triggered about 51
 Julia collections per objective evaluation; later evaluations spent about
-8–9 seconds almost entirely in GC. With Legate auto configuration, the full
-`N=1024` solve passed with 32 objective evaluations. A cuNumeric-only run took
-0.73 seconds; the default paired run took 0.91 seconds for cuNumeric and 0.16
-seconds for CUDA.jl. An explicit 16 GiB framebuffer setting also passed at
-0.70 seconds. These are diagnostic single runs, not publication-grade timings.
+8–9 seconds almost entirely in GC. With the 3 GiB framebuffer and 4 GiB host
+pools, the full `N=1024` cuNumeric solve passed with 32 objective evaluations
+in 0.82 seconds. Auto configuration and an explicit 16 GiB framebuffer also
+passed. These are diagnostic single runs, not publication-grade timings.

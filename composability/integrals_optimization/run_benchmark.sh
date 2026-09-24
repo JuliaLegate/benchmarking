@@ -7,9 +7,9 @@ if [[ $# -eq 0 ]]; then
 fi
 : "${INTOPT_PROJECT:?Set INTOPT_PROJECT to the environment created by setup.jl}"
 
-# Use one GPU for the CUDA.jl comparison and let Legate size its memory pools.
-export LEGATE_AUTO_CONFIG="${LEGATE_AUTO_CONFIG:-1}"
-export LEGATE_CONFIG="${LEGATE_CONFIG:---gpus 1 --cpus 4}"
+# Use one GPU with a 3 GiB Legate framebuffer pool, leaving room for CUDA overhead.
+export LEGATE_AUTO_CONFIG="${LEGATE_AUTO_CONFIG:-0}"
+export LEGATE_CONFIG="${LEGATE_CONFIG:---gpus 1 --cpus 4 --fbmem 3072 --sysmem 4096}"
 
 for n in "$@"; do
     if ! [[ $n =~ ^[1-9][0-9]*$ ]] || (( 10#$n < 4 )); then
