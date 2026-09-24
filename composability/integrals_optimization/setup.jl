@@ -18,6 +18,7 @@ Pkg.add([
     PackageSpec(name="Optimization"),
     PackageSpec(name="OptimizationOptimJL"),
     PackageSpec(name="CUDA", version="6.4.0"),
+    PackageSpec(name="Dagger", version="0.22.5"),
     PackageSpec(name="Plots"),
 ])
 Pkg.precompile()

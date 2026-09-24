@@ -21,15 +21,15 @@ positive parameters without gradients; log parameters enforce positivity.
 `Optimization.jl` owns a two-element host parameter vector. Each objective
 evaluation builds a backend concentration image, runs `Integrals.jl` on that
 image for every band, and reduces the error to one scalar loss. The expensive
-image arithmetic and integrals use `CuArray` or `NDArray` storage. The scalar
+image arithmetic and integrals use `CuArray`, Dagger `DArray`, or `NDArray` storage. The scalar
 loss reaches the optimizer through ordinary `allowautofetch` conversion; no
 `all(isfinite, NDArray)` shim or `CNBool` conversion is defined.
 
-The default comparison is single-GPU CUDA.jl versus cuNumeric. Each backend
+The default single-GPU comparison is CUDA.jl, Dagger, and cuNumeric. Each backend
 and size runs in its own Julia process with the same model, initial parameters,
 observations, quadrature, solver, and correctness checks. The optional `cpu`
-backend supports small smoke tests. Dagger is not included because this
-Optimization.jl objective path has not been validated for it.
+backend supports small smoke tests. Dagger's `Integrals.solve` path must pass
+the same checks before it contributes a timing.
 
 ## Setup and run
 
@@ -45,15 +45,15 @@ export INTOPT_PROJECT="$HOME/integrals-opt-env"
 
 Apply machine-specific cuNumeric `LocalPreferences.toml` settings to that
 environment if needed. Keep its `Manifest.toml` with benchmark results. Start
-with the default cuBLAS workspace on H100 and use one setting for both backends:
+with the default cuBLAS workspace on H100 and use one setting for every backend:
 
 ```sh
 unset CUBLAS_WORKSPACE_CONFIG
-bash composability/integrals_optimization/run_benchmark.sh 32 128 256
+INTOPT_OUTPUT=/opt/bench-results/intopt-single bash composability/integrals_optimization/run_benchmark.sh single 32 128 256
 ```
 
 The launcher sets `LEGATE_AUTO_CONFIG=1` and
-`LEGATE_CONFIG="--gpus 1 --cpus 4"` by default. Both backends use one GPU,
+`LEGATE_CONFIG="--gpus G --cpus 4"` by default. Each backend uses the requested GPUs,
 and Legate sizes its memory pools for the machine. Override either variable
 for a different setup; the effective settings are recorded in `metadata.txt`.
 If you disable auto configuration, specify `--fbmem` and `--sysmem` in MiB.
@@ -64,22 +64,32 @@ Start with `32` for correctness. The launcher writes `results.csv`,
 `timings.png`, `metadata.txt`, and per-case logs under a timestamped results
 directory. Set `INTOPT_OUTPUT=/path/to/results` to choose one. It exits nonzero
 when a requested case fails and retains the failure log. The plot compares
-complete `Optimization.solve` time against `N`, with minimum/maximum error bars
-around the median.
+mean complete `Optimization.solve` time against `N`, with standard-error bars.
+
+For weak scaling, choose the largest `N` that passed all three single-GPU
+variants as `N(1)`. The runner uses `N(G) = round(N(1)√G)` and runs Dagger and
+cuNumeric at each count. The one-GPU point can be validated here; 2, 4, and 8
+GPUs require the later machine. The weak-scaling plot shows mean time versus
+GPU count with standard-error bars and a horizontal ideal reference per backend.
+
+```sh
+BASE_N=1024 # replace with the largest common passing single-GPU N
+INTOPT_OUTPUT=/opt/bench-results/intopt-weak bash composability/integrals_optimization/run_benchmark.sh weak "$BASE_N" 1 2 4 8
+```
 
 `INTOPT_ELTYPE=Float32`, `INTOPT_BANDS=4`, `INTOPT_ORDER=12`,
-`INTOPT_ITERS=80`, `INTOPT_SAMPLES=3`, and `INTOPT_NOISE=0.001` are the defaults.
+`INTOPT_ITERS=80`, `INTOPT_SAMPLES=5`, and `INTOPT_NOISE=0.001` are the defaults.
 `INTOPT_ITERS` is a maximum; the CSV records the actual objective evaluation
 count. For a CPU smoke run:
 
 ```sh
-INTOPT_BACKENDS=cpu INTOPT_SAMPLES=1 \
-  bash composability/integrals_optimization/run_benchmark.sh 32
+INTOPT_BACKENDS=cpu INTOPT_SAMPLES=2 \
+  bash composability/integrals_optimization/run_benchmark.sh single 32
 ```
 
 The timed region is one complete optimizer solve with a fresh copy of the
-initial parameters. Synthetic observation generation, transfers, and a warmup
-solve are outside timing. There is no per-iteration `GC.gc()` call. cuNumeric's
+initial parameters. Synthetic observation generation, transfers, and two warmup
+solves are outside timing. There is no per-iteration `GC.gc()` call. cuNumeric's
 `get_time_nanoseconds()` and CUDA's `synchronize()` delimit the timed solve.
 The result is checked against the known plume parameters after timing.
 

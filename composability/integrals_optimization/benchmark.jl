@@ -4,12 +4,12 @@
 using Optimization
 using OptimizationOptimJL
 using Random: MersenneTwister, randn
-using Statistics: median
+using Statistics: mean, median, std
 using LinearAlgebra: norm
 
 include(joinpath(@__DIR__, "model.jl"))
 
-length(ARGS) == 2 || error("Usage: julia benchmark.jl {cpu|CuArray|cuNumeric} N")
+length(ARGS) == 2 || error("Usage: julia benchmark.jl {cpu|CuArray|Dagger|cuNumeric} N")
 backend = ARGS[1]
 n = parse(Int, ARGS[2])
 n >= 4 || error("N must be at least 4")
@@ -20,10 +20,12 @@ const T = PRECISION == "Float64" ? Float64 : Float32
 const BANDS = parse(Int, get(ENV, "INTOPT_BANDS", "4"))
 const ORDER = parse(Int, get(ENV, "INTOPT_ORDER", "12"))
 const ITERS = parse(Int, get(ENV, "INTOPT_ITERS", "80"))
-const SAMPLES = parse(Int, get(ENV, "INTOPT_SAMPLES", "3"))
+const SAMPLES = parse(Int, get(ENV, "INTOPT_SAMPLES", "5"))
+const GPUS = parse(Int, get(ENV, "INTOPT_GPUS", "1"))
 const NOISE = parse(T, get(ENV, "INTOPT_NOISE", "0.001"))
-ITERS > 0 && SAMPLES > 0 && NOISE >= 0 ||
+ITERS > 0 && SAMPLES >= 2 && GPUS > 0 && NOISE >= 0 ||
     error("Invalid iteration, sample, or noise setting")
+(backend != "CuArray" || GPUS == 1) || error("CuArray baseline uses one GPU")
 
 if backend == "cpu"
     make_state(a) = a
@@ -44,6 +46,37 @@ elseif backend == "cuNumeric"
     synchronized_time_ns() = cuNumeric.get_time_nanoseconds()
     correct_storage(a) = a isa NDArray{T,2}
     run_with_scalar_fetch(f) = cuNumeric.allowautofetch(f)
+elseif backend == "Dagger"
+    using Dagger, CUDA
+    CUDA.allowscalar(false)
+    length(collect(CUDA.devices())) >= GPUS || error("Requested $GPUS GPUs are unavailable")
+    dagger_scope = Dagger.scope(; cuda_gpus=collect(1:GPUS))
+    function make_state(a)
+        procs = sort(collect(filter(p -> p isa Dagger.CuArrayDeviceProc,
+                                    Dagger.compatible_processors())); by=p -> p.device)
+        length(procs) == GPUS || error("Dagger sees $(length(procs)) of $GPUS requested GPUs")
+        block = cld(size(a, 1), GPUS)
+        grid = Array{Dagger.Processor}(undef, cld(size(a, 1), block), 1)
+        for i in axes(grid, 1)
+            grid[i, 1] = procs[i]
+        end
+        result = Dagger.distribute(a, Dagger.Blocks(block, size(a, 2)), grid)
+        wait(result)
+        correct_storage(result) || error("Dagger array left the requested CUDA devices")
+        return result
+    end
+    synchronized_time_ns() = (Dagger.gpu_synchronize(:CUDA); time_ns())
+    function correct_storage(a)
+        a isa Dagger.DArray || return false
+        chunks = [fetch(chunk; raw=true) for chunk in a.chunks]
+        return all(chunk -> chunk isa Dagger.Chunk{<:CUDA.CuArray}, chunks) &&
+               Set(chunk.processor.device + 1 for chunk in chunks) == Set(1:GPUS)
+    end
+    function run_with_scalar_fetch(f)
+        Dagger.with_options(; scope=dagger_scope) do
+            f()
+        end
+    end
 else
     error("Unknown backend $backend")
 end
@@ -77,8 +110,10 @@ function run_case(n)
                                     NelderMead(); maxiters=ITERS, progress=false)
 
     initial_loss = objective(initial)
-    warmup = do_solve()
-    warmup.u isa Vector{Float64} || error("Unexpected optimizer parameter storage")
+    for _ in 1:2
+        warmup = do_solve()
+        warmup.u isa Vector{Float64} || error("Unexpected optimizer parameter storage")
+    end
     synchronized_time_ns()
 
     elapsed_ms = Float64[]
@@ -95,9 +130,10 @@ function run_case(n)
     parameter_error = norm(estimated .- TRUTH) / norm(TRUTH)
     parameter_error < 0.1 || error("Plume parameters were not recovered")
     println("parameters=$estimated objective_evals=$(solution.stats.fevals)")
-    println("RESULT,$backend,$T,$n,$BANDS,$ORDER,$ITERS,$(solution.stats.fevals),$(median(elapsed_ms)),$(minimum(elapsed_ms)),$(maximum(elapsed_ms)),$initial_loss,$final_loss,$parameter_error,$(join(elapsed_ms, ';'))")
+    stderr = std(elapsed_ms) / sqrt(length(elapsed_ms))
+    println("RESULT,$backend,$T,$GPUS,$n,$BANDS,$ORDER,$ITERS,$(solution.stats.fevals),$(mean(elapsed_ms)),$stderr,$(median(elapsed_ms)),$(minimum(elapsed_ms)),$(maximum(elapsed_ms)),$initial_loss,$final_loss,$parameter_error,$(join(elapsed_ms, ';'))")
 end
 
-println("backend=$backend eltype=$T N=$n bands=$BANDS order=$ORDER maxiters=$ITERS Julia=$VERSION")
+println("backend=$backend eltype=$T gpus=$GPUS N=$n bands=$BANDS order=$ORDER maxiters=$ITERS Julia=$VERSION")
 println("Integrals=$(pkgversion(Integrals)) Optimization=$(pkgversion(Optimization)) OptimizationOptimJL=$(pkgversion(OptimizationOptimJL))")
 run_with_scalar_fetch(() -> run_case(n))
