@@ -152,8 +152,10 @@ FFT. See `nas/README.md` for initialization, checksum, and timing differences.
 NAS MG runs the official periodic multigrid V-cycle and verifies its final L2
 norm. Its exact sparse RNG-generated right-hand side is setup outside timing,
 matching NPB-GPU. Dagger uses distributed periodic stencils, but currently
-constructs temporary distributed arrays for multigrid transfers; its GPU
-scaling still needs measurement. See `nas/README.md` for backend limitations.
+constructs a tuple-valued distributed array for interpolation and temporary
+arrays for restriction; its GPU scaling still needs measurement. An optional
+CUDA.jl separable-array point uses cuNumeric's three-axis transfer algorithm.
+See `nas/README.md` for backend limitations.
 
 ## Results
 

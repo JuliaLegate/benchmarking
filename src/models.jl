@@ -139,9 +139,9 @@ function kwargs_toml(kwargs)
     return sprint(io -> TOML.print(io, Dict(string(k)=>v for (k, v) in kwargs); sorted=true))
 end
 function results_subdir(s)
-    # EP implementation variants share a plot when class and dimensions match.
+    # NAS implementation variants share a plot when class and dimensions match.
     # Their distinct CSV model keys preserve the individual measurements.
-    kwargs = s.name == "nas_ep" ?
+    kwargs = s.name in ("nas_ep", "nas_mg") ?
         Dict(k=>v for (k, v) in s.kwargs if k != :implementation) : s.kwargs
     return isempty(kwargs) ? s.T : s.T * "-" * bytes2hex(sha1(kwargs_toml(kwargs)))[1:12]
 end

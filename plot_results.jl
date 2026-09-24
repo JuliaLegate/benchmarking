@@ -76,6 +76,7 @@ const VARIANT_MARKERS = [:circle, :diamond, :hexagon, :dtriangle, :star4, :penta
 const REF_FAMILIES = [
     ("cupynumeric", "cuPyNumeric", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC),
     ("CUDA.jl", "CUDA.jl", COLOR_CUDA, MARKER_CUDA),
+    ("CUDA.jl_separable", "CUDA.jl (separable arrays)", COLOR_CUDA, :dtriangle),
     ("tensoroperations_cuda", "TensorOperations.jl / cuTENSOR", COLOR_CUTENSOR, MARKER_CUTENSOR),
     ("jacc", "JACC.jl", COLOR_JACC, MARKER_JACC),
     ("dagger", "Dagger.jl", COLOR_DAGGER, MARKER_DAGGER),
@@ -172,9 +173,9 @@ end
 # Both groups perform the same workload under the same timing contract.
 function ep_series(results_dir, category)
     entries = if category == :high_level
-        (("cunumeric_structarray", "cuNumeric.jl (StructArray broadcast)",
+        (("cunumeric_struct", "cuNumeric.jl (struct broadcast)",
           COLOR_CUNUMERIC, MARKER_CUNUMERIC),
-         ("dagger", "Dagger.jl (map!)", COLOR_DAGGER, MARKER_DAGGER),
+         ("dagger", "Dagger.jl (broadcast)", COLOR_DAGGER, MARKER_DAGGER),
          ("cupynumeric", "cuPyNumeric (array skip-ahead)", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC),
          ("CUDA.jl_broadcast", "CUDA.jl (broadcast)", COLOR_CUDA, MARKER_CUDA),
          ("jacc_broadcast", "JACC.jl (array broadcast)", COLOR_JACC, MARKER_JACC),

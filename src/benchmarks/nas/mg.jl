@@ -4,11 +4,15 @@ Base.@kwdef struct NASMultiGrid{T} <: AbstractBenchmark{T}
     N::Int
     M::Int
     class::String = "S"
+    implementation::String = "default"
 end
 
 name(::NASMultiGrid) = "nas_mg"
 dims(b::NASMultiGrid) = (b.N, b.M)
 allowed_types(::Type{<:NASMultiGrid}) = Float64
+# MG verifies against the official NPB norm; run the CUDA.jl check as well.
+correctness_uses_cpu(::NASMultiGrid) = true
+correctness_reference_label(mod, ::NASMultiGrid) = "NPB-GPU"
 
 function data(b::NASMultiGrid)
     p = nas_mg_parameters(b.class)

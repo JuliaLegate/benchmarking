@@ -2,7 +2,7 @@
 # smoothers use Dagger's distributed periodic stencils; restriction and
 # interpolation use Dagger-scheduled chunk broadcasts. This avoids scalar
 # DArray indexing and does not use a hand-written CUDA kernel, but interpolation
-# currently builds seven temporary DArrays per level.
+# currently builds one tuple-valued temporary DArray per level.
 # Restriction filters the entire fine grid before subsampling (eight times as
 # many stencil outputs as direct coarse-grid evaluation). Coarse levels use
 # fewer GPUs; stencil/chunk movement is runtime-managed, not explicit minimal
@@ -168,18 +168,21 @@ end
         n[1, 1, 2] + n[2, 1, 2] + n[1, 2, 2] + n[2, 2, 2]
     )
 
-function dagger_mg_interp_components(coarse)
-    c100 = @stencil dagger_mg_interp_100(@neighbors(coarse[idx], 1, Wrap()))
-    c010 = @stencil dagger_mg_interp_010(@neighbors(coarse[idx], 1, Wrap()))
-    c110 = @stencil dagger_mg_interp_110(@neighbors(coarse[idx], 1, Wrap()))
-    c001 = @stencil dagger_mg_interp_001(@neighbors(coarse[idx], 1, Wrap()))
-    c101 = @stencil dagger_mg_interp_101(@neighbors(coarse[idx], 1, Wrap()))
-    c011 = @stencil dagger_mg_interp_011(@neighbors(coarse[idx], 1, Wrap()))
-    c111 = @stencil dagger_mg_interp_111(@neighbors(coarse[idx], 1, Wrap()))
-    return (coarse, c100, c010, c110, c001, c101, c011, c111)
+@inline function dagger_mg_interp_values(n)
+    return (
+        n[2, 2, 2], dagger_mg_interp_100(n), dagger_mg_interp_010(n),
+        dagger_mg_interp_110(n), dagger_mg_interp_001(n),
+        dagger_mg_interp_101(n), dagger_mg_interp_011(n), dagger_mg_interp_111(n),
+    )
 end
 
-function dagger_mg_upsample_chunk!(fine, global_z, coarse_z, components...)
+function dagger_mg_interp_components(coarse)
+    components = similar(coarse, NTuple{8,Float64}, size(coarse))
+    @stencil components[idx] = dagger_mg_interp_values(@neighbors(coarse[idx], 1, Wrap()))
+    return components
+end
+
+function dagger_mg_upsample_chunk!(fine, global_z, coarse_z, components)
     nx, ny, nz = size(fine)
     for odd_z in (false, true)
         local_z = isodd(global_z) == odd_z ? 1 : 2
@@ -192,36 +195,28 @@ function dagger_mg_upsample_chunk!(fine, global_z, coarse_z, components...)
         for odd_y in (false, true), odd_x in (false, true)
             output_x = odd_x ? (1:2:nx) : (2:2:nx)
             output_y = odd_y ? (1:2:ny) : (2:2:ny)
-            component = components[1 + (odd_x ? 1 : 0) + (odd_y ? 2 : 0) + zbit]
-            @views fine[output_x, output_y, output_z] .+= component[:, :, input_z]
+            component_index = 1 + (odd_x ? 1 : 0) + (odd_y ? 2 : 0) + zbit
+            @views fine[output_x, output_y, output_z] .+=
+                getindex.(components[:, :, input_z], Ref(component_index))
         end
     end
     return nothing
 end
 
 function dagger_mg_upsample!(fine, components)
-    coarse = first(components)
     Dagger.spawn_datadeps() do
         for index in CartesianIndices(fine.chunks)
             target_z = fine.subdomains[index].indexes[3]
             first_coarse_z = cld(first(target_z), 2)
             last_coarse_z = cld(last(target_z), 2)
             source_index, source_z = dagger_mg_covering_chunk(
-                coarse, first_coarse_z, last_coarse_z
+                components, first_coarse_z, last_coarse_z
             )
-            chunks = map(component -> component.chunks[source_index], components)
             Dagger.@spawn dagger_mg_upsample_chunk!(
                 Dagger.Out(fine.chunks[index]),
                 first(target_z),
                 first(source_z),
-                Dagger.In(chunks[1]),
-                Dagger.In(chunks[2]),
-                Dagger.In(chunks[3]),
-                Dagger.In(chunks[4]),
-                Dagger.In(chunks[5]),
-                Dagger.In(chunks[6]),
-                Dagger.In(chunks[7]),
-                Dagger.In(chunks[8]),
+                Dagger.In(components.chunks[source_index]),
             )
         end
     end

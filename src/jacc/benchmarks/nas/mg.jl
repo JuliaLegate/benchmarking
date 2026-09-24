@@ -39,7 +39,7 @@ function model_initialize(b::JACCNASMG)
     u = [JACC.zeros(Float64, n, n, n) for n in sizes]
     r = [JACC.zeros(Float64, n, n, n) for n in sizes]
     return JACCNASMGState(
-        u, r, JACC.Array(nas_mg_rhs(p)), nas_mg_smoother(b.class),
+        u, r, JACC.array(nas_mg_rhs(p)), nas_mg_smoother(b.class),
         JACC.reducer(; range=p.n^3, type=Float64, sync=false),
     )
 end

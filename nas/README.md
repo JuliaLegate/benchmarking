@@ -175,12 +175,20 @@ every prescribed level. Correctness compares the final L2 norm with the
 official value at relative tolerance `1.0e-8`.
 
 JACC is single-GPU because it has no distributed 3-D halo API. CUDA.jl is the
-single-GPU baseline. cuNumeric, cuPyNumeric, and Dagger express the hierarchy
-through their distributed array APIs; implementation headers document their
-communication limitations.
+single-GPU baseline. The optional CUDA.jl `separable` variant uses the same
+three-axis restriction and interpolation decomposition as cuNumeric. Its
+separate result shows the cost of that array algorithm on CUDA.jl; the runtimes
+still differ in scheduling, views, and data movement. Dagger now computes all
+eight interpolation components in one tuple-valued stencil, but its restriction
+still evaluates the full fine grid. cuNumeric, cuPyNumeric, and Dagger express
+the hierarchy through their distributed array APIs; implementation headers
+document their communication limitations.
 
 Run class S across all models with:
 
 ```sh
 julia --project=. run.jl --config=benchmarks_nas_mg.toml
 ```
+
+To include the CUDA.jl separable variant as an additional point, run
+`julia --project=. run.jl --config=benchmarks_nas_mg_compare.toml`.
