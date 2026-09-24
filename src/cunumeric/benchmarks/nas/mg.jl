@@ -46,6 +46,20 @@ function Base.setindex!(
     return rhs
 end
 
+# @accelerate releases each temporary view; the library sends disjoint
+# slice-to-slice assignments straight to the native copy path.
+cuNumeric.@accelerate function nas_mg_comm3!(u::cuNumeric.NDArray{T,3}) where {T}
+    n1, n2, n3 = size(u)
+    yi, zi = 2:(n2 - 1), 2:(n3 - 1)
+    u[1:1, yi, zi] .= u[(n1 - 1):(n1 - 1), yi, zi]
+    u[n1:n1, yi, zi] .= u[2:2, yi, zi]
+    u[:, 1:1, zi] .= u[:, (n2 - 1):(n2 - 1), zi]
+    u[:, n2:n2, zi] .= u[:, 2:2, zi]
+    u[:, :, 1:1] .= u[:, :, (n3 - 1):(n3 - 1)]
+    u[:, :, n3:n3] .= u[:, :, 2:2]
+    return u
+end
+
 function initialize(b::NASMultiGrid{Float64}; mod=cuNumeric)
     p = validate_nas_mg(b)
     sizes = nas_mg_level_sizes(p)
@@ -99,10 +113,11 @@ function cunumeric_mg_interp_axis(array, axis, weights)
     hi4 = cuNumeric.reshape(hi, d1, d2, n - 1, 1)
     mixed = lo4 .+ weights .* (hi4 .- lo4)
     interpolated = cuNumeric.reshape(mixed, d1, d2, 2(n - 1))
-    result = axis == 3 ? interpolated : permutedims(interpolated, inverse)
-    # The next interpolation axis permutes this result. Give it an independent
-    # store instead of composing a transpose with the reshape view above.
-    return copy(result)
+    if axis == 3
+        return interpolated
+    end
+    # Legate cannot slice the composed reshape/transpose in the next pass.
+    return copy(permutedims(interpolated, inverse))
 end
 
 function cunumeric_mg_interp!(fine, coarse, weights)
