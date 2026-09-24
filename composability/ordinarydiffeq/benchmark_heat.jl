@@ -43,6 +43,7 @@ elseif backend == "cuNumeric"
 elseif backend == "Dagger"
     using Dagger, CUDA
     CUDA.allowscalar(false)
+    Dagger.allowscalar!(false)
     length(collect(CUDA.devices())) >= GPUS || error("Requested $GPUS GPUs are unavailable")
     dagger_scope = Dagger.scope(; cuda_gpus=collect(1:GPUS))
     function make_state(a)
