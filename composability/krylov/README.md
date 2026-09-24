@@ -55,13 +55,12 @@ one-GPU point normally with `weak "$BASE_N" 1`.
 The runner uses CG only. It writes `results.csv`, `timings.png`, per-case logs,
 the package manifest, sampled GPU-memory log and peak summary, and `environment.txt` together. `BENCH_PROJECT` can point to an
 already-instantiated equivalent environment (the default is this directory).
-Set `JULIA`, `BENCH_THREADS`,
-`BENCH_CPUS`, `BENCH_FBMEM`, `BENCH_SYSMEM`, or `BENCH_ZCMEM` for the machine.
+Set `JULIA`, `BENCH_THREADS`, or `BENCH_CPUS` for the machine.
 Set `BENCH_TIMEOUT` to a per-case duration accepted by GNU `timeout`
 (default `15m`). Failed or timed-out cases keep their logs; completed CSV
 rows remain plottable without hiding other backends or sizes.
-`BENCH_FBMEM` is MiB per GPU and defaults to 57344 for the 80 GiB H100, leaving
-room for non-Legate allocations below the 60 GiB sampled-memory limit.
+Legate auto-sizes its memory pool. The sampled `nvidia-smi` memory peak is
+diagnostic; pool reservation can make it much larger than live array storage.
 The runner sets `LEGATE_CONFIG` separately for every GPU count. Set
 `CUBLAS_WORKSPACE_CONFIG` externally, if desired, so every backend sees the same
 setting. `plot.py` needs Python with Matplotlib.

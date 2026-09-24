@@ -6,7 +6,7 @@ project=${BENCH_PROJECT:-$script_dir}
 export BENCH_ELTYPE=${BENCH_ELTYPE:-Float32}
 export BENCH_SAMPLES=${BENCH_SAMPLES:-5}
 [[ $BENCH_ELTYPE == Float32 || $BENCH_ELTYPE == Float64 ]] || { echo "BENCH_ELTYPE must be Float32 or Float64" >&2; exit 2; }
-export LEGATE_AUTO_CONFIG=0
+export LEGATE_AUTO_CONFIG=1
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 
 usage() {
@@ -32,9 +32,9 @@ echo 'backend,mode,gpus,n,legate_config' > "$output/planned-cases.csv"
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     "$julia_bin" --version
     nvidia-smi
-    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=cg\nBENCH_SAMPLES=%s\nBENCH_CPUS=%s\nBENCH_FBMEM=%s\nBENCH_SYSMEM=%s\nBENCH_ZCMEM=%s\nBENCH_TIMEOUT=%s\nGPU_MEMORY_LIMIT_MIB=%s\n' \
+    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=cg\nBENCH_SAMPLES=%s\nBENCH_CPUS=%s\nBENCH_TIMEOUT=%s\nLEGATE_AUTO_CONFIG=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "$BENCH_SAMPLES" "${BENCH_CPUS:-2}" \
-        "${BENCH_FBMEM:-57344}" "${BENCH_SYSMEM:-65536}" "${BENCH_ZCMEM:-1024}" "${BENCH_TIMEOUT:-15m}" "${GPU_MEMORY_LIMIT_MIB:-61440}"
+        "${BENCH_TIMEOUT:-15m}" "$LEGATE_AUTO_CONFIG"
     python3 -c 'import matplotlib; print("matplotlib=" + matplotlib.__version__)'
     "$julia_bin" --startup-file=no --project="$project" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/environment.txt" 2>&1
@@ -48,7 +48,7 @@ run_case() {
     time_limit=(timeout --signal=TERM --kill-after=30s "${BENCH_TIMEOUT:-15m}")
     local log="$output/$BENCH_ELTYPE-$backend-$solver-$mode-$gpus-$n.log"
     export BENCH_GPUS=$gpus
-    export LEGATE_CONFIG="--gpus $gpus --cpus ${BENCH_CPUS:-2} --fbmem ${BENCH_FBMEM:-57344} --sysmem ${BENCH_SYSMEM:-65536} --zcmem ${BENCH_ZCMEM:-1024}"
+    export LEGATE_CONFIG="--gpus $gpus --cpus ${BENCH_CPUS:-2}"
     printf '%s,%s,%s,%s,%s\n' "$backend" "$mode" "$gpus" "$n" "$LEGATE_CONFIG" >> "$output/planned-cases.csv"
     echo "Running $backend $solver $mode: G=$gpus N=$n"
     [[ ${BENCH_DRY_RUN:-0} != 1 ]] || return 0
@@ -73,10 +73,7 @@ run_case() {
     local peak
     peak=$(awk '$1 ~ /^[0-9]+$/ && $1 > peak { peak=$1 } END { print peak+0 }' "$memory_log")
     printf '%s,%s,%s,%s\n' "$backend-$mode" "$gpus" "$n" "$peak" >> "$output/memory.csv"
-    if [[ $experiment == single && $peak -gt ${GPU_MEMORY_LIMIT_MIB:-61440} ]]; then
-        echo "Memory limit exceeded for $backend G=$gpus N=$n: $peak MiB" >&2
-        failed=1
-    elif [[ -n $result_line ]]; then
+    if [[ -n $result_line ]]; then
         printf '%s\n' "$result_line" >> "$csv"
     fi
 }
