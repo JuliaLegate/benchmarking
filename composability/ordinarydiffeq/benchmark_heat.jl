@@ -99,7 +99,9 @@ function run_case(n)
                        unstable_check=(dt, u, p, t) -> false)
 
     local sol
-    for _ in 1:2
+    for warmup_index in 1:2
+        println("warmup=$warmup_index backend=$backend N=$n")
+        flush(stdout)
         sol = do_solve()
         synchronized_time_ns(sol.u[end])
         @assert successful_retcode(sol)
@@ -107,7 +109,9 @@ function run_case(n)
     end
 
     elapsed_ms = Float64[]
-    for _ in 1:SAMPLES
+    for sample_index in 1:SAMPLES
+        println("sample=$sample_index backend=$backend N=$n")
+        flush(stdout)
         started = synchronized_time_ns()
         sol = do_solve()
         push!(elapsed_ms, (synchronized_time_ns(sol.u[end]) - started) / 1e6)
