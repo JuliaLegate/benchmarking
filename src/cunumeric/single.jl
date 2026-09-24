@@ -6,7 +6,6 @@ using cuNumeric
 using AbstractFFTs
 using LinearAlgebra, TOML
 using TensorOperations
-using StructArrays
 
 assert_models_not_loaded(("JACC", "Dagger"))
 
