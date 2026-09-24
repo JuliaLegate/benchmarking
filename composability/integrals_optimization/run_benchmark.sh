@@ -23,7 +23,7 @@ julia_bin="${JULIA:-julia}"
 output="${INTOPT_OUTPUT:-$script_dir/results-$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$output"
 csv="$output/results.csv"
-printf 'backend,eltype,N,bands,order,iters,median_ms,min_ms,max_ms,initial_loss,final_loss,relative_error,samples_ms\n' > "$csv"
+printf 'backend,eltype,N,bands,order,maxiters,objective_evals,median_ms,min_ms,max_ms,initial_loss,final_loss,parameter_error,samples_ms\n' > "$csv"
 
 read -r -a backends <<< "${INTOPT_BACKENDS:-CuArray cuNumeric}"
 if [[ ${#backends[@]} -eq 0 ]]; then
@@ -40,10 +40,9 @@ done
 {
     printf 'git_commit=%s\n' "$(git -C "$script_dir/../.." rev-parse HEAD)"
     printf 'julia=%s\n' "$("$julia_bin" --version)"
-    printf 'eltype=%s\nbands=%s\norder=%s\niters=%s\nsamples=%s\nrate=%s\nnoise=%s\n' \
+    printf 'eltype=%s\nbands=%s\norder=%s\nmaxiters=%s\nsamples=%s\nnoise=%s\n' \
         "${INTOPT_ELTYPE:-Float32}" "${INTOPT_BANDS:-4}" "${INTOPT_ORDER:-12}" \
-        "${INTOPT_ITERS:-40}" "${INTOPT_SAMPLES:-3}" \
-        "${INTOPT_RATE:-0.05}" "${INTOPT_NOISE:-0.001}"
+        "${INTOPT_ITERS:-80}" "${INTOPT_SAMPLES:-3}" "${INTOPT_NOISE:-0.001}"
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\n' "${CUBLAS_WORKSPACE_CONFIG:-<default>}"
     printf 'LEGATE_AUTO_CONFIG=%s\n' "$LEGATE_AUTO_CONFIG"
     printf 'LEGATE_CONFIG=%s\n' "$LEGATE_CONFIG"

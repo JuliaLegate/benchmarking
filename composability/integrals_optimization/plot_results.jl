@@ -6,23 +6,23 @@ rows = NamedTuple[]
 for (i, line) in enumerate(eachline(csv_path))
     i == 1 && continue
     fields = split(line, ',')
-    length(fields) == 13 || error("Malformed result row $i")
+    length(fields) == 14 || error("Malformed result row $i")
     push!(rows, (
         backend=fields[1], eltype=fields[2], n=parse(Int, fields[3]),
         bands=parse(Int, fields[4]), order=parse(Int, fields[5]),
-        iters=parse(Int, fields[6]), median=parse(Float64, fields[7]),
-        minimum=parse(Float64, fields[8]), maximum=parse(Float64, fields[9]),
+        maxiters=parse(Int, fields[6]), median=parse(Float64, fields[8]),
+        minimum=parse(Float64, fields[9]), maximum=parse(Float64, fields[10]),
     ))
 end
 isempty(rows) && error("No results in $csv_path")
-length(unique((r.eltype, r.bands, r.order, r.iters) for r in rows)) == 1 ||
+length(unique((r.eltype, r.bands, r.order, r.maxiters) for r in rows)) == 1 ||
     error("Mixed precision or solver settings in one plot")
 
 sizes = sort!(unique(row.n for row in rows))
 settings = first(rows)
 figure = plot(;
     xlabel="Image dimension N (N × N pixels)", ylabel="Complete optimization (ms)",
-    title="Absorption image fit — $(settings.eltype), $(settings.bands) bands, $(settings.iters) Adam steps",
+    title="Plume calibration — $(settings.eltype), $(settings.bands) bands, Nelder-Mead",
     xscale=:log10, yscale=:log10, xticks=(sizes, string.(sizes)),
     legend=:topleft, linewidth=2, markersize=5, size=(900, 550),
 )

@@ -1,5 +1,4 @@
-# A transparent inverse problem: infer a gas concentration image from
-# wavelength-integrated transmission measurements.
+# Infer a two-parameter gas plume from wavelength-integrated measurements.
 import Integrals
 using Integrals: IntegralProblem, GaussLegendre
 using FastGaussQuadrature: gausslegendre
@@ -17,16 +16,22 @@ function AbsorptionModel(::Type{T}, bands::Int, order::Int) where {T<:AbstractFl
     return AbsorptionModel(centers, GaussLegendre(T.(nodes), T.(weights)))
 end
 
-# One smooth absorption line and a Gaussian response for each detector band.
+# Log parameters keep plume amplitude and width positive without solver bounds.
+function plume(log_parameters, radius2)
+    T = eltype(radius2)
+    amplitude = exp(T(log_parameters[1]))
+    width = exp(T(log_parameters[2]))
+    return T(0.2) .+ amplitude .* exp.(-radius2 ./ (width * width))
+end
+
 absorption(λ::T) where {T} = T(0.15) + T(1.1) * exp(-((λ - T(0.5)) / T(0.16))^2)
 response(λ::T, center::T) where {T} = exp(-((λ - center) / T(0.12))^2)
 
-function band_integral(concentration, center, model; derivative=false)
+function band_integral(concentration, center, model)
     T = eltype(concentration)
     function integrand(λ, _)
         k = absorption(λ)
-        factor = response(λ, center) * (derivative ? -k : one(T))
-        return factor .* exp.(-k .* concentration)
+        return response(λ, center) .* exp.(-k .* concentration)
     end
     problem = IntegralProblem(integrand, (zero(T), one(T)))
     return Integrals.solve(problem, model.quadrature).u
@@ -39,17 +44,6 @@ function loss(concentration, observations, model)
         term = residual .* residual
         squared_error = isnothing(squared_error) ? term : squared_error .+ term
     end
-    # Optimization.jl needs one host scalar per objective evaluation.
+    # The optimizer needs one host loss value per objective evaluation.
     return Float64(sum(squared_error)) / (length(concentration) * length(observations))
-end
-
-function gradient!(G, concentration, observations, model)
-    G .= zero(eltype(G))
-    scale = eltype(G)(2 / (length(concentration) * length(observations)))
-    for (center, observed) in zip(model.centers, observations)
-        predicted = band_integral(concentration, center, model)
-        derivative = band_integral(concentration, center, model; derivative=true)
-        G .+= scale .* (predicted .- observed) .* derivative
-    end
-    return nothing
 end

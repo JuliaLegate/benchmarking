@@ -16,7 +16,7 @@ Pkg.add([
     PackageSpec(name="Integrals"),
     PackageSpec(name="FastGaussQuadrature"),
     PackageSpec(name="Optimization"),
-    PackageSpec(name="OptimizationOptimisers"),
+    PackageSpec(name="OptimizationOptimJL"),
     PackageSpec(name="CUDA", version="6.4.0"),
     PackageSpec(name="Plots"),
 ])
