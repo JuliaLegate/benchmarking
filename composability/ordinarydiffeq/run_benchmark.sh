@@ -15,6 +15,7 @@ if [[ $experiment == weak ]]; then
     [[ $base_n =~ ^[1-9][0-9]*$ ]] && (( base_n >= 4 )) || usage
 fi
 for value in "$@"; do
+    rows_before=$(wc -l < "$csv")
     [[ $value =~ ^[1-9][0-9]*$ ]] || usage
     if [[ $experiment == single ]]; then
         (( value >= 4 )) || usage
@@ -102,6 +103,16 @@ for value in "$@"; do
             printf '%s\n' "$result_line" >> "$csv"
         fi
     done
+    if [[ $experiment == single ]]; then
+        if [[ $status -ne 0 ]]; then
+            head -n "$rows_before" "$csv" > "$csv.tmp" && mv "$csv.tmp" "$csv"
+            echo "Stopping size sweep at failed N=$n; see retained logs" >&2
+            break
+        fi
+        if [[ ${ODE_DRY_RUN:-0} != 1 && "${backends[*]}" == 'CuArray Dagger cuNumeric' ]]; then
+            printf '%s\n' "$n" > "$output/base_n.txt"
+        fi
+    fi
 done
 
 if [[ $(wc -l < "$csv") -gt 1 ]]; then

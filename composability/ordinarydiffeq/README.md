@@ -77,6 +77,8 @@ The default single-GPU backends are `CuArray Dagger cuNumeric`. The setup
 installs Dagger. The Dagger variant checks GPU-backed chunks and uses one chunk
 per requested GPU. For weak scaling, use the largest dimension that passed all
 three single-GPU backends as `N(1)`:
+The complete single-GPU sweep writes this value to `base_n.txt` and stops
+after the first failed size.
 
 ```sh
 BASE_N=4096 # replace with the largest common passing single-GPU N
