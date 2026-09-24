@@ -1,79 +1,95 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -eq 0 ]]; then
-    echo "Usage: ODE_PROJECT=/path/to/env bash composability/ordinarydiffeq/run_benchmark.sh N [N ...]" >&2
+usage() {
+    echo "Usage: ODE_PROJECT=/path/to/env $0 single N [N ...] | weak BASE_N GPU_COUNT [GPU_COUNT ...]" >&2
     exit 2
-fi
+}
+[[ $# -ge 2 ]] || usage
 : "${ODE_PROJECT:?Set ODE_PROJECT to the environment created by setup.jl}"
-
-for n in "$@"; do
-    if ! [[ $n =~ ^[1-9][0-9]*$ ]] || (( 10#$n < 4 )); then
-        echo "Each N must be an integer at least 4; got '$n'" >&2
-        exit 2
+experiment=$1; shift
+[[ $experiment == single || $experiment == weak ]] || usage
+if [[ $experiment == weak ]]; then
+    [[ $# -ge 2 ]] || usage
+    base_n=$1; shift
+    [[ $base_n =~ ^[1-9][0-9]*$ ]] && (( base_n >= 4 )) || usage
+fi
+for value in "$@"; do
+    [[ $value =~ ^[1-9][0-9]*$ ]] || usage
+    if [[ $experiment == single ]]; then
+        (( value >= 4 )) || usage
+    else
+        [[ $value == 1 || $value == 2 || $value == 4 || $value == 8 ]] || usage
     fi
 done
 
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-julia_bin="${JULIA:-julia}"
-output="${ODE_OUTPUT:-$script_dir/results-$(date +%Y%m%d-%H%M%S)}"
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+julia_bin=${JULIA:-julia}
+output=${ODE_OUTPUT:-"$script_dir/results-$experiment-$(date +%Y%m%d-%H%M%S)-$$"}
 mkdir -p "$output"
 csv="$output/results.csv"
-printf 'backend,eltype,N,steps,median_ms,min_ms,max_ms,relative_error,samples_ms\n' > "$csv"
+echo 'experiment,base_n,backend,eltype,gpus,N,steps,mean_ms,stderr_ms,median_ms,min_ms,max_ms,relative_error,samples_ms' > "$csv"
+export ODE_SAMPLES=${ODE_SAMPLES:-5}
+export LEGATE_AUTO_CONFIG=${LEGATE_AUTO_CONFIG:-1}
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 
-read -r -a backends <<< "${ODE_BACKENDS:-CuArray cuNumeric}"
-if [[ ${#backends[@]} -eq 0 ]]; then
-    echo "ODE_BACKENDS must name at least one backend" >&2
-    exit 2
-fi
+read -r -a backends <<< "${ODE_BACKENDS:-$( [[ $experiment == single ]] && echo 'CuArray Dagger cuNumeric' || echo 'Dagger cuNumeric' )}"
+[[ ${#backends[@]} -gt 0 ]] || usage
 for backend in "${backends[@]}"; do
     case "$backend" in
-        cpu|CuArray|cuNumeric|Dagger) ;;
-        *) echo "Unknown backend '$backend'" >&2; exit 2 ;;
+        CuArray|Dagger|cuNumeric) ;;
+        *) echo "Unknown GPU backend '$backend'" >&2; exit 2 ;;
     esac
+    [[ $experiment == single || $backend != CuArray ]] || { echo "CuArray is single GPU only" >&2; exit 2; }
 done
 
 {
-    printf 'git_commit=%s\n' "$(git -C "$script_dir/../.." rev-parse HEAD)"
+    printf 'benchmark_commit=%s\n' "$(git -C "$script_dir/../.." rev-parse HEAD)"
+    printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     printf 'julia=%s\n' "$("$julia_bin" --version)"
-    printf 'eltype=%s\nsteps=%s\nsamples=%s\n' \
-        "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "${ODE_SAMPLES:-5}"
-    printf 'CUBLAS_WORKSPACE_CONFIG=%s\n' "${CUBLAS_WORKSPACE_CONFIG:-<default>}"
-    printf 'backends=%s\nsizes=%s\n' "${backends[*]}" "$*"
-    if command -v nvidia-smi >/dev/null 2>&1; then
-        nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
-    fi
-} > "$output/metadata.txt"
+    printf 'experiment=%s\nbase_n=%s\nbackends=%s\nvalues=%s\n' "$experiment" "${base_n:-}" "${backends[*]}" "$*"
+    printf 'eltype=%s\nsteps=%s\nsamples=%s\ntimeout=%s\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES" "${ODE_TIMEOUT:-15m}"
+    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\n' "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG"
+    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+    "$julia_bin" --startup-file=no --project="$ODE_PROJECT" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
+} > "$output/metadata.txt" 2>&1
+cp "$ODE_PROJECT/Manifest.toml" "$output/Manifest.toml"
+[[ ! -f "$ODE_PROJECT/LocalPreferences.toml" ]] || cp "$ODE_PROJECT/LocalPreferences.toml" "$output/LocalPreferences.toml"
 
 status=0
-for backend in "${backends[@]}"; do
-    for n in "$@"; do
-        log="$output/${backend}-${n}.log"
-        echo "Running $backend N=$n"
-        if "$julia_bin" --startup-file=no --project="$ODE_PROJECT" \
-                "$script_dir/benchmark_heat.jl" "$backend" "$n" > "$log" 2>&1; then
-            line="$(grep '^RESULT,' "$log" | tail -n 1 || true)"
+for value in "$@"; do
+    if [[ $experiment == single ]]; then
+        gpus=1; n=$value
+    else
+        gpus=$value
+        n=$(awk -v base="$base_n" -v g="$gpus" 'BEGIN { printf "%.0f", base * sqrt(g) }')
+    fi
+    export ODE_GPUS=$gpus
+    export LEGATE_CONFIG="--gpus $gpus --cpus ${ODE_CPUS:-4}"
+    for backend in "${backends[@]}"; do
+        log="$output/$backend-$gpus-$n.log"
+        echo "Running $backend G=$gpus N=$n"
+        if timeout --signal=TERM --kill-after=30s "${ODE_TIMEOUT:-15m}" \
+            "$julia_bin" --startup-file=no --project="$ODE_PROJECT" \
+            "$script_dir/benchmark_heat.jl" "$backend" "$n" > "$log" 2>&1; then
+            line=$(grep '^RESULT,' "$log" | tail -n 1 || true)
             if [[ -n $line ]]; then
-                printf '%s\n' "${line#RESULT,}" >> "$csv"
+                printf '%s\n' "$experiment,${base_n:-},${line#RESULT,}" >> "$csv"
             else
-                echo "No RESULT row in $log" >&2
-                status=1
+                echo "No RESULT row in $log" >&2; status=1
             fi
         else
-            echo "$backend N=$n failed; see $log" >&2
-            status=1
+            echo "$backend G=$gpus N=$n failed; see $log" >&2; status=1
         fi
     done
 done
 
 if [[ $(wc -l < "$csv") -gt 1 ]]; then
     if ! GKSwstype=100 "$julia_bin" --startup-file=no --project="$ODE_PROJECT" \
-            "$script_dir/plot_results.jl" "$csv" "$output/timings.png"; then
-        echo "Plot generation failed" >&2
-        status=1
+        "$script_dir/plot_results.jl" "$experiment" "$csv" "$output/timings.png"; then
+        echo "Plot generation failed" >&2; status=1
     fi
 fi
-
 echo "Results: $csv"
-[[ -f "$output/timings.png" ]] && echo "Plot: $output/timings.png"
+[[ ! -f "$output/timings.png" ]] || echo "Plot: $output/timings.png"
 exit "$status"

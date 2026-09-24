@@ -1,37 +1,52 @@
 using Plots
+using Statistics: mean, std
 
-length(ARGS) == 2 || error("Usage: julia plot_results.jl results.csv timings.png")
-csv_path, image_path = ARGS
+length(ARGS) == 3 || error("Usage: julia plot_results.jl {single|weak} results.csv timings.png")
+experiment, csv_path, image_path = ARGS
+experiment in ("single", "weak") || error("Unknown experiment $experiment")
+
 rows = NamedTuple[]
 for (i, line) in enumerate(eachline(csv_path))
     i == 1 && continue
     fields = split(line, ',')
-    length(fields) == 9 || error("Malformed result row $i")
+    length(fields) == 14 || error("Malformed result row $i")
+    fields[1] == experiment || continue
+    samples = parse.(Float64, split(fields[14], ';'))
+    length(samples) >= 2 && all(isfinite, samples) && all(>(0), samples) ||
+        error("Invalid timing samples in row $i")
     push!(rows, (
-        backend=fields[1], eltype=fields[2], n=parse(Int, fields[3]),
-        steps=parse(Int, fields[4]), median=parse(Float64, fields[5]),
-        minimum=parse(Float64, fields[6]), maximum=parse(Float64, fields[7]),
+        base_n=fields[2], backend=fields[3], eltype=fields[4],
+        gpus=parse(Int, fields[5]), n=parse(Int, fields[6]),
+        steps=parse(Int, fields[7]), mean=mean(samples),
+        stderr=std(samples) / sqrt(length(samples)),
     ))
 end
-isempty(rows) && error("No results in $csv_path")
-length(unique(row.eltype for row in rows)) == 1 || error("Mixed element types in one plot")
-length(unique(row.steps for row in rows)) == 1 || error("Mixed step counts in one plot")
+isempty(rows) && error("No $experiment results in $csv_path")
+length(unique((r.eltype, r.steps) for r in rows)) == 1 ||
+    error("Mixed precision or step counts in one plot")
+experiment == "single" || length(unique(row.base_n for row in rows)) == 1 ||
+    error("Mixed weak-scaling base N in one plot")
 
-sizes = sort!(unique(row.n for row in rows))
+xs = sort!(unique(experiment == "single" ? row.n : row.gpus for row in rows))
 figure = plot(;
-    xlabel="Grid dimension N (N × N)", ylabel="Complete solve (ms)",
-    title="OrdinaryDiffEq heat equation — $(first(rows).eltype), $(first(rows).steps) steps",
-    xscale=:log10, yscale=:log10, xticks=(sizes, string.(sizes)),
+    xlabel=experiment == "single" ? "Grid dimension N (N × N)" : "GPUs",
+    ylabel="Mean complete solve (ms) ± standard error",
+    title="OrdinaryDiffEq heat equation — $(first(rows).eltype), $(first(rows).steps) steps" *
+          (experiment == "weak" ? ", N(1)=$(first(rows).base_n)" : ""),
+    xscale=:log2, yscale=:log10, xticks=(xs, string.(xs)),
     legend=:topleft, linewidth=2, markersize=5, size=(900, 550),
 )
-for backend in ("CuArray", "cuNumeric", "Dagger", "cpu")
-    subset = sort!(filter(row -> row.backend == backend, rows); by=row -> row.n)
+for backend in ("CuArray", "Dagger", "cuNumeric")
+    subset = sort!(filter(row -> row.backend == backend, rows);
+                   by=row -> experiment == "single" ? row.n : row.gpus)
     isempty(subset) && continue
-    medians = [row.median for row in subset]
-    lows = [row.median - row.minimum for row in subset]
-    highs = [row.maximum - row.median for row in subset]
-    plot!(figure, [row.n for row in subset], medians;
-          yerror=(lows, highs), label=backend, marker=:circle)
+    x = [experiment == "single" ? row.n : row.gpus for row in subset]
+    plot!(figure, x, [row.mean for row in subset];
+          yerror=[row.stderr for row in subset], label=backend, marker=:circle)
+    if experiment == "weak" && first(x) == 1
+        hline!(figure, [first(subset).mean];
+               linestyle=:dash, alpha=0.4, label="$backend ideal")
+    end
 end
 savefig(figure, image_path)
 println("Saved $image_path")

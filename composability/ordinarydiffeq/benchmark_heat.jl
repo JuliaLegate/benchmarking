@@ -3,7 +3,7 @@
 import OrdinaryDiffEqLowStorageRK
 using OrdinaryDiffEqLowStorageRK: CarpenterKennedy2N54
 using SciMLBase: ODEProblem, solve, successful_retcode, FullSpecialize
-using Statistics: median
+using Statistics: mean, median, std
 using LinearAlgebra: transpose
 
 length(ARGS) >= 1 || error("Usage: julia benchmark_heat.jl {cpu|CuArray|cuNumeric|Dagger} [N ...]")
@@ -13,8 +13,11 @@ const KAPPA = T(0.2)
 const T_END = T(1)
 const NSTEPS = parse(Int, get(ENV, "ODE_STEPS", "20"))
 const SAMPLES = parse(Int, get(ENV, "ODE_SAMPLES", "5"))
+const GPUS = parse(Int, get(ENV, "ODE_GPUS", "1"))
 NSTEPS > 0 || error("ODE_STEPS must be positive")
-SAMPLES > 0 || error("ODE_SAMPLES must be positive")
+SAMPLES >= 2 || error("ODE_SAMPLES must be at least 2 for a standard error")
+GPUS > 0 || error("ODE_GPUS must be positive")
+(backend != "CuArray" || GPUS == 1) || error("CuArray baseline uses one GPU")
 
 include(joinpath(@__DIR__, "heat_rhs.jl"))
 
@@ -40,11 +43,20 @@ elseif backend == "cuNumeric"
 elseif backend == "Dagger"
     using Dagger, CUDA
     CUDA.allowscalar(false)
-    dagger_scope = Dagger.scope(; cuda_gpus=[1])
+    length(collect(CUDA.devices())) >= GPUS || error("Requested $GPUS GPUs are unavailable")
+    dagger_scope = Dagger.scope(; cuda_gpus=collect(1:GPUS))
     function make_state(a)
-        state = Dagger.distribute(a, Dagger.Blocks(size(a)...))
+        procs = sort(collect(filter(p -> p isa Dagger.CuArrayDeviceProc,
+                                    Dagger.compatible_processors())); by=p -> p.device)
+        length(procs) == GPUS || error("Dagger sees $(length(procs)) of $GPUS requested GPUs")
+        block = cld(size(a, 1), GPUS)
+        grid = Array{Dagger.Processor}(undef, cld(size(a, 1), block), 1)
+        for i in axes(grid, 1)
+            grid[i, 1] = procs[i]
+        end
+        state = Dagger.distribute(a, Dagger.Blocks(block, size(a, 2)), grid)
         wait(state)
-        correct_storage(state) || error("Dagger initial state is not a single CUDA chunk")
+        correct_storage(state) || error("Dagger initial state is not distributed across requested CUDA devices")
         return state
     end
     function synchronized_time_ns(a=nothing)
@@ -53,8 +65,12 @@ elseif backend == "Dagger"
         return time_ns()
     end
     host_state(a) = collect(a)
-    correct_storage(a) = a isa Dagger.DArray && length(a.chunks) == 1 &&
-        fetch(only(a.chunks); raw=true) isa Dagger.Chunk{<:CUDA.CuArray}
+    function correct_storage(a)
+        a isa Dagger.DArray || return false
+        chunks = [fetch(chunk; raw=true) for chunk in a.chunks]
+        return all(chunk -> chunk isa Dagger.Chunk{<:CUDA.CuArray}, chunks) &&
+               Set(chunk.processor.device + 1 for chunk in chunks) == Set(1:GPUS)
+    end
 else
     error("Unknown backend $backend")
 end
@@ -106,11 +122,12 @@ function run_case(n)
     error_rel = maximum(abs.(actual .- reference)) / maximum(abs.(reference))
     tolerance = T == Float32 ? 1e-4 : 1e-7
     @assert error_rel < tolerance "relative error $error_rel exceeds $tolerance"
-    println("RESULT,$backend,$T,$n,$NSTEPS,$(median(elapsed_ms)),$(minimum(elapsed_ms)),$(maximum(elapsed_ms)),$error_rel,$(join(elapsed_ms, ';'))")
+    stderr = std(elapsed_ms) / sqrt(length(elapsed_ms))
+    println("RESULT,$backend,$T,$GPUS,$n,$NSTEPS,$(mean(elapsed_ms)),$stderr,$(median(elapsed_ms)),$(minimum(elapsed_ms)),$(maximum(elapsed_ms)),$error_rel,$(join(elapsed_ms, ';'))")
     flush(stdout)
 end
 
-println("backend=$backend eltype=$T dx=$DX steps=$NSTEPS Julia=$VERSION threads=$(Threads.nthreads())")
+println("backend=$backend eltype=$T gpus=$GPUS dx=$DX steps=$NSTEPS Julia=$VERSION threads=$(Threads.nthreads())")
 println("workspace=", get(ENV, "CUBLAS_WORKSPACE_CONFIG", "<default>"),
         " OrdinaryDiffEqLowStorageRK=", pkgversion(OrdinaryDiffEqLowStorageRK))
 flush(stdout)
