@@ -79,8 +79,7 @@ function run!(b::NASFourierTransform, s::CuNumericNASFTState)
     fft!(s.u0)
     for _ in 1:p.niter
         map!(*, s.u0, s.u0, s.twiddle)
-        copyto!(s.u1, s.u0)
-        bfft!(s.u1)
+        bfft!(s.u1, s.u0)
         map!(*, s.product, s.u1, s.mask)
         push!(s.checksums, sum(s.product))
     end
