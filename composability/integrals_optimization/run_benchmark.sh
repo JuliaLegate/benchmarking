@@ -15,7 +15,6 @@ if [[ $experiment == weak ]]; then
     [[ $base_n =~ ^[1-9][0-9]*$ ]] && (( base_n >= 4 )) || usage
 fi
 for value in "$@"; do
-    rows_before=$(wc -l < "$csv")
     [[ $value =~ ^[1-9][0-9]*$ ]] || usage
     if [[ $experiment == single ]]; then
         (( value >= 4 )) || usage
@@ -65,6 +64,7 @@ cp "$INTOPT_PROJECT/Manifest.toml" "$output/Manifest.toml"
 
 status=0
 for value in "$@"; do
+    rows_before=$(wc -l < "$csv")
     if [[ $experiment == single ]]; then
         gpus=1; n=$value
     else
