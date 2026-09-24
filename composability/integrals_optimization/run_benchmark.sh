@@ -7,8 +7,8 @@ if [[ $# -eq 0 ]]; then
 fi
 : "${INTOPT_PROJECT:?Set INTOPT_PROJECT to the environment created by setup.jl}"
 
-# Match CUDA.jl's single-GPU run by default. Callers can override either setting.
-export LEGATE_AUTO_CONFIG="${LEGATE_AUTO_CONFIG:-0}"
+# Use one GPU for the CUDA.jl comparison and let Legate size its memory pools.
+export LEGATE_AUTO_CONFIG="${LEGATE_AUTO_CONFIG:-1}"
 export LEGATE_CONFIG="${LEGATE_CONFIG:---gpus 1 --cpus 4}"
 
 for n in "$@"; do

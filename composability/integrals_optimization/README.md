@@ -52,10 +52,12 @@ unset CUBLAS_WORKSPACE_CONFIG
 bash composability/integrals_optimization/run_benchmark.sh 32 128 256
 ```
 
-The launcher sets `LEGATE_AUTO_CONFIG=0` and
-`LEGATE_CONFIG="--gpus 1 --cpus 4"` by default, so cuNumeric and CUDA.jl
-both use one GPU. Override either variable for a different machine setup;
-the effective settings are recorded in `metadata.txt`.
+The launcher sets `LEGATE_AUTO_CONFIG=1` and
+`LEGATE_CONFIG="--gpus 1 --cpus 4"` by default. Both backends use one GPU,
+and Legate sizes its memory pools for the machine. Override either variable
+for a different setup; the effective settings are recorded in `metadata.txt`.
+If you disable auto configuration, specify `--fbmem` and `--sysmem` in MiB.
+Legate's minimal manual defaults can cause excessive cuNumeric collections.
 
 The shell arguments are image dimensions `N`; each case has `N × N` pixels.
 Start with `32` for correctness. The launcher writes `results.csv`,
@@ -91,8 +93,11 @@ benchmark-specific cuNumeric method. An Nsight Systems trace of the pushed
 `N=16` run recorded cuPyNumeric CUDA kernels. These are correctness smoke runs, not
 publication-grade timings; cuNumeric was slower than CUDA.jl at these sizes.
 
-A standalone `Integrals.jl` call returned an `NDArray` result at `N=1024`, but
-the complete derivative-free cuNumeric solve did not finish within a 180-second
-time limit. The corresponding CUDA.jl solve completed. Investigate the
-repeated-objective scaling before using this workload to claim a performance
-win at large image sizes.
+The initial `N=1024` cuNumeric run timed out after 180 seconds because its
+manual Legate configuration reserved only 256 MiB of framebuffer memory on
+the 24 GiB A30X. cuNumeric's 80% memory threshold then triggered about 51
+Julia collections per objective evaluation; later evaluations spent about
+8–9 seconds almost entirely in GC. With Legate auto configuration, the full
+`N=1024` solve passed (32 objective evaluations, 0.73 seconds timed solve,
+one sample). An explicit 16 GiB framebuffer setting also passed (0.70
+seconds). These are diagnostic single runs, not publication-grade timings.
