@@ -83,6 +83,10 @@ BASE_N=4096 # replace with the largest common passing single-GPU N
 ODE_OUTPUT=/opt/bench-results/ode-weak bash composability/ordinarydiffeq/run_benchmark.sh weak "$BASE_N" 1 2 4 8
 ```
 
+On the one-GPU H100, set `ODE_DRY_RUN=1` to write `planned-cases.csv` for all
+GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records sampled
+GPU memory and excludes one-GPU points exceeding 60 GiB.
+
 The weak run uses Dagger and cuNumeric. It sets `N(G) = round(N(1)√G)` and
 checks CUDA chunk placement, backend retention, and the same exact-solution
 reference at every GPU count. Multi-GPU execution must be verified on the
@@ -103,7 +107,7 @@ the backends in each comparison.
 
 Start with the `128` correctness case before large allocations. Any solver
 failure or host storage fallback exits nonzero; retain the error and package
-versions. The launcher saves the Manifest and metadata with the results and
+versions. The launcher saves the Manifest, sampled GPU-memory peak, and metadata with the results and
 uses a 15-minute per-case timeout by default. There is no cuNumeric-specific
 extension in this experiment.
 
