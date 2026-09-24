@@ -98,6 +98,7 @@ manual Legate configuration reserved only 256 MiB of framebuffer memory on
 the 24 GiB A30X. cuNumeric's 80% memory threshold then triggered about 51
 Julia collections per objective evaluation; later evaluations spent about
 8–9 seconds almost entirely in GC. With Legate auto configuration, the full
-`N=1024` solve passed (32 objective evaluations, 0.73 seconds timed solve,
-one sample). An explicit 16 GiB framebuffer setting also passed (0.70
-seconds). These are diagnostic single runs, not publication-grade timings.
+`N=1024` solve passed with 32 objective evaluations. A cuNumeric-only run took
+0.73 seconds; the default paired run took 0.91 seconds for cuNumeric and 0.16
+seconds for CUDA.jl. An explicit 16 GiB framebuffer setting also passed at
+0.70 seconds. These are diagnostic single runs, not publication-grade timings.
