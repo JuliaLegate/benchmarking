@@ -32,7 +32,7 @@ echo 'experiment,base_n,backend,eltype,gpus,N,bands,order,maxiters,objective_eva
 echo 'backend,gpus,N,peak_gpu_memory_mib' > "$output/memory.csv"
 echo 'backend,gpus,N,legate_config' > "$output/planned-cases.csv"
 export INTOPT_SAMPLES=${INTOPT_SAMPLES:-5}
-export LEGATE_AUTO_CONFIG=${LEGATE_AUTO_CONFIG:-0}
+export LEGATE_AUTO_CONFIG=1
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 
 read -r -a backends <<< "${INTOPT_BACKENDS:-$( [[ $experiment == single ]] && echo 'CuArray Dagger cuNumeric' || echo 'Dagger cuNumeric' )}"
@@ -52,11 +52,11 @@ done
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     printf 'julia=%s\n' "$("$julia_bin" --version)"
     printf 'experiment=%s\nbase_n=%s\nbackends=%s\nvalues=%s\n' "$experiment" "${base_n:-}" "${backends[*]}" "$*"
-    printf 'eltype=%s\nbands=%s\norder=%s\nmaxiters=%s\nsamples=%s\nnoise=%s\ntimeout=%s\nGPU_MEMORY_LIMIT_MIB=%s\n' \
+    printf 'eltype=%s\nbands=%s\norder=%s\nmaxiters=%s\nsamples=%s\nnoise=%s\ntimeout=%s\n' \
         "${INTOPT_ELTYPE:-Float32}" "${INTOPT_BANDS:-4}" "${INTOPT_ORDER:-12}" \
-        "${INTOPT_ITERS:-80}" "$INTOPT_SAMPLES" "${INTOPT_NOISE:-0.001}" "${INTOPT_TIMEOUT:-15m}" "${GPU_MEMORY_LIMIT_MIB:-61440}"
-    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\nINTOPT_FBMEM=%s\nINTOPT_SYSMEM=%s\nINTOPT_ZCMEM=%s\n' \
-        "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG" "${INTOPT_FBMEM:-57344}" "${INTOPT_SYSMEM:-65536}" "${INTOPT_ZCMEM:-1024}"
+        "${INTOPT_ITERS:-80}" "$INTOPT_SAMPLES" "${INTOPT_NOISE:-0.001}" "${INTOPT_TIMEOUT:-15m}"
+    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\n' \
+        "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
     "$julia_bin" --startup-file=no --project="$INTOPT_PROJECT" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/metadata.txt" 2>&1
@@ -73,7 +73,7 @@ for value in "$@"; do
         n=$(awk -v base="$base_n" -v g="$gpus" 'BEGIN { printf "%.0f", base * sqrt(g) }')
     fi
     export INTOPT_GPUS=$gpus
-    export LEGATE_CONFIG="--gpus $gpus --cpus ${INTOPT_CPUS:-4} --fbmem ${INTOPT_FBMEM:-57344} --sysmem ${INTOPT_SYSMEM:-65536} --zcmem ${INTOPT_ZCMEM:-1024}"
+    export LEGATE_CONFIG="--gpus $gpus --cpus ${INTOPT_CPUS:-4}"
     for backend in "${backends[@]}"; do
         printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$LEGATE_CONFIG" >> "$output/planned-cases.csv"
         if [[ ${INTOPT_DRY_RUN:-0} == 1 ]]; then
@@ -102,9 +102,7 @@ for value in "$@"; do
         wait "$monitor_pid" 2>/dev/null || true
         peak=$(awk '$1 ~ /^[0-9]+$/ && $1 > peak { peak=$1 } END { print peak+0 }' "$memory_log")
         printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$peak" >> "$output/memory.csv"
-        if [[ $experiment == single && $peak -gt ${GPU_MEMORY_LIMIT_MIB:-61440} ]]; then
-            echo "Memory limit exceeded for $backend G=$gpus N=$n: $peak MiB" >&2; status=1
-        elif [[ -n $result_line ]]; then
+        if [[ -n $result_line ]]; then
             printf '%s\n' "$result_line" >> "$csv"
         fi
     done

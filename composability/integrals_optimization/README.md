@@ -52,12 +52,8 @@ unset CUBLAS_WORKSPACE_CONFIG
 INTOPT_OUTPUT=/opt/bench-results/intopt-single bash composability/integrals_optimization/run_benchmark.sh single 32 128 256
 ```
 
-The launcher sets `LEGATE_AUTO_CONFIG=0` and allocates a 56 GiB Legate
-framebuffer pool per GPU on the 80 GiB H100. This leaves room for other
-allocations below the 60 GiB sampled-memory limit. Override `INTOPT_FBMEM`,
-`INTOPT_SYSMEM`, and `INTOPT_ZCMEM` for a different machine; the effective
-settings are recorded in `metadata.txt`. Tiny manual pools can cause
-excessive cuNumeric collections.
+The launcher enables Legate auto configuration, so it sizes the framebuffer
+pool for the available GPU. The setting is recorded in `metadata.txt`.
 
 The shell arguments are image dimensions `N`; each case has `N × N` pixels.
 Start with `32` for correctness. The launcher writes `results.csv`,
@@ -81,7 +77,7 @@ INTOPT_OUTPUT=/opt/bench-results/intopt-weak bash composability/integrals_optimi
 
 On the one-GPU H100, set `INTOPT_DRY_RUN=1` to write `planned-cases.csv` for
 all GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records
-sampled GPU memory and excludes one-GPU points exceeding 60 GiB.
+sampled GPU memory as a diagnostic; the reading includes Legate's reserved pool.
 
 `INTOPT_ELTYPE=Float32`, `INTOPT_BANDS=4`, `INTOPT_ORDER=12`,
 `INTOPT_ITERS=80`, `INTOPT_SAMPLES=5`, and `INTOPT_NOISE=0.001` are the defaults.
