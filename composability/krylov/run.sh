@@ -82,6 +82,7 @@ run_case() {
 }
 
 for value in "$@"; do
+    rows_before=$(wc -l < "$csv")
     if [[ $experiment == single ]]; then
         gpus=1; n=$value
     else
@@ -95,6 +96,14 @@ for value in "$@"; do
     run_case Dagger cg stock "$n" "$gpus"
     run_case cuNumeric cg stock "$n" "$gpus"
     run_case cuNumeric cg local "$n" "$gpus"
+    if [[ $experiment == single ]]; then
+        if [[ $failed -ne 0 ]]; then
+            head -n "$rows_before" "$csv" > "$csv.tmp" && mv "$csv.tmp" "$csv"
+            echo "Stopping size sweep at failed N=$n; see retained logs" >&2
+            break
+        fi
+        [[ ${BENCH_DRY_RUN:-0} == 1 ]] || printf '%s\n' "$n" > "$output/base_n.txt"
+    fi
 done
 echo "Results: $csv"
 if [[ $(wc -l < "$csv") -gt 1 ]]; then

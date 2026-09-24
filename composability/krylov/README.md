@@ -40,7 +40,8 @@ BENCH_ELTYPE=Float32 BENCH_OUTPUT=results/krylov-single-f32 bash composability/k
 For weak scaling, set the **one-GPU** dimension followed by GPU counts. The
 runner chooses `N(G) = round(N(1) × sqrt(G))`, keeping dense matrix elements per
 GPU approximately constant. Use the largest dimension that passed all four
-single-GPU variants as `N(1)`. Every backend gets the same `N(G)` at each count:
+single-GPU variants as `N(1)`; the single-GPU sweep writes it to `base_n.txt`
+and stops after the first failed size. Every backend gets the same `N(G)` at each count:
 
 ```sh
 BASE_N=32768 # replace with the largest common passing single-GPU N
