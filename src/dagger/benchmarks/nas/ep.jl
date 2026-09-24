@@ -1,10 +1,9 @@
 # Dagger partitions independent EP streams across its requested CUDA scope.
-# Device chunks use high-level map! with the common scalar EP function; there
-# is no hand-written CUDA kernel. The untimed correctness pass uses Dagger's
-# mapped reductions so only the two verification scalars reach the host.
+# A DArray broadcast applies the common scalar EP function to each stream;
+# there is no hand-written CUDA kernel. The correctness pass gathers partials
+# after timing and checks the official verification sums.
 # LIMITATION: Timing includes task completion but excludes global aggregation,
-# consistently with the other EP adapters. This uses one stream-mapping task
-# per GPU, not Dagger's distributed mapreduce as the timed workload.
+# consistently with the other EP adapters.
 
 include(joinpath(@__DIR__, "..", "..", "..", "nas", "ep.jl"))
 
@@ -17,12 +16,9 @@ struct DaggerNASEP{S,P}
     processors::P
 end
 
-struct DaggerNASEPState{P,I,PC,IC,S}
+struct DaggerNASEPState{P,I}
     partials::P
     indices::I
-    partial_chunks::PC
-    index_chunks::IC
-    scopes::S
 end
 
 function model_build_nas_ep(config::ModelWorkerConfig)
@@ -55,43 +51,19 @@ function model_initialize(b::DaggerNASEP)
         )
         foreach(wait_for_darray, (partials, indices))
         partial_chunks = map(task -> fetch(task; raw=true), partials.chunks)
-        index_chunks = map(task -> fetch(task; raw=true), indices.chunks)
         length(partial_chunks) == b.gpus || error("Dagger EP chunk count mismatch")
         processors = Dagger.processor.(partial_chunks)
         length(unique(processors)) == b.gpus || error(
             "Dagger did not place one EP chunk on each requested GPU"
         )
-        return DaggerNASEPState(
-            partials, indices, partial_chunks, index_chunks,
-            Dagger.ExactScope.(processors),
-        )
+        return DaggerNASEPState(partials, indices)
     end
-end
-
-function dagger_nas_ep_chunk!(partials, indices, jump)
-    map!(i -> nas_ep_batch(i, jump), partials, indices)
-    return nothing
-end
-
-dagger_nas_ep_sx(partial) = partial.sx
-dagger_nas_ep_sy(partial) = partial.sy
-
-function dagger_nas_ep_chunk_sum(f, partials)
-    return mapreduce(f, +, partials; init=0.0)
-end
-
-function dagger_nas_ep_sum(f, s::DaggerNASEPState)
-    partials = map(zip(s.partial_chunks, s.scopes)) do (chunk, scope)
-        Dagger.@spawn scope=scope dagger_nas_ep_chunk_sum(f, chunk)
-    end
-    return mapreduce(fetch, +, partials; init=0.0)
 end
 
 function model_run!(b::DaggerNASEP, s::DaggerNASEPState)
-    tasks = map(zip(s.partial_chunks, s.index_chunks, s.scopes)) do (out, indices, scope)
-        Dagger.@spawn scope=scope dagger_nas_ep_chunk!(out, indices, nas_ep_batch_jump())
+    Dagger.with_options(; scope=b.scope) do
+        s.partials .= nas_ep_batch.(s.indices, Ref(nas_ep_batch_jump()))
     end
-    foreach(fetch, tasks)
     return s.partials
 end
 
@@ -102,9 +74,8 @@ function model_check_correctness(b::DaggerNASEP, config)
     state = model_initialize(b)
     model_run!(b, state)
     model_synchronize(b)
-    sx = dagger_nas_ep_sum(dagger_nas_ep_sx, state)
-    sy = dagger_nas_ep_sum(dagger_nas_ep_sy, state)
-    return nas_ep_verified(b.class, sx, sy) ? "pass" : "fail"
+    partials = nas_ep_combine(collect(state.partials))
+    return nas_ep_verified(b.class, partials.sx, partials.sy) ? "pass" : "fail"
 end
 
 function model_correctness_context(b::DaggerNASEP, config)
