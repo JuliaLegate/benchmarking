@@ -13,6 +13,8 @@ N > 1 || error("N must exceed 1")
 GPUS > 0 || error("BENCH_GPUS must be positive")
 const T = get(ENV, "BENCH_ELTYPE", "Float32") == "Float64" ? Float64 : Float32
 const TOL = T === Float32 ? T(1e-5) : T(1e-8)
+const SAMPLES = parse(Int, get(ENV, "BENCH_SAMPLES", "5"))
+SAMPLES >= 2 || error("BENCH_SAMPLES must be at least 2 for a standard error")
 BLAS.set_num_threads(1)
 if BACKEND == "cuNumeric"
     @eval using cuNumeric
@@ -20,6 +22,7 @@ if BACKEND == "cuNumeric"
     @eval make_array(a) = NDArray(a)
     @eval sync(w) = cuNumeric.issue_execution_fence(; block=true)
     @eval host_array(x) = Array(x)
+    @eval correct_storage(x) = x isa NDArray{T,1}
     @eval permitted_solve!(w, A, b) = @allowpromotion @allowautofetch solve!(w, A, b)
     MODE == "local" && include("local.jl")
 elseif BACKEND == "CuArray"
@@ -28,6 +31,7 @@ elseif BACKEND == "CuArray"
     @eval make_array(a) = CuArray(a)
     @eval sync(w) = CUDA.synchronize()
     @eval host_array(x) = Array(x)
+    @eval correct_storage(x) = x isa CuArray{T,1}
     @eval permitted_solve!(w, A, b) = solve!(w, A, b)
 else
     @eval using Dagger, CUDA
@@ -65,6 +69,12 @@ else
         Dagger.gpu_synchronize(:CUDA)
     end
     @eval host_array(x) = collect(x)
+    @eval function correct_storage(x)
+        x isa Dagger.DArray || return false
+        chunks = [fetch(chunk; raw=true) for chunk in x.chunks]
+        return all(chunk -> chunk isa Dagger.Chunk{<:CuArray}, chunks) &&
+               Set(chunk.processor.device + 1 for chunk in chunks) == Set(1:GPUS)
+    end
     @eval permitted_solve!(w, A, b) = solve!(w, A, b)
 end
 
@@ -83,6 +93,7 @@ end
 function checked_solve!(w, A, b, reference, bh)
     x, iterations, solved = permitted_solve!(w, A, b)
     sync(w)
+    correct_storage(x) || error("$BACKEND solver returned a non-GPU or incorrectly placed vector")
     solved || error("$SOLVER did not converge")
     residual = norm(reference * Float64.(host_array(x)) - Float64.(bh)) / norm(Float64.(bh))
     residual <= TOL || error("Relative residual $residual exceeds $TOL")
@@ -107,7 +118,7 @@ function benchmark()
         checked_solve!(w, A, b, reference, bh)
     end
     samples = Float64[]
-    for _ in 1:5
+    for _ in 1:SAMPLES
         GC.gc(); sync(w)
         start = time_ns()
         permitted_solve!(w, A, b)
@@ -117,7 +128,8 @@ function benchmark()
     iterations, residual = checked_solve!(w, A, b, reference, bh)
     label = BACKEND == "CuArray" ? "CUDA" :
             BACKEND == "cuNumeric" && MODE != "stock" ? "cuNumeric $(MODE)" : BACKEND
-    println("RESULT,$label,$SOLVER,$MODE,$T,$GPUS,$N,$iterations,$(median(samples)),$(minimum(samples)),$(maximum(samples)),$residual,$(join(samples, ';'))")
+    stderr = std(samples) / sqrt(length(samples))
+    println("RESULT,$label,$SOLVER,$MODE,$T,$GPUS,$N,$iterations,$(mean(samples)),$stderr,$(median(samples)),$(minimum(samples)),$(maximum(samples)),$residual,$(join(samples, ';'))")
 end
 
 if BACKEND == "Dagger"
