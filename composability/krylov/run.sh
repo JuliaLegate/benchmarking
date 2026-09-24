@@ -34,7 +34,7 @@ echo 'backend,mode,gpus,n,legate_config' > "$output/planned-cases.csv"
     nvidia-smi
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=cg\nBENCH_SAMPLES=%s\nBENCH_CPUS=%s\nBENCH_FBMEM=%s\nBENCH_SYSMEM=%s\nBENCH_ZCMEM=%s\nBENCH_TIMEOUT=%s\nGPU_MEMORY_LIMIT_MIB=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "$BENCH_SAMPLES" "${BENCH_CPUS:-2}" \
-        "${BENCH_FBMEM:-61440}" "${BENCH_SYSMEM:-65536}" "${BENCH_ZCMEM:-1024}" "${BENCH_TIMEOUT:-15m}" "${GPU_MEMORY_LIMIT_MIB:-61440}"
+        "${BENCH_FBMEM:-57344}" "${BENCH_SYSMEM:-65536}" "${BENCH_ZCMEM:-1024}" "${BENCH_TIMEOUT:-15m}" "${GPU_MEMORY_LIMIT_MIB:-61440}"
     python3 -c 'import matplotlib; print("matplotlib=" + matplotlib.__version__)'
     "$julia_bin" --startup-file=no --project="$project" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/environment.txt" 2>&1
@@ -48,7 +48,7 @@ run_case() {
     time_limit=(timeout --signal=TERM --kill-after=30s "${BENCH_TIMEOUT:-15m}")
     local log="$output/$BENCH_ELTYPE-$backend-$solver-$mode-$gpus-$n.log"
     export BENCH_GPUS=$gpus
-    export LEGATE_CONFIG="--gpus $gpus --cpus ${BENCH_CPUS:-2} --fbmem ${BENCH_FBMEM:-61440} --sysmem ${BENCH_SYSMEM:-65536} --zcmem ${BENCH_ZCMEM:-1024}"
+    export LEGATE_CONFIG="--gpus $gpus --cpus ${BENCH_CPUS:-2} --fbmem ${BENCH_FBMEM:-57344} --sysmem ${BENCH_SYSMEM:-65536} --zcmem ${BENCH_ZCMEM:-1024}"
     printf '%s,%s,%s,%s,%s\n' "$backend" "$mode" "$gpus" "$n" "$LEGATE_CONFIG" >> "$output/planned-cases.csv"
     echo "Running $backend $solver $mode: G=$gpus N=$n"
     [[ ${BENCH_DRY_RUN:-0} != 1 ]] || return 0

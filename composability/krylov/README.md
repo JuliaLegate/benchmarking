@@ -60,7 +60,8 @@ Set `JULIA`, `BENCH_THREADS`,
 Set `BENCH_TIMEOUT` to a per-case duration accepted by GNU `timeout`
 (default `15m`). Failed or timed-out cases keep their logs; completed CSV
 rows remain plottable without hiding other backends or sizes.
-`BENCH_FBMEM` is MiB per GPU and defaults to 61440 for the 80 GiB H100.
+`BENCH_FBMEM` is MiB per GPU and defaults to 57344 for the 80 GiB H100, leaving
+room for non-Legate allocations below the 60 GiB sampled-memory limit.
 The runner sets `LEGATE_CONFIG` separately for every GPU count. Set
 `CUBLAS_WORKSPACE_CONFIG` externally, if desired, so every backend sees the same
 setting. `plot.py` needs Python with Matplotlib.
