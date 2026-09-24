@@ -25,14 +25,17 @@ output=${BENCH_OUTPUT:-"$PWD/krylov-$experiment-$(date +%Y%m%d-%H%M%S)-$$"}
 mkdir -p "$output"
 csv="$output/results.csv"
 echo 'experiment,base_n,backend,solver,mode,eltype,gpus,n,iterations,mean_ms,stderr_ms,median_ms,min_ms,max_ms,relative_residual,samples_ms' > "$csv"
+echo 'backend,gpus,n,peak_gpu_memory_mib' > "$output/memory.csv"
+echo 'backend,mode,gpus,n,legate_config' > "$output/planned-cases.csv"
 {
     printf 'benchmark_commit=%s\n' "$(git -C "$script_dir" rev-parse HEAD)"
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     "$julia_bin" --version
     nvidia-smi
-    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=cg\nBENCH_SAMPLES=%s\nBENCH_CPUS=%s\nBENCH_FBMEM=%s\nBENCH_SYSMEM=%s\nBENCH_ZCMEM=%s\nBENCH_TIMEOUT=%s\n' \
+    printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=cg\nBENCH_SAMPLES=%s\nBENCH_CPUS=%s\nBENCH_FBMEM=%s\nBENCH_SYSMEM=%s\nBENCH_ZCMEM=%s\nBENCH_TIMEOUT=%s\nGPU_MEMORY_LIMIT_MIB=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "$BENCH_SAMPLES" "${BENCH_CPUS:-2}" \
-        "${BENCH_FBMEM:-61440}" "${BENCH_SYSMEM:-65536}" "${BENCH_ZCMEM:-1024}" "${BENCH_TIMEOUT:-15m}"
+        "${BENCH_FBMEM:-61440}" "${BENCH_SYSMEM:-65536}" "${BENCH_ZCMEM:-1024}" "${BENCH_TIMEOUT:-15m}" "${GPU_MEMORY_LIMIT_MIB:-61440}"
+    python3 -c 'import matplotlib; print("matplotlib=" + matplotlib.__version__)'
     "$julia_bin" --startup-file=no --project="$project" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/environment.txt" 2>&1
 cp "$project/Manifest.toml" "$output/Manifest.toml"
@@ -46,11 +49,17 @@ run_case() {
     local log="$output/$BENCH_ELTYPE-$backend-$solver-$mode-$gpus-$n.log"
     export BENCH_GPUS=$gpus
     export LEGATE_CONFIG="--gpus $gpus --cpus ${BENCH_CPUS:-2} --fbmem ${BENCH_FBMEM:-61440} --sysmem ${BENCH_SYSMEM:-65536} --zcmem ${BENCH_ZCMEM:-1024}"
+    printf '%s,%s,%s,%s,%s\n' "$backend" "$mode" "$gpus" "$n" "$LEGATE_CONFIG" >> "$output/planned-cases.csv"
     echo "Running $backend $solver $mode: G=$gpus N=$n"
+    [[ ${BENCH_DRY_RUN:-0} != 1 ]] || return 0
+    local memory_log="$output/gpu-memory-$BENCH_ELTYPE-$backend-$mode-$gpus-$n.log"
+    nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
+    local monitor_pid=$!
+    local result_line=""
     if "${time_limit[@]}" "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
         "$script_dir/krylov.jl" "$backend" "$solver" "$mode" "$n" > "$log" 2>&1; then
         if [[ $(grep -c '^RESULT,' "$log") == 1 ]]; then
-            sed -n "s/^RESULT,/$experiment,${base_n:-},/p" "$log" >> "$csv"
+            result_line=$(sed -n "s/^RESULT,/$experiment,${base_n:-},/p" "$log")
         else
             echo "Missing or duplicate RESULT: $log" >&2
             failed=1
@@ -58,6 +67,17 @@ run_case() {
     else
         echo "Failed: $backend $solver $mode, G=$gpus N=$n ($log)" >&2
         failed=1
+    fi
+    kill "$monitor_pid" 2>/dev/null || true
+    wait "$monitor_pid" 2>/dev/null || true
+    local peak
+    peak=$(awk '$1 ~ /^[0-9]+$/ && $1 > peak { peak=$1 } END { print peak+0 }' "$memory_log")
+    printf '%s,%s,%s,%s\n' "$backend-$mode" "$gpus" "$n" "$peak" >> "$output/memory.csv"
+    if [[ $experiment == single && $peak -gt ${GPU_MEMORY_LIMIT_MIB:-61440} ]]; then
+        echo "Memory limit exceeded for $backend G=$gpus N=$n: $peak MiB" >&2
+        failed=1
+    elif [[ -n $result_line ]]; then
+        printf '%s\n' "$result_line" >> "$csv"
     fi
 }
 

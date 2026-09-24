@@ -47,8 +47,12 @@ BASE_N=32768 # replace with the largest common passing single-GPU N
 BENCH_ELTYPE=Float32 BENCH_OUTPUT=results/krylov-weak-f32 bash composability/krylov/run.sh weak "$BASE_N" 1 2 4 8
 ```
 
+On a one-GPU machine, use `BENCH_DRY_RUN=1` with the weak command to write
+`planned-cases.csv` for all four GPU counts without launching them. Run the
+one-GPU point normally with `weak "$BASE_N" 1`.
+
 The runner uses CG only. It writes `results.csv`, `timings.png`, per-case logs,
-the package manifest, and `environment.txt` together. `BENCH_PROJECT` can point to an
+the package manifest, sampled GPU-memory log and peak summary, and `environment.txt` together. `BENCH_PROJECT` can point to an
 already-instantiated equivalent environment (the default is this directory).
 Set `JULIA`, `BENCH_THREADS`,
 `BENCH_CPUS`, `BENCH_FBMEM`, `BENCH_SYSMEM`, or `BENCH_ZCMEM` for the machine.
