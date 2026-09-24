@@ -62,7 +62,7 @@ Legate's minimal manual defaults can cause excessive cuNumeric collections.
 The shell arguments are image dimensions `N`; each case has `N × N` pixels.
 Start with `32` for correctness. The launcher writes `results.csv`,
 `timings.png`, `metadata.txt`, and per-case logs under a timestamped results
-directory. Set `INTOPT_OUTPUT=/path/to/results` to choose one. It exits nonzero
+directory, along with the package manifest and sampled GPU-memory peak. Set `INTOPT_OUTPUT=/path/to/results` to choose one. It exits nonzero
 when a requested case fails and retains the failure log. The plot compares
 mean complete `Optimization.solve` time against `N`, with standard-error bars.
 
@@ -76,6 +76,10 @@ GPU count with standard-error bars and a horizontal ideal reference per backend.
 BASE_N=1024 # replace with the largest common passing single-GPU N
 INTOPT_OUTPUT=/opt/bench-results/intopt-weak bash composability/integrals_optimization/run_benchmark.sh weak "$BASE_N" 1 2 4 8
 ```
+
+On the one-GPU H100, set `INTOPT_DRY_RUN=1` to write `planned-cases.csv` for
+all GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records
+sampled GPU memory and excludes one-GPU points exceeding 60 GiB.
 
 `INTOPT_ELTYPE=Float32`, `INTOPT_BANDS=4`, `INTOPT_ORDER=12`,
 `INTOPT_ITERS=80`, `INTOPT_SAMPLES=5`, and `INTOPT_NOISE=0.001` are the defaults.
