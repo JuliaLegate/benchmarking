@@ -87,7 +87,8 @@ On dubliner, single-sample Float32 runs at `N=16`, `128`, and `256` passed for
 CUDA.jl and cuNumeric; the `N=16` CPU case also passed. All backends recovered
 the same two parameters to within 0.4% relative error, and the optimizer used
 32 objective evaluations. The cuNumeric runs used one configured GPU and no
-benchmark-specific cuNumeric method. These are correctness smoke runs, not
+benchmark-specific cuNumeric method. An Nsight Systems trace of the pushed
+`N=16` run recorded cuPyNumeric CUDA kernels. These are correctness smoke runs, not
 publication-grade timings; cuNumeric was slower than CUDA.jl at these sizes.
 
 A standalone `Integrals.jl` call returned an `NDArray` result at `N=1024`, but
