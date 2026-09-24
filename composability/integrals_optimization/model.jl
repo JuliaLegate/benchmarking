@@ -45,5 +45,7 @@ function loss(concentration, observations, model)
         squared_error = isnothing(squared_error) ? term : squared_error .+ term
     end
     # The optimizer needs one host loss value per objective evaluation.
-    return Float64(sum(squared_error)) / (length(concentration) * length(observations))
+    # Give distributed GPU reductions a concrete identity for every tile.
+    return Float64(sum(squared_error; init=zero(eltype(squared_error)))) /
+           (length(concentration) * length(observations))
 end
