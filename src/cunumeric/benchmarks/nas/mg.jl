@@ -67,8 +67,8 @@ function cunumeric_mg_restrict_axis(array, axis)
     d1, d2, n = size(back)
     physical = n - 2
     # cuNumeric reshapes stores in C order, so move the active dimension to
-    # the back before pairing neighboring points. Legate cannot reshape a
-    # sliced store; materialize only these two contiguous shifted slabs.
+    # the back before pairing neighboring points. Materialize the shifted
+    # slabs before reshaping; omitting these copies did not improve MG timing.
     left = copy(back[:, :, 2:(n - 1)])
     right = copy(back[:, :, 3:n])
     paired_shape = (d1, d2, physical ÷ 2, 2)
@@ -136,7 +136,7 @@ end
 function cunumeric_mg_norm2(residual)
     n = size(residual, 1)
     interior = residual[2:(n - 1), 2:(n - 1), 2:(n - 1)]
-    squared = sum(interior .* interior)
+    squared = sum(abs2, interior)
     cuNumeric.destroy!(interior)
     return squared
 end
