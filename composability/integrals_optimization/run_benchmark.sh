@@ -7,11 +7,9 @@ if [[ $# -eq 0 ]]; then
 fi
 : "${INTOPT_PROJECT:?Set INTOPT_PROJECT to the environment created by setup.jl}"
 
-# Keep each GPU backend's pool below 4 GB, leaving room for runtime overhead.
+# Use one GPU with a 3 GiB Legate framebuffer pool, leaving room for CUDA overhead.
 export LEGATE_AUTO_CONFIG="${LEGATE_AUTO_CONFIG:-0}"
 export LEGATE_CONFIG="${LEGATE_CONFIG:---gpus 1 --cpus 4 --fbmem 3072 --sysmem 4096}"
-export JULIA_CUDA_SOFT_MEMORY_LIMIT="${JULIA_CUDA_SOFT_MEMORY_LIMIT:-3GiB}"
-export JULIA_CUDA_HARD_MEMORY_LIMIT="${JULIA_CUDA_HARD_MEMORY_LIMIT:-3GiB}"
 
 for n in "$@"; do
     if ! [[ $n =~ ^[1-9][0-9]*$ ]] || (( 10#$n < 4 )); then
@@ -46,8 +44,6 @@ done
         "${INTOPT_ELTYPE:-Float32}" "${INTOPT_BANDS:-4}" "${INTOPT_ORDER:-12}" \
         "${INTOPT_ITERS:-80}" "${INTOPT_SAMPLES:-3}" "${INTOPT_NOISE:-0.001}"
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\n' "${CUBLAS_WORKSPACE_CONFIG:-<default>}"
-    printf 'JULIA_CUDA_SOFT_MEMORY_LIMIT=%s\n' "$JULIA_CUDA_SOFT_MEMORY_LIMIT"
-    printf 'JULIA_CUDA_HARD_MEMORY_LIMIT=%s\n' "$JULIA_CUDA_HARD_MEMORY_LIMIT"
     printf 'LEGATE_AUTO_CONFIG=%s\n' "$LEGATE_AUTO_CONFIG"
     printf 'LEGATE_CONFIG=%s\n' "$LEGATE_CONFIG"
     printf 'backends=%s\nsizes=%s\n' "${backends[*]}" "$*"
