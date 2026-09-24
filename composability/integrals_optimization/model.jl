@@ -37,6 +37,8 @@ function band_integral(concentration, center, model)
     return Integrals.solve(problem, model.quadrature).u
 end
 
+squared_error_sum(a) = sum(a; init=zero(eltype(a)))
+
 function loss(concentration, observations, model)
     squared_error = nothing
     for (center, observed) in zip(model.centers, observations)
@@ -46,6 +48,6 @@ function loss(concentration, observations, model)
     end
     # The optimizer needs one host loss value per objective evaluation.
     # Give distributed GPU reductions a concrete identity for every tile.
-    return Float64(sum(squared_error; init=zero(eltype(squared_error)))) /
+    return Float64(squared_error_sum(squared_error)) /
            (length(concentration) * length(observations))
 end

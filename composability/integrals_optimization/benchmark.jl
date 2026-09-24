@@ -42,6 +42,7 @@ elseif backend == "CuArray"
 elseif backend == "cuNumeric"
     using cuNumeric
     cuNumeric.allowscalar(false)
+    @eval squared_error_sum(a::NDArray) = sum(a)
     make_state(a) = NDArray(a)
     synchronized_time_ns() = cuNumeric.get_time_nanoseconds()
     correct_storage(a) = a isa NDArray{T,2}
