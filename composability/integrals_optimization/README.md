@@ -52,14 +52,17 @@ unset CUBLAS_WORKSPACE_CONFIG
 bash composability/integrals_optimization/run_benchmark.sh 32 128 256
 ```
 
-The launcher sets `LEGATE_AUTO_CONFIG=0` and
-`LEGATE_CONFIG="--gpus 1 --cpus 4 --fbmem 3072 --sysmem 4096"` by
-default. Both backends use one GPU; Legate reserves a 3 GiB GPU framebuffer
-pool and a separate 4 GiB host memory pool. The smaller framebuffer leaves
-room for CUDA runtime and library allocations. Override either setting for
-a different machine; the effective values are recorded in `metadata.txt`.
-`--fbmem` and `--sysmem` are in MiB. Omitting them with manual configuration
-can cause excessive cuNumeric collections.
+The launcher uses one GPU and caps both GPU memory pools at 3 GiB by default.
+For cuNumeric it sets `LEGATE_AUTO_CONFIG=0` with
+`LEGATE_CONFIG="--gpus 1 --cpus 4 --fbmem 3072 --sysmem 4096"`.
+`--fbmem` reserves a 3 GiB GPU framebuffer pool; `--sysmem` sets a separate
+4 GiB host memory pool. Both flags are in MiB. For CUDA.jl it sets
+`JULIA_CUDA_SOFT_MEMORY_LIMIT=3GiB` and
+`JULIA_CUDA_HARD_MEMORY_LIMIT=3GiB`. These pool caps leave room for CUDA
+runtime and library allocations; they are not a strict total-process limit.
+Override the environment variables for another machine. The effective
+settings are recorded in `metadata.txt`. Omitting memory sizes with manual
+Legate configuration can cause excessive cuNumeric collections.
 
 The shell arguments are image dimensions `N`; each case has `N × N` pixels.
 Start with `32` for correctness. The launcher writes `results.csv`,
