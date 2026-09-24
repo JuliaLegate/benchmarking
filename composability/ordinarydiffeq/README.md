@@ -68,6 +68,8 @@ ODE_OUTPUT=/opt/bench-results/ode-single bash composability/ordinarydiffeq/run_b
 
 The launcher writes `results.csv`, `timings.png`, `metadata.txt`, and one log
 per case under a timestamped `composability/ordinarydiffeq/results-*` directory.
+It configures a 56 GiB Legate framebuffer pool per GPU on the 80 GiB H100,
+leaving room for other allocations below the 60 GiB sampled-memory limit.
 Set `ODE_OUTPUT=/path/to/results` to choose the directory. The plot shows
 mean complete solve time against N with standard-error bars. It includes every
 backend that produced a valid result. The
