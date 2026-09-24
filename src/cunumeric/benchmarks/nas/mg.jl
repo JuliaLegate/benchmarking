@@ -67,10 +67,9 @@ function cunumeric_mg_restrict_axis(array, axis)
     d1, d2, n = size(back)
     physical = n - 2
     # cuNumeric reshapes stores in C order, so move the active dimension to
-    # the back before pairing neighboring points. Materialize the shifted
-    # slabs before reshaping; omitting these copies did not improve MG timing.
-    left = copy(back[:, :, 2:(n - 1)])
-    right = copy(back[:, :, 3:n])
+    # the back before pairing neighboring points.
+    left = back[:, :, 2:(n - 1)]
+    right = back[:, :, 3:n]
     paired_shape = (d1, d2, physical ÷ 2, 2)
     reduced = cuNumeric.reshape(
         sum(cuNumeric.reshape(left, paired_shape); dims=4) .+
@@ -94,8 +93,8 @@ end
 function cunumeric_mg_interp_axis(array, axis, weights)
     back, inverse = cunumeric_mg_back(array, axis)
     d1, d2, n = size(back)
-    lo = copy(back[:, :, 1:(n - 1)])
-    hi = copy(back[:, :, 2:n])
+    lo = back[:, :, 1:(n - 1)]
+    hi = back[:, :, 2:n]
     lo4 = cuNumeric.reshape(lo, d1, d2, n - 1, 1)
     hi4 = cuNumeric.reshape(hi, d1, d2, n - 1, 1)
     mixed = lo4 .+ weights .* (hi4 .- lo4)
