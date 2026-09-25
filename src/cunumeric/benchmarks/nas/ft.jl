@@ -37,9 +37,8 @@ function cunumeric_nas_ft_checksum_mask(p)
 end
 
 function cunumeric_nas_ft_upload!(dest, host)
-    # The host's Julia column-major (nx, ny, nz) bytes are the row-major bytes
-    # of the reversed device shape (nz, ny, nx). Attach directly to avoid a
-    # full-volume host transpose on every timed run. The copy must finish
+    # Attach the host bytes row-major with the reversed shape (nz, ny, nx);
+    # x is fastest in both, so no data is transposed. The copy must finish
     # before the host buffer is reused or the attachment is destroyed.
     attached = cuNumeric.nda_attach_external(host; shape=size(dest))
     try
