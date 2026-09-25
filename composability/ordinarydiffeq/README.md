@@ -129,19 +129,42 @@ extension in this experiment.
 ## Changing the time integrator
 
 [`integrator_smoke.jl`](integrator_smoke.jl) runs the same cuNumeric heat problem
-with RK4, Tsit5, and Vern7. It checks the returned NDArray and the final state
-against the discrete eigenmode solution. This is a correctness probe, not a
-timed backend comparison. All three passed at N=128 on one H100 with both
-fixed and adaptive steps (Float32, Julia 1.13). Install the additional solvers in the ODE environment:
+with CarpenterKennedy2N54, RK4, Tsit5, and Vern7 in fixed-step mode, and with
+RK4, Tsit5, and Vern7 in adaptive mode. It checks the returned NDArray and
+the final state against the discrete eigenmode solution. All passed at
+`N=128` and `N=4096` on one H100 (Float32, Julia 1.13). Install the
+additional solvers in a separate ODE environment:
 
 ```sh
+export ODE_PROJECT=/path/to/ode-integrators-env
 ODE_INSTALL_INTEGRATORS=1 CUNUMERIC_SOURCE=/path/to/cuNumeric.jl \
   julia --startup-file=no composability/ordinarydiffeq/setup.jl "$ODE_PROJECT"
 julia --project="$ODE_PROJECT" composability/ordinarydiffeq/integrator_smoke.jl 128
 ODE_ADAPTIVE=1 julia --project="$ODE_PROJECT" \
   composability/ordinarydiffeq/integrator_smoke.jl 128
+ODE_ADAPTIVE=1 ODE_TIMED_SAMPLES=5 julia --project="$ODE_PROJECT" \
+  composability/ordinarydiffeq/integrator_smoke.jl 4096
 ```
 
 The adaptive case scopes `cuNumeric.allowautofetch()` around `solve`, because
 the step-size controller makes host-side scalar decisions. The timed benchmark
 above continues to use the fixed-step CarpenterKennedy2N54 method.
+
+With five synchronized samples at `N=4096`, cuNumeric mean solve times
+(milliseconds ± standard error) were:
+
+| Method | Fixed, 20 steps | Adaptive |
+| --- | ---: | ---: |
+| CarpenterKennedy2N54 | 120.2 ± 1.2 | — |
+| RK4 | 65.3 ± 0.7 | 83.4 ± 5.5 (6 accepted steps) |
+| Tsit5 | 97.2 ± 1.1 | 85.4 ± 21.1 (5 accepted steps) |
+| Vern7 | 163.6 ± 0.7 | 96.1 ± 4.0 (6 accepted steps) |
+
+Adaptive Tsit5 also passed the same GPU storage and exact-solution checks on
+CuArray and Dagger at `N=128` and `N=4096`. At `N=4096`, its five-sample
+means were 30.0 ± 5.2 ms on CuArray and 430.7 ± 142.7 ms on Dagger. The
+adaptive Tsit5 measurements had large outliers on all three backends. They run
+fewer RHS evaluations and introduce host-side step decisions, so keep the
+20-step low-storage method as the main weak-scaling workload. Adaptive Tsit5
+is a useful supplementary composability result; a performance comparison
+would need more samples and a separate accuracy and tolerance study.
