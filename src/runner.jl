@@ -119,8 +119,8 @@ function execute_plan(runs, gs, opts, budget, raw; launch=run, prepare=prepare_b
                 s.gpus, s.cpus, s.name, s.T, r.N, r.M, s.n_iter, s.n_warmup, s.n_trial,
                 correctness, correct_iters, Float64(total_flops(b)), s.kwargs,
             )
-            cmd = wrapped_worker_command(model, request, root; verbose=opts.verbose)
             results = joinpath(dir, results_subdir(s))
+            cmd = wrapped_worker_command(model, request, root; verbose=opts.verbose)
             model_env = model_environment(model, request, opts.verbose)
             model_env["CUNUMERIC_BENCH_RESULTS_DIR"] = results
             launch(addenv(Cmd(cmd; dir=root), model_env))

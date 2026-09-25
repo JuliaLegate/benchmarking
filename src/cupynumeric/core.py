@@ -82,10 +82,10 @@ def _std(x):
     return math.sqrt(sum((v - m) ** 2 for v in x) / (len(x) - 1))
 
 
-def save_result(name, dims, gpus, times_ms, gflops, correctness="skipped"):
+def save_result(name, dims, gpus, times_ms, gflops, correctness="skipped", save_as=None):
     os.makedirs(RESULTS_DIR, exist_ok=True)
     N, M = dims
-    path = os.path.join(RESULTS_DIR, f"{name}_{MOD}.csv")
+    path = os.path.join(RESULTS_DIR, f"{name}_{save_as or MOD}.csv")
     with open(path, "a") as io:
         for i, (t, g) in enumerate(zip(times_ms, gflops), start=1):
             io.write(f"{MOD},{gpus},{N},{M},{i},{t:.6f},{g:.6f},{correctness}\n")

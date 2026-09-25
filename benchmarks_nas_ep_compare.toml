@@ -1,0 +1,35 @@
+[Global]
+n_warmup = 1
+n_iter = 1
+n_trial = 3
+check_correctness = true
+auto_size = false
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
+
+# The five default adapters use the shared class and timing contract.
+[[nas_ep]]
+T = "Float64"
+gpus = 1
+cpus = 8
+N = 33554432
+M = 1
+kwargs = { class = "S" }
+
+# High-level counterparts of the explicit CUDA.jl and JACC kernels.
+[[nas_ep]]
+T = "Float64"
+gpus = 1
+cpus = 8
+N = 33554432
+M = 1
+models = ["cudajl"]
+kwargs = { class = "S", implementation = "broadcast" }
+
+[[nas_ep]]
+T = "Float64"
+gpus = 1
+cpus = 8
+N = 33554432
+M = 1
+models = ["jacc"]
+kwargs = { class = "S", implementation = "broadcast" }

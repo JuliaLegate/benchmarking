@@ -57,6 +57,8 @@ model_throughput_label(benchmark) = "GFLOP/s"
 model_reset!(benchmark, state) = false
 model_check_correctness(benchmark, config) = "skipped"
 model_correctness_context(benchmark, config) = nothing
+model_save_id(benchmark, model::Symbol) = model
+model_worker_label(benchmark, default::String) = default
 
 function montecarlo_correctness_samples(::Type{T}, n::Integer) where {T}
     return T.(range(T(0), T(10); length=n))
@@ -170,6 +172,7 @@ function run_model_worker(model::Symbol, label::String, args=ARGS)
     assert_active_model(model)
     config = parse_model_worker_args(args)
     benchmark = model_build_benchmark(config)
+    label = model_worker_label(benchmark, label)
     verbose = get(ENV, "CUNUMERIC_BENCH_VERBOSE", "0") == "1"
     if verbose && config.check_correctness
         context = model_correctness_context(benchmark, config)
@@ -213,5 +216,6 @@ function run_model_worker(model::Symbol, label::String, args=ARGS)
         "[%s] Mean throughput: %.5f ± %.5f %s (trial SD)\n",
         label, mean(gflops), length(gflops)>1 ? std(gflops) : 0.0, unit,
     )
-    return save_model_results(config, model, times_ms, gflops, correctness)
+    return save_model_results(config, model_save_id(benchmark, model),
+                              times_ms, gflops, correctness)
 end

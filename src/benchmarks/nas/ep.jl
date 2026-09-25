@@ -4,12 +4,16 @@ Base.@kwdef struct NASEmbarrassinglyParallel{T} <: AbstractBenchmark{T}
     N::Int
     M::Int
     class::String = "S"
+    implementation::String = "default"
 end
 
 name(::NASEmbarrassinglyParallel) = "nas_ep"
 dims(b::NASEmbarrassinglyParallel) = (b.N, b.M)
 allowed_types(::Type{<:NASEmbarrassinglyParallel}) = Float64
 throughput_label(::NASEmbarrassinglyParallel) = "G random numbers/s"
+# EP verifies against the official NPB sums; CUDA.jl must run its check too.
+correctness_uses_cpu(::NASEmbarrassinglyParallel) = true
+correctness_reference_label(mod, ::NASEmbarrassinglyParallel) = "NPB-GPU"
 
 function data(b::NASEmbarrassinglyParallel)
     p = nas_ep_parameters(b.class)
