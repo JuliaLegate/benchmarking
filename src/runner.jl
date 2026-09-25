@@ -1,7 +1,7 @@
 using Dates, Pkg
 
 function cli_options(args)
-    config = joinpath(@__DIR__, "..", "benchmarks.toml")
+    config = joinpath(@__DIR__, "..", "configs", "multi_gpu", "all.toml")
     only = nothing
     fusion = nothing
     models = nothing

@@ -27,7 +27,7 @@ function parse_args(args)
     results_dir = "results"
     out_dir = nothing
     output_suffix = ""
-    config = joinpath(@__DIR__, "benchmarks.toml")
+    config = joinpath(@__DIR__, "configs", "multi_gpu", "all.toml")
 
     for arg in args
         if startswith(arg, "--out=")

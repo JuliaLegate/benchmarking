@@ -103,7 +103,7 @@ function _define_accelerated_definition(signature, body, form=:function)
     return Expr(:function, signature, Expr(:block, Base.macroexpand(@__MODULE__, call)))
 end
 
-# Maps a benchmarks.toml table name to its benchmark type. Each benchmark file
+# Maps a config table name to its benchmark type. Each benchmark file
 # registers itself via `register_benchmark`.
 const BENCHMARKS = Dict{String,Type}()
 function register_benchmark(key::AbstractString, ::Type{B}) where {B<:AbstractBenchmark}

@@ -56,7 +56,7 @@ Set `CUNUMERIC_BENCH_CONDA` if `conda` is not on `PATH`, or
 Use the smoke test for a quick end-to-end check:
 
 ```bash
-julia --project=. run.jl --config=benchmarks_smoke.toml
+julia --project=. run.jl --config=configs/single_gpu/smoke.toml
 ```
 
 Run the configured benchmark suite with:
@@ -81,13 +81,15 @@ Run the focused cuNumeric, cuPyNumeric, and Dagger Gray-Scott weak-scaling
 check on 1, 2, 4, and 8 GPUs with:
 
 ```bash
-julia --project=. run.jl --config=benchmarks_grayscott_multigpu.toml --verbose
+julia --project=. run.jl --config=configs/multi_gpu/grayscott.toml --verbose
 ```
 
 ## Configure
 
-Benchmarks are declared in `benchmarks.toml`. Global values are inherited by
-each benchmark block:
+Benchmarks are declared in TOML configs under `configs/`: `single_gpu/` holds
+one-GPU runs (smoke test, CG, NAS) and `multi_gpu/` holds weak-scaling sweeps.
+`run.jl` defaults to `configs/multi_gpu/all.toml`; pass another with `--config=`.
+Global values are inherited by each benchmark block:
 
 ```toml
 [Global]
@@ -151,7 +153,7 @@ are comparison variants rather than separate workloads.
 `montecarlo` uses cuNumeric's fused mapped reduction. The cuNumeric-only
 `montecarlo_naive` variant materializes the broadcasted integrand before its
 ordinary reduction for an explicit implementation comparison. Run both with
-`julia --project=. run.jl --config=benchmarks_montecarlo.toml`.
+`julia --project=. run.jl --config=configs/multi_gpu/montecarlo.toml`.
 
 NAS EP reproduces the official 46-bit RNG sequence and verification sums. The
 cuNumeric and cuPyNumeric implementations express that RNG as Float64 array
@@ -199,13 +201,13 @@ julia --project=. plot_results.jl results/<run-id>
 array workers (`src/benchmarks/cg.jl`); JACC and Dagger have native versions.
 
 ```bash
-julia --project=. run.jl --config=benchmarks_cg.toml
+julia --project=. run.jl --config=configs/single_gpu/cg.toml
 ```
 
 For the 9-million-elements-per-GPU weak-scaling run:
 
 ```bash
-julia --project=. run.jl --config=benchmarks_cg_multigpu.toml
+julia --project=. run.jl --config=configs/multi_gpu/cg.toml
 ```
 
 Dagger CG uses distributed arrays and its native stencil, broadcast, and

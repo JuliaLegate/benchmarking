@@ -18,7 +18,7 @@
     @test run!(ConjugateGradientBenchmark{Float64}(; N=17, max_iter=1), s)==1
     @test s.x ≈ fill(17/(12*17-4), 17)
     @test run!(ConjugateGradientBenchmark{Float64}(; N=17, check_every=30, max_iter=17), s)==17
-    config=joinpath(@__DIR__, "../benchmarks_cg.toml")
+    config=joinpath(@__DIR__, "..", "configs", "single_gpu", "cg.toml")
     gs, specs=parse_config(config)
     raw=TOML.parsefile(config)
     @test first(specs).kwargs==Dict(:check_every=>10, :max_iter=>1000)

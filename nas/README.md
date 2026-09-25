@@ -69,7 +69,7 @@ floating-point instructions.
 Run class B across all models with:
 
 ```sh
-julia --project=. run.jl --config=benchmarks_nas_ep.toml
+julia --project=. run.jl --config=configs/single_gpu/nas_ep.toml
 ```
 
 EP plots use two comparison groups. `nas_ep_high_level_weak_scaling.png`
@@ -87,7 +87,7 @@ earlier `mapreduce` results cannot be mistaken for this implementation. The
 optional cuPyNumeric recurrence saves to `nas_ep_cupynumeric_recurrence.csv`
 so it remains separate from its default path. Only measured implementations
 appear in each plot.
-Run `julia --project=. run.jl --config=benchmarks_nas_ep_compare.toml` to
+Run `julia --project=. run.jl --config=configs/single_gpu/nas_ep_compare.toml` to
 measure both kernel and high level variants of CUDA.jl and JACC in one sweep.
 Each high level variant broadcasts over independent stream indices and saves
 to a separate CSV from its explicit kernel path. The same variants can also be
@@ -140,7 +140,7 @@ still uses Dagger's distributed constructor.
 Run class B across all models with:
 
 ```sh
-julia --project=. run.jl --config=benchmarks_nas_ft.toml
+julia --project=. run.jl --config=configs/single_gpu/nas_ft.toml
 ```
 
 The cuNumeric FT GPU regression covers repeated S/W/B runs with a 12 GiB
@@ -187,8 +187,8 @@ document their communication limitations.
 Run class B across all models with:
 
 ```sh
-julia --project=. run.jl --config=benchmarks_nas_mg.toml
+julia --project=. run.jl --config=configs/single_gpu/nas_mg.toml
 ```
 
 To include the CUDA.jl separable variant as an additional point, run
-`julia --project=. run.jl --config=benchmarks_nas_mg_compare.toml`.
+`julia --project=. run.jl --config=configs/single_gpu/nas_mg_compare.toml`.

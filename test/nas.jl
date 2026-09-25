@@ -30,15 +30,18 @@
     @test supports_run(execution_model(:jacc), "nas_ep", 2)
     @test supports_run(execution_model(:dagger), "nas_ep", 2)
 
-    config = joinpath(@__DIR__, "..", "benchmarks_nas_ep.toml")
+    config = joinpath(@__DIR__, "..", "configs", "single_gpu", "nas_ep.toml")
     settings, specs = parse_config(config)
     runs = plan_runs(
         specs, settings, TOML.parsefile(config), parse_plot_groups(config), 10^12
     )
     @test Set(r.model for r in runs) ==
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
-    @test all(r.N == 33_554_432 && r.M == 1 && r.spec.n_iter == 1 for r in runs)
-    compare_config = joinpath(@__DIR__, "..", "benchmarks_nas_ep_compare.toml")
+    @test all(runs) do r
+        p = nas_ep_parameters(get(r.spec.kwargs, :class, "S"))
+        (r.N, r.M) == (nas_ep_random_numbers(p), 1) && r.spec.n_iter == 1
+    end
+    compare_config = joinpath(@__DIR__, "..", "configs", "single_gpu", "nas_ep_compare.toml")
     compare_settings, compare_specs = parse_config(compare_config)
     compare_runs = plan_runs(
         compare_specs, compare_settings, TOML.parsefile(compare_config),
@@ -82,7 +85,7 @@ end
     )
     @test !supports_run(execution_model(:jacc), "nas_ft", 2)
 
-    config = joinpath(@__DIR__, "..", "benchmarks_nas_ft.toml")
+    config = joinpath(@__DIR__, "..", "configs", "single_gpu", "nas_ft.toml")
     settings, specs = parse_config(config)
     runs = plan_runs(
         specs, settings, TOML.parsefile(config), parse_plot_groups(config), 10^12
@@ -127,14 +130,17 @@ end
     @test !supports_run(execution_model(:jacc), "nas_mg", 2)
     @test supports_run(execution_model(:dagger), "nas_mg", 2)
 
-    config = joinpath(@__DIR__, "..", "benchmarks_nas_mg.toml")
+    config = joinpath(@__DIR__, "..", "configs", "single_gpu", "nas_mg.toml")
     settings, specs = parse_config(config)
     runs = plan_runs(
         specs, settings, TOML.parsefile(config), parse_plot_groups(config), 10^12
     )
     @test Set(r.model for r in runs) ==
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
-    @test all(r.N == 32 && r.M == 32 && r.spec.n_iter == 1 for r in runs)
+    @test all(runs) do r
+        p = nas_mg_parameters(get(r.spec.kwargs, :class, "S"))
+        (r.N, r.M) == (p.n, p.n) && r.spec.n_iter == 1
+    end
 end
 
 @testset "NAS classes supply N and M" begin

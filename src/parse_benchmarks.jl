@@ -1,7 +1,7 @@
 using TOML
 
 """
-One benchmark invocation parsed from `benchmarks.toml`. `name` selects the
+One benchmark invocation parsed from a config under `configs/`. `name` selects the
 benchmark type from `BENCHMARKS`; `T` is the element type (e.g. "Float32");
 `args` are the sizes (`N M`) when pinned. When `autosize` is true, `args` is
 unused and `N_hint` / `M_hint` feed `fit_one_gpu`.

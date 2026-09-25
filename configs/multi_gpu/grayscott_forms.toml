@@ -1,6 +1,6 @@
 # Gray-Scott @accelerate scope-contract comparison (cuNumeric only).
 # The four accelerated forms plus the baseline share one weak-scaling figure.
-#   julia --project=. run.jl --config=benchmarks_grayscott_forms.toml
+#   julia --project=. run.jl --config=configs/multi_gpu/grayscott_forms.toml
 [Global]
 n_warmup = 2
 n_iter = 250

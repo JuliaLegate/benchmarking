@@ -9,7 +9,7 @@ docker build -f docker/Dockerfile \
   --build-arg BENCHMARK_COMMIT="$(git rev-parse HEAD)" \
   -t cunumeric:benchmark .
 docker run --rm --gpus=all cunumeric:benchmark \
-  julia --project=. run.jl --config=benchmarks_smoke.toml
+  julia --project=. run.jl --config=configs/single_gpu/smoke.toml
 ```
 
 The image build runs `instantiate_projects.sh`, so the composability Julia

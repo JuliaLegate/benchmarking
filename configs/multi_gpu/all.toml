@@ -14,7 +14,7 @@ mem_frac = 0.75
 # Names in a list share one weak-scaling figure. Unlisted [[benchmark]]
 # tables each get their own. CUDA.jl and cupynumeric overlay from the
 # group's baseline member (`*_baseline`, else the only / first name).
-# Gray-Scott @accelerate scope-contract forms live in benchmarks_grayscott_forms.toml.
+# Gray-Scott @accelerate scope-contract forms live in configs/multi_gpu/grayscott_forms.toml.
 [plot.groups]
 dmd = ["dmd_baseline", "dmd_accelerated"]
 
