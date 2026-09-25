@@ -71,7 +71,7 @@ The complete single-GPU sweep writes `N(1)` to `base_n.txt` and stops after
 the first failed size.
 
 ```sh
-BASE_N=1024 # replace with the largest common passing single-GPU N
+BASE_N=8192 # largest common passing one-GPU N in the H100 sweep below
 INTOPT_OUTPUT=/opt/bench-results/intopt-weak bash composability/integrals_optimization/run_benchmark.sh weak "$BASE_N" 1 2 4 8
 ```
 
@@ -94,6 +94,29 @@ initial parameters. Synthetic observation generation, transfers, and two warmup
 solves are outside timing. There is no per-iteration `GC.gc()` call. cuNumeric's
 `get_time_nanoseconds()` and CUDA's `synchronize()` delimit the timed solve.
 The result is checked against the known plume parameters after timing.
+
+## Single-H100 sweep (2026-09-24)
+
+CUDA.jl, Dagger, and cuNumeric each passed `N=32, 128, 512, 1024, 2048,
+4096, 6144, 8192` on one H100. Every case used two warmups and five
+synchronized complete-solve samples, recovered both parameters within
+0.095% relative error, and kept image arrays on its intended GPU backend.
+All variants used 32 objective evaluations. Selected mean times, in seconds,
+with standard errors are:
+
+| N | CUDA.jl | Dagger | cuNumeric |
+| ---: | ---: | ---: | ---: |
+| 4096 | 0.802 ± 0.014 | 6.450 ± 0.162 | 0.842 ± 0.009 |
+| 6144 | 1.733 ± 0.001 | 10.850 ± 0.368 | 15.855 ± 4.256 |
+| 8192 | 3.051 ± 0.001 | 20.663 ± 0.316 | 41.545 ± 0.693 |
+
+The `N=8192` point is the largest common passing size and the weak-scaling
+baseline. Its exact planned dimensions for 1, 2, 4, and 8 GPUs are `8192`,
+`11585`, `16384`, and `23170`. The cuNumeric slowdown above `N=4096` is
+real in the measured samples; these data do not support a claim that its
+large-size curve converges with CUDA.jl. Sampled `nvidia-smi` memory reflects
+Legate's automatically reserved pool and is retained as a diagnostic, not
+used as a live-allocation threshold.
 
 ## A30X validation (2026-09-23)
 
