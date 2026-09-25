@@ -1,5 +1,11 @@
 # JuliaLegate benchmarks
 
+## Composability
+
+The [composability benchmark plan](composability/README.md) covers Krylov CG,
+the OrdinaryDiffEq heat equation, and the Integrals.jl + Optimization.jl gas
+plume fit. These workloads run independently of the benchmark orchestrator.
+
 This directory runs the same GPU benchmarks across cuNumeric.jl, cuPyNumeric,
 CUDA.jl, JACC.jl, and Dagger.jl. Each model runs in an isolated process and
 environment. Runs include correctness checks, trial progress, mean time, and
