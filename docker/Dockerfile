@@ -81,8 +81,10 @@ RUN test -n "$BENCHMARK_COMMIT" \
 
 # Pkg.develop records absolute [sources] paths in Project.toml, which the COPY
 # above replaced with the committed (source-free) file. Re-record the image's
-# cuNumeric.jl checkout and hide that local edit from git status.
-RUN julia -e 'using Pkg; Pkg.Registry.add("General")' \
+# cuNumeric.jl checkout and hide that local edit from git status. The profile
+# supplies the CUDA driver stub, since builds have no GPU.
+RUN source /etc/profile.d/cunumeric.sh \
+    && julia -e 'using Pkg; Pkg.Registry.add("General")' \
     && julia --project=environments/cunumeric -e \
         'using Pkg; Pkg.develop([PackageSpec(path=ARGS[1]), PackageSpec(path=ARGS[2])])' \
         "$CUNUMERIC_SOURCE" "$CUNUMERIC_SOURCE/lib/CNPreferences" \
