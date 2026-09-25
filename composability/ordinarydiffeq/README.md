@@ -21,20 +21,27 @@ backend and size in a fresh Julia process, saves logs and CSV results, and
 uses [`plot_results.jl`](plot_results.jl) to make a PNG comparison plot.
 
 The `heat.jl` N=128 cuNumeric example completed on one H100 with Julia 1.13
-and returned an `NDArray{Float32,2}`. The separate five-sample H100 sweep at
-20 fixed steps passed CUDA.jl, Dagger, and cuNumeric through `N=4096`.
+and returned an `NDArray{Float32,2}`. A five-sample H100 sweep at 20 fixed
+steps passed CUDA.jl, Dagger, and cuNumeric at `N=128, 512, 2048, 4096,
+8192, 16384`, with relative exact-solution errors below `1e-4` and GPU-backed
+outputs. At `N=16384`, mean complete-solve times were 1.112 s for CUDA.jl,
+8.169 s for Dagger, and 1.285 s for cuNumeric. Each standard error comes
+from the sample standard deviation divided by the square root of five.
 
 The [SciML solver documentation](https://docs.sciml.ai/OrdinaryDiffEq/stable/explicit/LowStorageRK/)
 describes this as a fixed-step, fourth-order low-storage method. We set
 `williamson_condition=false` because its fused RHS optimization only supports
 ordinary `Array` storage.
 
-The common heat RHS materializes its five shifted interior slices, performs
-the five-point stencil as array broadcasts, then copies the interior result
-into the derivative array. Broadcasting directly over views of a `DArray`
-fell back to scalar `getindex` and timed out at `N=128`; materialized slices
-use Dagger's distributed array operations. The Dagger benchmark disables
-scalar indexing so this fallback fails visibly if it returns.
+The common heat RHS evaluates the five-point stencil on five shifted interior
+slices, then copies the result into the derivative array. `heat_slice` uses
+`@views` for CuArray and NDArray inputs so ranged indexing does not make a
+full array copy. Dagger overrides `heat_slice` to use materialized distributed
+slices: a view of a `DArray` hits scalar `getindex`, which the benchmark
+disables and checks at `N=128`.
+The earlier version materialized CUDA slices and took 8.029 s at `N=16384`;
+the view-backed version takes 1.112 s. Keep results from these two code
+versions separate.
 The problem uses `FullSpecialize` so SciML accepts both the initial NDArray
 and solver work arrays when their storage-parent types differ. This fixed-step
 example disables SciML's per-step instability scan, which scalar-iterates
@@ -67,7 +74,7 @@ For the single-GPU comparison, pass grid dimensions (each problem has `N × N`
 elements):
 
 ```sh
-ODE_OUTPUT=/opt/bench-results/ode-single bash composability/ordinarydiffeq/run_benchmark.sh single 128 1024 4096
+ODE_OUTPUT=/opt/bench-results/ode-single bash composability/ordinarydiffeq/run_benchmark.sh single 128 512 2048 4096 8192 16384
 ```
 
 The launcher writes `results.csv`, `timings.png`, `metadata.txt`, and one log
@@ -80,13 +87,14 @@ launcher exits nonzero if any requested case fails and keeps its log.
 
 The default single-GPU backends are `CuArray Dagger cuNumeric`. The setup
 installs Dagger. The Dagger variant checks GPU-backed chunks and uses one chunk
-per requested GPU. For weak scaling, use the largest dimension that passed all
-three single-GPU backends as `N(1)`:
-The complete single-GPU sweep writes this value to `base_n.txt` and stops
-after the first failed size.
+per requested GPU. For weak scaling, choose a dimension that passed all three
+single-GPU backends, amortizes launch overhead, and leaves enough memory and
+time headroom for all GPU counts. A complete single-GPU sweep writes its
+largest common passing size to `base_n.txt` and stops after the first failed
+size; record the selected practical baseline separately if it is smaller.
 
 ```sh
-BASE_N=4096 # replace with the largest common passing single-GPU N
+BASE_N=16384 # replace with the selected common passing single-GPU N
 ODE_OUTPUT=/opt/bench-results/ode-weak bash composability/ordinarydiffeq/run_benchmark.sh weak "$BASE_N" 1 2 4 8
 ```
 
