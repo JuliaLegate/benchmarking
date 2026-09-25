@@ -69,7 +69,10 @@ def main():
     ax.set_ylabel("Mean complete solve time (ms) ± standard error")
     ax.set_xscale("log", base=2)
     ax.set_yscale("log")
-    if args.experiment == "weak":
+    if args.experiment == "single":
+        dimensions = sorted({x for points in series.values() for x in points})
+        ax.set_xticks(dimensions, [str(x) for x in dimensions])
+    else:
         ax.set_xticks([1, 2, 4, 8], ["1", "2", "4", "8"])
     ax.grid(alpha=0.25)
     ax.legend()
