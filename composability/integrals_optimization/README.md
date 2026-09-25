@@ -118,6 +118,15 @@ large-size curve converges with CUDA.jl. Sampled `nvidia-smi` memory reflects
 Legate's automatically reserved pool and is retained as a diagnostic, not
 used as a live-allocation threshold.
 
+An instrumented `N=8192` run using Julia's `@timed` around two complete
+cuNumeric solves measured 40.237 and 40.489 seconds per solve, of which
+39.421 and 39.677 seconds were Julia GC time. The cuNumeric allocation
+heuristic calls `GC.gc` when predicted device or host use crosses its soft
+threshold. This isolates collection as the immediate cause of the slowdown;
+it does not establish whether the predicted pressure, the collector, or
+deferred Legate-array frees should be changed. The main plot uses the
+unmodified benchmark and cuNumeric settings.
+
 ## A30X validation (2026-09-23)
 
 On dubliner, single-sample Float32 runs at `N=16`, `128`, and `256` passed for
