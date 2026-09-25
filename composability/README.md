@@ -10,6 +10,12 @@ error bars. CUDA.jl is the one-GPU reference; Dagger and cuNumeric also have
 weak-scaling launchers. Krylov runs stock CG on all three backends and local
 CG on cuNumeric.
 
+The one-H100 CG plot has seven matrix dimensions: `1024, 2048, 4096, 8192,
+16384, 32768, 65536`. The heat-equation plot has seven grid dimensions:
+`128, 512, 1024, 2048, 4096, 8192, 16384`. These retain the original
+largest sizes and weak-scaling baselines. Each new point passed the same
+backend and numerical checks, two warmups, and five timed solves.
+
 `weak_scaling_plan.csv` is the versioned run sheet. Its `n_1`, `n_2`, `n_4`,
 and `n_8` columns give the exact dimensions passed by each launcher. All
 dimensions follow `N(G) = round(N(1) * sqrt(G))`. The dense CG matrix and the
