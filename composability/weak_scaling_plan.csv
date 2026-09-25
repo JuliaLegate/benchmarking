@@ -1,0 +1,4 @@
+workload,base_n,n_1,n_2,n_4,n_8
+krylov,65536,65536,92682,131072,185364
+ordinarydiffeq,16384,16384,23170,32768,46341
+integrals_optimization,8192,8192,11585,16384,23170

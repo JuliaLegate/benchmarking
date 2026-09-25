@@ -2,9 +2,9 @@
 
 ## Composability
 
-The [OrdinaryDiffEq heat-equation example and benchmark](composability/ordinarydiffeq/README.md)
-run independently of the benchmark orchestrator. They compare an actual
-SciML ODE solver on cuNumeric and CUDA.jl arrays.
+The [composability benchmark plan](composability/README.md) covers Krylov CG,
+the OrdinaryDiffEq heat equation, and the Integrals.jl + Optimization.jl gas
+plume fit. These workloads run independently of the benchmark orchestrator.
 
 This directory runs the same GPU benchmarks across cuNumeric.jl, cuPyNumeric,
 CUDA.jl, JACC.jl, and Dagger.jl. Each model runs in an isolated process and
