@@ -127,6 +127,17 @@ it does not establish whether the predicted pressure, the collector, or
 deferred Legate-array frees should be changed. The main plot uses the
 unmodified benchmark and cuNumeric settings.
 
+The weak launcher also passed its measured one-GPU point at `N=8192`:
+Dagger averaged 21.025 ± 0.271 seconds and cuNumeric 43.277 ± 0.441 seconds
+over five samples. The two-, four-, and eight-GPU cases remain unmeasured.
+
+An exploratory `@accelerate` version of the integrand expression and per-band
+loss accumulation recovered the same parameters. Its two-sample `N=8192`
+solve averaged 38.50 seconds, but an instrumented repeat spent 37.79–39.98
+seconds per solve in GC. The integrand's dotted expression is already fused;
+`@accelerate` cannot rewrite inside `Integrals.solve`. The trial is kept
+separate from the main sweep because it does not remove the scaling cliff.
+
 ## A30X validation (2026-09-23)
 
 On dubliner, single-sample Float32 runs at `N=16`, `128`, and `256` passed for
