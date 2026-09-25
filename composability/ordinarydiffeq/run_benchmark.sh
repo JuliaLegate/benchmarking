@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+env_root=${COMPOSABILITY_ENV_ROOT:-"$script_dir/../../environments"}
+ODE_PROJECT=${ODE_PROJECT:-"$env_root/ordinarydiffeq"}
 
 usage() {
-    echo "Usage: ODE_PROJECT=/path/to/env $0 single N [N ...] | weak BASE_N GPU_COUNT [GPU_COUNT ...]" >&2
+    echo "Usage: $0 single N [N ...] | weak BASE_N GPU_COUNT [GPU_COUNT ...]" >&2
     exit 2
 }
 [[ $# -ge 2 ]] || usage
-: "${ODE_PROJECT:?Set ODE_PROJECT to the environment created by setup.jl}"
 experiment=$1; shift
 [[ $experiment == single || $experiment == weak ]] || usage
 if [[ $experiment == weak ]]; then
@@ -23,7 +25,6 @@ for value in "$@"; do
     fi
 done
 
-script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 julia_bin=${JULIA:-julia}
 visible_pool=${CUDA_VISIBLE_DEVICES-}
 gpu_mask_for_count() {

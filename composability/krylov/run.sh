@@ -2,7 +2,8 @@
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 julia_bin=${JULIA:-julia}
-project=${BENCH_PROJECT:-$script_dir}
+env_root=${COMPOSABILITY_ENV_ROOT:-"$script_dir/../../environments"}
+project=${BENCH_PROJECT:-"$env_root/krylov"}
 export BENCH_ELTYPE=${BENCH_ELTYPE:-Float32}
 export BENCH_SAMPLES=${BENCH_SAMPLES:-5}
 [[ $BENCH_ELTYPE == Float32 || $BENCH_ELTYPE == Float64 ]] || { echo "BENCH_ELTYPE must be Float32 or Float64" >&2; exit 2; }

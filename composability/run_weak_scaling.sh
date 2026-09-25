@@ -11,6 +11,7 @@ for g in "$@"; do
 done
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+env_root=${COMPOSABILITY_ENV_ROOT:-"$script_dir/../environments"}
 plan="$script_dir/weak_scaling_plan.csv"
 [[ -f $plan ]] || { echo "Missing $plan" >&2; exit 2; }
 read -r -a workloads <<< "${COMPOSABILITY_WORKLOADS:-krylov ordinarydiffeq}"
@@ -72,7 +73,7 @@ for workload in "${workloads[@]}"; do
     echo "$workload weak scaling: N(1)=$(plan_field "$workload" 2)"
     case $workload in
         krylov)
-            if ! BENCH_PROJECT="${BENCH_PROJECT:-/opt/bench-envs/krylov}" \
+            if ! BENCH_PROJECT="${BENCH_PROJECT:-$env_root/krylov}" \
                 BENCH_OUTPUT="$output_root/krylov" BENCH_DRY_RUN="$dry_run" \
                 bash "$script_dir/krylov/run.sh" weak \
                 "$(plan_field krylov 2)" "$@"; then
@@ -80,7 +81,7 @@ for workload in "${workloads[@]}"; do
             fi
             ;;
         ordinarydiffeq)
-            if ! ODE_PROJECT="${ODE_PROJECT:-/opt/bench-envs/ode}" \
+            if ! ODE_PROJECT="${ODE_PROJECT:-$env_root/ordinarydiffeq}" \
                 ODE_OUTPUT="$output_root/ordinarydiffeq" ODE_DRY_RUN="$dry_run" \
                 bash "$script_dir/ordinarydiffeq/run_benchmark.sh" weak \
                 "$(plan_field ordinarydiffeq 2)" "$@"; then
@@ -88,7 +89,7 @@ for workload in "${workloads[@]}"; do
             fi
             ;;
         integrals_optimization)
-            if ! INTOPT_PROJECT="${INTOPT_PROJECT:-/opt/bench-envs/intopt}" \
+            if ! INTOPT_PROJECT="${INTOPT_PROJECT:-$env_root/integrals_optimization}" \
                 INTOPT_OUTPUT="$output_root/integrals_optimization" \
                 INTOPT_DRY_RUN="$dry_run" \
                 bash "$script_dir/integrals_optimization/run_benchmark.sh" weak \

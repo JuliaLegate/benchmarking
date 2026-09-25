@@ -27,14 +27,17 @@ of elements per GPU. The one-GPU baseline for each workload came from its
 common passing one-GPU sweep, and the launchers' one-GPU weak points were
 exercised on the single-H100 machine.
 
-Run CG and ODE on the eight-GPU H100 machine from this combined branch,
-after making their external Julia environments as described in the workload
-READMEs. The wrapper runs these two workloads by default. The plume remains
+Run CG and ODE on the eight-GPU H100 machine from benchmarking `main` after
+initializing environments with `./instantiate_projects.sh` (already done during
+the benchmark container build). The wrapper runs these two workloads by
+default. The plume remains
 available for a separate run by setting
 `COMPOSABILITY_WORKLOADS='integrals_optimization'`. The default environment
-paths are `/opt/bench-envs/krylov`, `/opt/bench-envs/ode`, and
-`/opt/bench-envs/intopt`; override them with `BENCH_PROJECT`, `ODE_PROJECT`,
-and `INTOPT_PROJECT` when necessary. The wrapper records the run sheet with
+paths are `environments/krylov`, `environments/ordinarydiffeq`, and
+`environments/integrals_optimization` in a standalone checkout, or
+`/opt/bench-envs` in the container. Set `COMPOSABILITY_ENV_ROOT` to choose a
+different environment root, or override individual paths with `BENCH_PROJECT`,
+`ODE_PROJECT`, and `INTOPT_PROJECT`. The wrapper records the run sheet with
 the output and invokes the selected launchers:
 
 ```sh

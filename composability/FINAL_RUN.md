@@ -1,17 +1,18 @@
 # Final H100 benchmark run
 
 Run CG and the heat equation on an otherwise idle eight-H100 (80 GB each)
-machine. Use Julia 1.13 and clean, pinned checkouts of this combined branch
+machine. Use Julia 1.13 and clean, pinned checkouts of benchmarking `main`
 and cuNumeric's `codex/ode-scalar-broadcast` branch. Keep the checkouts at
 `/opt/benchmarking-composability` and `/opt/cuNumeric.jl`, or set
 `CUNUMERIC_SOURCE` to the actual cuNumeric checkout. Record the chosen commit
 SHAs before running; every launcher also saves them with its results.
 
-Prepare `/opt/bench-envs/krylov` and `/opt/bench-envs/ode` from the workload
-READMEs. Prefer the `Project.toml`, `Manifest.toml`, and
-`LocalPreferences.toml` saved from the tested single-H100 machine, then run
-`Pkg.instantiate()` with Julia 1.13 on this machine. Verify that the
-preferences point to the installed cuNumeric/Legate libraries. Check
+The benchmark container initializes all three composability environments
+during its build through `instantiate_projects.sh`. On a bare host, run
+`COMPOSABILITY_ENV_ROOT=/opt/bench-envs ./instantiate_projects.sh` once from
+the benchmarking checkout. Preserve its `Manifest.toml` and
+`LocalPreferences.toml` files with the results, and verify that preferences
+point to the installed cuNumeric/Legate libraries. Check
 `nvidia-smi -L` shows eight H100s and that no other job is using them.
 Check host and container memory limits as well: the `G=8` dense CG matrix
 contains about 128 GiB of Float32 values and is first constructed on the
@@ -27,10 +28,9 @@ fresh output root for each final attempt.
 ```bash
 cd /opt/benchmarking-composability
 export CUNUMERIC_SOURCE=/opt/cuNumeric.jl
+export COMPOSABILITY_ENV_ROOT=/opt/bench-envs
 export BENCH_PROJECT=/opt/bench-envs/krylov
-export ODE_PROJECT=/opt/bench-envs/ode
-julia --project="$BENCH_PROJECT" -e 'using Pkg; Pkg.instantiate()'
-julia --project="$ODE_PROJECT" -e 'using Pkg; Pkg.instantiate()'
+export ODE_PROJECT=/opt/bench-envs/ordinarydiffeq
 run_id=$(date -u +%Y%m%dT%H%M%SZ)
 results=/opt/bench-results/final-$run_id
 mkdir -p "$results"

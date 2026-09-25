@@ -51,23 +51,24 @@ The stencil computes `du/dt = κ Δ_h u`; the explicit integrator evaluates
 this RHS at its stage states and advances it through 20 time steps by default.
 This benchmark does not exercise an implicit integrator or its linear solves.
 
-On a Linux GPU host with cuNumeric installed, use Julia 1.13 and create an
-environment outside the benchmarking repository:
+On a Linux GPU host with cuNumeric installed, use Julia 1.13 and initialize the
+benchmark environments from the repository root:
 
 ```sh
 export CUNUMERIC_SOURCE=/path/to/cuNumeric.jl
-julia --startup-file=no composability/ordinarydiffeq/setup.jl "$HOME/ode-smoke-env"
-export ODE_PROJECT="$HOME/ode-smoke-env"
+./instantiate_projects.sh
 ```
 
-The setup develops the specified cuNumeric checkout and its CNPreferences
-package. Keep the resulting `Manifest.toml` with any results.
+The ODE launcher defaults to `environments/ordinarydiffeq`; set
+`COMPOSABILITY_ENV_ROOT` before initialization to place the environment
+elsewhere. The setup develops the specified cuNumeric checkout and its
+CNPreferences package. Keep the resulting `Manifest.toml` with any results.
 Apply machine-specific cuNumeric `LocalPreferences.toml` settings to the new
 environment if needed. Start with the default cuBLAS workspace on H100:
 
 ```sh
 unset CUBLAS_WORKSPACE_CONFIG
-julia --startup-file=no --project="$ODE_PROJECT" composability/ordinarydiffeq/heat.jl
+julia --startup-file=no --project="${ODE_PROJECT:-${COMPOSABILITY_ENV_ROOT:-environments}/ordinarydiffeq}" composability/ordinarydiffeq/heat.jl
 ```
 
 For the single-GPU comparison, pass grid dimensions (each problem has `N × N`

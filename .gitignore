@@ -1,5 +1,8 @@
 *Manifest.toml
 *LocalPreferences.toml
+/environments/krylov/
+/environments/ordinarydiffeq/
+/environments/integrals_optimization/
 __pycache__/
 *.pyc
 *.log*
