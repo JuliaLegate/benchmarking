@@ -98,6 +98,9 @@ BASE_N=16384 # replace with the selected common passing single-GPU N
 ODE_OUTPUT=/opt/bench-results/ode-weak bash composability/ordinarydiffeq/run_benchmark.sh weak "$BASE_N" 1 2 4 8
 ```
 
+For the one-H100 run, the selected dimensions at 1, 2, 4, and 8 GPUs are
+`N=16384, 23170, 32768, 46341`. The weak run includes Dagger and cuNumeric.
+
 On the one-GPU H100, set `ODE_DRY_RUN=1` to write `planned-cases.csv` for all
 GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records sampled
 GPU memory as a diagnostic; the reading includes Legate's reserved pool.
