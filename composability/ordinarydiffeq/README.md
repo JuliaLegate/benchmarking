@@ -20,17 +20,21 @@ error, raw samples, and relative error. [`run_benchmark.sh`](run_benchmark.sh) r
 backend and size in a fresh Julia process, saves logs and CSV results, and
 uses [`plot_results.jl`](plot_results.jl) to make a PNG comparison plot.
 
-Status: the `heat.jl` N=128 cuNumeric example completed on one H100 with
-Julia 1.13 and returned an `NDArray{Float32,2}`. The N=128 cuNumeric benchmark
-completed with `ODE_SAMPLES=1` and relative error `4.50e-7`; the N=128 CuArray
-benchmark also completed. Larger comparisons remain unrun; no speedup is
-claimed from these smoke tests.
+The `heat.jl` N=128 cuNumeric example completed on one H100 with Julia 1.13
+and returned an `NDArray{Float32,2}`. The separate five-sample H100 sweep at
+20 fixed steps passed CUDA.jl, Dagger, and cuNumeric through `N=4096`.
 
 The [SciML solver documentation](https://docs.sciml.ai/OrdinaryDiffEq/stable/explicit/LowStorageRK/)
 describes this as a fixed-step, fourth-order low-storage method. We set
 `williamson_condition=false` because its fused RHS optimization only supports
-ordinary `Array` storage. cuNumeric's existing sliced-broadcast tests exercise
-the stencil operations used here.
+ordinary `Array` storage.
+
+The common heat RHS materializes its five shifted interior slices, performs
+the five-point stencil as array broadcasts, then copies the interior result
+into the derivative array. Broadcasting directly over views of a `DArray`
+fell back to scalar `getindex` and timed out at `N=128`; materialized slices
+use Dagger's distributed array operations. The Dagger benchmark disables
+scalar indexing so this fallback fails visibly if it returns.
 The problem uses `FullSpecialize` so SciML accepts both the initial NDArray
 and solver work arrays when their storage-parent types differ. This fixed-step
 example disables SciML's per-step instability scan, which scalar-iterates

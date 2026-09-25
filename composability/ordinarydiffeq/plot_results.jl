@@ -35,6 +35,7 @@ figure = plot(;
           (experiment == "weak" ? ", N(1)=$(first(rows).base_n)" : ""),
     xscale=:log2, yscale=:log10, xticks=(xs, string.(xs)),
     legend=:topleft, linewidth=2, markersize=5, size=(900, 550),
+    left_margin=18Plots.mm, bottom_margin=8Plots.mm,
 )
 for backend in ("CuArray", "Dagger", "cuNumeric")
     subset = sort!(filter(row -> row.backend == backend, rows);
