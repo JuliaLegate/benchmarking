@@ -34,7 +34,7 @@ If cuNumeric uses local backend-library preferences, copy its
 Set one or more explicit matrix dimensions for the single-GPU comparison:
 
 ```sh
-BENCH_ELTYPE=Float32 BENCH_OUTPUT=results/krylov-single-f32 bash composability/krylov/run.sh single 8192 16384 32768
+BENCH_ELTYPE=Float32 BENCH_OUTPUT=results/krylov-single-f32 bash composability/krylov/run.sh single 1024 2048 4096 8192 16384 32768 65536
 ```
 
 For weak scaling, set the **one-GPU** dimension followed by GPU counts. The
@@ -52,6 +52,10 @@ The selected H100 weak-scaling dimensions are `N=65536, 92682, 131072,
 185364` at 1, 2, 4, and 8 GPUs, respectively. CUDA is included only in the
 one-GPU size sweep; the weak run has Dagger, cuNumeric stock, and cuNumeric
 local cases at every count.
+
+The seven listed one-GPU dimensions all passed the residual and GPU-storage
+checks on the single H100. The `N=1024`, `2048`, and `4096` measurements fill
+in the low end while retaining `N=65536` as the maximum and weak baseline.
 
 On a one-GPU machine, use `BENCH_DRY_RUN=1` with the weak command to write
 `planned-cases.csv` for all four GPU counts without launching them. Run the
