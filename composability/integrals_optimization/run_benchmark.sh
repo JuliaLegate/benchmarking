@@ -25,12 +25,29 @@ done
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 julia_bin=${JULIA:-julia}
+visible_pool=${CUDA_VISIBLE_DEVICES-}
+gpu_mask_for_count() {
+    local count=$1 i mask
+    local -a devices=()
+    if [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
+        [[ -n $visible_pool ]] || { echo "CUDA_VISIBLE_DEVICES is empty" >&2; return 2; }
+        IFS=, read -r -a devices <<< "$visible_pool"
+        (( ${#devices[@]} >= count )) || {
+            echo "CUDA_VISIBLE_DEVICES has fewer than $count devices" >&2
+            return 2
+        }
+    else
+        for ((i=0; i<count; i++)); do devices+=("$i"); done
+    fi
+    printf -v mask '%s,' "${devices[@]:0:count}"
+    printf '%s\n' "${mask%,}"
+}
 output=${INTOPT_OUTPUT:-"$script_dir/results-$experiment-$(date +%Y%m%d-%H%M%S)-$$"}
 mkdir -p "$output"
 csv="$output/results.csv"
 echo 'experiment,base_n,backend,eltype,gpus,N,bands,order,maxiters,objective_evals,mean_ms,stderr_ms,median_ms,min_ms,max_ms,initial_loss,final_loss,parameter_error,samples_ms' > "$csv"
 echo 'backend,gpus,N,peak_gpu_memory_mib' > "$output/memory.csv"
-echo 'backend,gpus,N,legate_config' > "$output/planned-cases.csv"
+echo 'backend,gpus,N,legate_config,cuda_visible_devices' > "$output/planned-cases.csv"
 export INTOPT_SAMPLES=${INTOPT_SAMPLES:-5}
 export LEGATE_AUTO_CONFIG=1
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
@@ -74,8 +91,9 @@ for value in "$@"; do
     fi
     export INTOPT_GPUS=$gpus
     export LEGATE_CONFIG="--gpus $gpus --cpus ${INTOPT_CPUS:-4}"
+    gpu_mask=$(gpu_mask_for_count "$gpus")
     for backend in "${backends[@]}"; do
-        printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$LEGATE_CONFIG" >> "$output/planned-cases.csv"
+        printf '%s,%s,%s,%s,"%s"\n' "$backend" "$gpus" "$n" "$LEGATE_CONFIG" "$gpu_mask" >> "$output/planned-cases.csv"
         if [[ ${INTOPT_DRY_RUN:-0} == 1 ]]; then
             echo "Planned $backend G=$gpus N=$n"
             continue
@@ -86,7 +104,7 @@ for value in "$@"; do
         nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
         monitor_pid=$!
         result_line=""
-        if timeout --signal=TERM --kill-after=30s "${INTOPT_TIMEOUT:-15m}" \
+        if CUDA_VISIBLE_DEVICES="$gpu_mask" timeout --signal=TERM --kill-after=30s "${INTOPT_TIMEOUT:-15m}" \
             "$julia_bin" --startup-file=no --project="$INTOPT_PROJECT" \
             "$script_dir/benchmark.jl" "$backend" "$n" > "$log" 2>&1; then
             line=$(grep '^RESULT,' "$log" | tail -n 1 || true)

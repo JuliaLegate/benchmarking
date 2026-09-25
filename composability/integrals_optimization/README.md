@@ -78,6 +78,10 @@ INTOPT_OUTPUT=/opt/bench-results/intopt-weak bash composability/integrals_optimi
 On the one-GPU H100, set `INTOPT_DRY_RUN=1` to write `planned-cases.csv` for
 all GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records
 sampled GPU memory as a diagnostic; the reading includes Legate's reserved pool.
+On an eight-GPU host, each Julia case sees exactly its requested GPU count:
+devices `0` through `G-1` by default, or the first `G` entries of an existing
+`CUDA_VISIBLE_DEVICES` list. The selected mask is recorded in
+`planned-cases.csv`.
 
 `INTOPT_ELTYPE=Float32`, `INTOPT_BANDS=4`, `INTOPT_ORDER=12`,
 `INTOPT_ITERS=80`, `INTOPT_SAMPLES=5`, and `INTOPT_NOISE=0.001` are the defaults.
