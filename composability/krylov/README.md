@@ -44,9 +44,14 @@ single-GPU variants as `N(1)`; the single-GPU sweep writes it to `base_n.txt`
 and stops after the first failed size. Every backend gets the same `N(G)` at each count:
 
 ```sh
-BASE_N=32768 # replace with the largest common passing single-GPU N
+BASE_N=65536 # largest common passing N on the one-H100 sweep
 BENCH_ELTYPE=Float32 BENCH_OUTPUT=results/krylov-weak-f32 bash composability/krylov/run.sh weak "$BASE_N" 1 2 4 8
 ```
+
+The selected H100 weak-scaling dimensions are `N=65536, 92682, 131072,
+185364` at 1, 2, 4, and 8 GPUs, respectively. CUDA is included only in the
+one-GPU size sweep; the weak run has Dagger, cuNumeric stock, and cuNumeric
+local cases at every count.
 
 On a one-GPU machine, use `BENCH_DRY_RUN=1` with the weak command to write
 `planned-cases.csv` for all four GPU counts without launching them. Run the
