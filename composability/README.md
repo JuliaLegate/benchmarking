@@ -24,12 +24,15 @@ of elements per GPU. The one-GPU baseline for each workload came from its
 common passing one-GPU sweep, and the launchers' one-GPU weak points were
 exercised on the single-H100 machine.
 
-Run all three workloads on the eight-GPU H100 machine from this combined
-branch, after making the three external Julia environments as described in
-the workload READMEs. The wrapper uses `/opt/bench-envs/krylov`,
-`/opt/bench-envs/ode`, and `/opt/bench-envs/intopt` by default; override them
-with `BENCH_PROJECT`, `ODE_PROJECT`, and `INTOPT_PROJECT` when necessary.
-It records the run sheet with the output and invokes the individual launchers:
+Run CG and ODE on the eight-GPU H100 machine from this combined branch,
+after making their external Julia environments as described in the workload
+READMEs. The wrapper runs these two workloads by default. The plume remains
+available for a separate run by setting
+`COMPOSABILITY_WORKLOADS='integrals_optimization'`. The default environment
+paths are `/opt/bench-envs/krylov`, `/opt/bench-envs/ode`, and
+`/opt/bench-envs/intopt`; override them with `BENCH_PROJECT`, `ODE_PROJECT`,
+and `INTOPT_PROJECT` when necessary. The wrapper records the run sheet with
+the output and invokes the selected launchers:
 
 ```sh
 COMPOSABILITY_OUTPUT_ROOT=/opt/bench-results/composability-weak \
