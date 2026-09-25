@@ -17,6 +17,9 @@ composability_env_root="$(cd -- "$composability_env_root" && pwd)"
 
 cd "$benchmark_dir"
 
+echo "Checking Julia package registry"
+"$julia_bin" --startup-file=no -e 'using Pkg; isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General")'
+
 echo "Instantiating the benchmark orchestrator"
 "$julia_bin" --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
 
