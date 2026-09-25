@@ -84,6 +84,8 @@ jobs:
           build-args: |
             BASE_IMAGE=${{ steps.images.outputs.base }}
             DEPENDENCY_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
+            BENCHMARK_REF=${{ github.ref_name }}
+            BENCHMARK_COMMIT=${{ github.sha }}
 
       - name: Test benchmark harness
         run: |

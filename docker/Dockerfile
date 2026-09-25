@@ -62,8 +62,26 @@ FROM benchmark-deps AS benchmark
 
 COPY . /opt/cuNumeric.jl/benchmark/
 
+# Add clean public Git metadata for the exact source copied above. Never copy
+# the build-context .git directory: CI checkouts may contain an auth header.
+ARG BENCHMARK_REF=main
+ARG BENCHMARK_COMMIT
+RUN test -n "$BENCHMARK_COMMIT" \
+    && test ! -e .git \
+    && git clone --quiet --no-checkout --depth 1 --branch "$BENCHMARK_REF" \
+        https://github.com/JuliaLegate/benchmarking.git /tmp/benchmark-git \
+    && git -C /tmp/benchmark-git fetch --quiet --depth 1 origin "$BENCHMARK_COMMIT" \
+    && mv /tmp/benchmark-git/.git .git \
+    && git config core.autocrlf input \
+    && git reset --mixed --quiet "$BENCHMARK_COMMIT" \
+    && git branch --set-upstream-to="origin/$BENCHMARK_REF" \
+    && git diff --quiet \
+    && git diff --cached --quiet \
+    && rm -rf /tmp/benchmark-git
+
 LABEL org.opencontainers.image.title="cuNumeric.jl benchmark suite" \
     org.opencontainers.image.source="https://github.com/JuliaLegate/benchmarking" \
+    org.opencontainers.image.revision="$BENCHMARK_COMMIT" \
     org.opencontainers.image.description="Benchmark-ready cuNumeric.jl image with CUDA.jl, JACC.jl, Dagger.jl, and cuPyNumeric"
 
 ENTRYPOINT ["/usr/local/bin/cunumeric-entrypoint"]
