@@ -1,5 +1,8 @@
 # Composability benchmarks
 
+For the eight-H100 smoke checks, final seven-point one-GPU sweeps, and full
+weak-scaling run, follow the [final runbook](FINAL_RUN.md).
+
 The three workloads are [Krylov CG](krylov/README.md),
 [OrdinaryDiffEq heat](ordinarydiffeq/README.md), and
 [Integrals.jl + Optimization.jl plume calibration](integrals_optimization/README.md).
