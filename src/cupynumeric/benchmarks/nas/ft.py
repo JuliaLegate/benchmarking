@@ -3,8 +3,8 @@
 LIMITATION: cuPyNumeric has no NPB 46-bit RNG primitive, so the exact initial
 field is generated with compiled NumPy operations and copied to Legate.
 Host generation and transfer are timed, unlike CUDA/JACC's device RNG.
-The FFT auto task broadcasts transformed axes: a full 3-D FFT cannot partition
-across GPUs, though other array operations may distribute. Native take gathers
+The FFT auto task broadcasts transformed axes, so the 3-D FFT runs as two slab
+passes (axes 1-2, then 0) that each partition along the untransformed axes. Native take gathers
 the prescribed 1024 checksum samples. ifftn normalizes the full array; FFT and
 evolution temporaries are allocated inside timing. Official verification is kept.
 """
@@ -151,11 +151,12 @@ class NASFourierTransform:
         u0 = np.asarray(state["host_initial"])
         twiddle = np.exp((-4.0*ALPHA*math.pi**2) *
             (state["ix2"]+state["iy2"]+state["iz2"]))
-        u0, checksums = np.fft.fftn(u0), []
+        u0, checksums = np.fft.fft(np.fft.fftn(u0, axes=(1, 2)), axis=0), []
         for _ in range(niter):
             u0 *= twiddle
+            u1 = np.fft.ifft(np.fft.ifftn(u0, axes=(1, 2)), axis=0)
             # All indices are valid; clip avoids a host-side bounds check.
-            samples = np.take(np.fft.ifftn(u0), state["indices"], mode="clip")
+            samples = np.take(u1, state["indices"], mode="clip")
             checksums.append(np.sum(samples))
         return checksums
     def correctness_dims(self):

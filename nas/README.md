@@ -1,194 +1,103 @@
 # NAS benchmarks
 
-This directory documents the benchmark-independent NAS contract.
-Backend implementations live under `src/<model>/benchmarks/nas/`.
+EP, FT, and MG from GMAP/NPB-GPU at commit
+`3f12d84920ee315ab00ef283717c1e74b68f4d00` (license:
+[`THIRD_PARTY_LICENSE.md`](THIRD_PARTY_LICENSE.md)). Don't change the commit
+without re-validating the official verification values. Backends live in
+`src/<model>/benchmarks/nas/`.
 
-The executable specification is GMAP/NPB-GPU at commit
-`3f12d84920ee315ab00ef283717c1e74b68f4d00`. Do not update the commit without
-updating reference metadata and validating the official verification values.
-Its license is preserved in [`THIRD_PARTY_LICENSE.md`](THIRD_PARTY_LICENSE.md).
+## Running
 
-## Comparing models fairly
+The class sets the problem size; N and M are derived from it.
 
-These compare implementations of the same mathematical problems, not identical
-kernels or certified NPB scores. Use the same class, Float64, iteration count,
-visible GPUs, and warmup policy, and require official verification to pass.
-Do not interpret throughput differences as runtime overhead alone.
-
-| Benchmark | Shared work | Material differences still included in results |
-| --- | --- | --- |
-| EP | Exact RNG sequence, MK=8, Gaussian transform, histogram/sum partials | cuNumeric and Dagger use struct-valued broadcast; CUDA/JACC offer broadcast and explicit kernel variants. cuPyNumeric uses array skip-ahead powers and materializes pair intermediates; its optional recurrence path traverses arrays at every pair step. Global aggregation is untimed for all. |
-| FT | Exact initial field, forward FFT, fixed evolve/inverse/checksum iterations | Host RNG in cuNumeric/cuPyNumeric/Dagger versus device RNG in CUDA/JACC; native FFT implementations and checksum strategies differ. Dagger leaves global checksum aggregation untimed. |
-| MG | Exact RHS, hierarchy, operators, fixed V-cycles and L2 verification | Direct kernels versus separable transfers/temporaries; Dagger restriction computes extra fine-grid stencil outputs and leaves global norm aggregation untimed. |
-
-For multi-GPU runs, distinguish **can execute with multiple GPUs visible** from
-**the dominant operation is distributed**. EP partitions independent streams;
-MG's array adapters can partition levels (coarse levels expose less parallelism).
-Dagger FT uses a distributed FFT, but the current cuNumeric/cuPyNumeric full 3-D
-FFT is unpartitioned. CUDA is the single-GPU baseline; JACC FT and MG are
-single-GPU adapters. No multi-GPU scaling claim follows from correctness alone.
-
-Each adapter's header records its limitations. These include choices in the
-current adapter, not only fundamental restrictions of the programming model.
-
-## EP execution contract
-
-One timed sample generates the class's exact `2^(M+1)` random numbers with the
-NPB 46-bit linear-congruential generator, applies the Gaussian
-acceptance-rejection transform, and produces the ten-bin histogram plus `sx`
-and `sy` partial sums. Correctness aggregation happens after timing and checks
-the official sums with relative tolerance `1.0e-8`.
-
-NPB explicitly permits changing `MK`, the batch-size exponent, without changing
-the result. The pinned CUDA source uses `MK=16`; all harness models use `MK=8`.
-That common setting preserves the exact global RNG sequence while limiting each
-independent stream to 256 Gaussian pairs, allowing array programming models to
-express the serial recurrence without host-generating the benchmark workload.
-Skip-ahead masks/constants and output reset are setup; random samples and
-Gaussian transforms remain timed. The reference also aggregates partials after
-its kernel timer, but uses a different partial/block layout.
-
-cuNumeric broadcasts the scalar stream function into one `NDArray{NASEPPartial}`
-backed by a Legate struct store. Its GPU broadcast computes each stream once
-and writes the complete partial. Array allocation is setup; broadcast and task
-completion are timed.
-cuPyNumeric uses its standard array API to compute exact pair seeds from timed
-skip-ahead powers, process up to `2^24` pair values in each slab, and reduce per-stream
-histogram and sum partials. Power generation, transfer, all array operations,
-and slab synchronization are timed. Set `CUPYNUMERIC_NAS_EP_IMPL=recurrence`
-for its original stepwise array implementation. CUDA.jl and JACC evaluate the
-scalar stream function directly. Dagger broadcasts the same function over its
-GPU-resident `DArray` without a hand-written CUDA kernel.
-JACC and Dagger partition streams across the requested GPUs; CUDA.jl remains
-the single-GPU baseline.
-
-Use `n_iter = 1`; use `n_trial` for independent complete runs. The common
-throughput value follows NAS EP and counts random numbers generated rather than
-floating-point instructions.
-
-Run class B across all models with:
+| Config | What it runs |
+| --- | --- |
+| `configs/single_gpu/nas_{ep,ft,mg}.toml` | Class B, one GPU, all models |
+| `configs/single_gpu/nas_{ep,mg}_compare.toml` | Adds CUDA.jl/JACC variants (below) |
+| `configs/multi_gpu/nas_*_strong.toml` | Class B on 1, 2, 4, 8 GPUs |
+| `configs/multi_gpu/nas_*_weak.toml` | `class = [...]` zipped with `gpus` (A–D for FT, B–E otherwise) |
 
 ```sh
 julia --project=. run.jl --config=configs/single_gpu/nas_ep.toml
 ```
 
-EP plots use two comparison groups. `nas_ep_high_level_weak_scaling.png`
-contains cuNumeric struct broadcast, Dagger `DArray` broadcast, cuPyNumeric array
-algebra, the CUDA.jl and JACC array broadcast paths, and cuPyNumeric's optional
-recurrence path when measured. The JACC array broadcast path currently supports one GPU.
-On the CUDA backend it uses JACC arrays and Julia broadcasting, which dispatches
-to CUDA.jl's array implementation; JACC.Multi has no map or broadcast API.
-`nas_ep_explicit_kernels_weak_scaling.png` contains the CUDA.jl and JACC
-per-stream kernels. This groups implementations by the API used to express EP,
-not by speed or a claim of optimality. Both plots use the same EP class and
-timing contract; each vertical axis scales to its group.
-The cuNumeric struct broadcast path saves to `nas_ep_cunumeric_struct.csv` so
-earlier `mapreduce` results cannot be mistaken for this implementation. The
-optional cuPyNumeric recurrence saves to `nas_ep_cupynumeric_recurrence.csv`
-so it remains separate from its default path. Only measured implementations
-appear in each plot.
-Run `julia --project=. run.jl --config=configs/single_gpu/nas_ep_compare.toml` to
-measure both kernel and high level variants of CUDA.jl and JACC in one sweep.
-Each high level variant broadcasts over independent stream indices and saves
-to a separate CSV from its explicit kernel path. The same variants can also be
-selected individually with `CUDA_NAS_EP_IMPL=broadcast` or
-`JACC_NAS_EP_IMPL=broadcast`.
+Every config uses Float64 and `n_iter = 1`; use `n_trial` for repeats. Each
+run is verified against the official NPB values after timing.
 
-## FT execution contract
+NPB classes don't grow in step with GPU count, so per-GPU work varies along a
+weak-scaling ladder. The efficiency plot uses throughput, h(P) / (P · h(1)).
 
-FT needs no cached input artifact: its 46-bit RNG and spectral index map are
-part of the benchmark. One timed sample follows the pinned `CUDA/FT/ft.cu`:
+## Multi-GPU support
 
-1. Generate the class's exact complex initial field and exponential index map.
-2. Perform one forward 3-D FFT.
-3. For each official `NITER`, evolve the spectrum cumulatively, perform an
-   inverse 3-D FFT, and compute the prescribed 1024-point checksum.
-4. Fetch checksums only after the run and compare every iteration with the
-   official values at relative tolerance `1.0e-12`.
+| | EP | FT | MG |
+| --- | --- | --- | --- |
+| cuNumeric, cuPyNumeric | partitioned | slab-partitioned FFT | partitioned |
+| Dagger | partitioned | distributed FFT | partitioned |
+| JACC | partitioned | 1 GPU | 1 GPU |
+| CUDA.jl | 1 GPU | 1 GPU | 1 GPU |
 
-Use `n_iter = 1`; use `n_trial` for independent complete runs. CUDA.jl uses
-device kernels plus cuFFT. JACC uses JACC kernels but must call cuFFT because it
-has no FFT API. Dagger uses its distributed 3-D FFT. cuNumeric and cuPyNumeric
-use native Legate FFT auto tasks, whose constraints broadcast all transformed
-axes. Their full 3-D transform therefore has no partitionable batch axis and
-is not a distributed FFT. See `src/ndarray/detail/fft.jl` in the parent package
-and cuPyNumeric's `DeferredArray.fft`.
+cuNumeric and cuPyNumeric's FFT task broadcasts every transformed axis
+(`src/ndarray/detail/fft.jl` in cuNumeric.jl), so a single 3-D FFT call runs
+as one task. FT therefore does two slab passes, a 2-D FFT over the last two
+axes and then a 1-D FFT over the first; each pass splits across GPUs along the
+axes it does not transform, and Legate moves data between them.
 
-All five workers use a monotonic host clock around one completed `run` for each
-timed sample. They allocate reusable buffers and perform warmup outside the
-clock, then synchronize before starting it and after the final run. Initial
-field generation, transfer, index-map computation, FFTs, evolution, and
-checksums are inside the clock. Result destruction and official verification
-are outside it. The workers synchronize after each FT run, including warmups.
+## Fairness
 
-CUDA/JACC gather 1024 samples (JACC reduces real/imaginary parts separately);
-cuPyNumeric uses native `take`. cuNumeric and Dagger currently scan a full-volume
-mask, a significant extra cost. Dagger only reduces within each slab during
-timing, so it also omits the cross-GPU aggregation paid by other adapters.
-cuNumeric uses NPB's unnormalized inverse with a pre-scaled checksum mask. The
-other adapters use normalized inverse FFTs. Host RNG, transfers, FFT scratch,
-temporary allocation, and planning inside `run` remain charged to that model.
-cuPyNumeric's compiled NumPy host RNG and transfer are included in its runtime.
-cuNumeric uses a chunked UInt64 host RNG and attaches the initial field in
-reversed axis order, avoiding a full-volume host transpose during upload. Its
-checksum still scans the full volume rather than gathering 1024 samples.
-Dagger uses the same exact chunked host RNG and computes the index map across
-CPU threads. On one GPU it creates each DArray input tile directly on the GPU,
-avoiding the full host tile copy in `DArray(host, ...)`; its multi-GPU path
-still uses Dagger's distributed constructor.
+These are the same problems, not identical kernels or certified NPB scores.
+Throughput differences include algorithm choices, not only runtime overhead.
+Each adapter's header lists its limitations.
 
-Run class B across all models with:
+## EP
 
-```sh
-julia --project=. run.jl --config=configs/single_gpu/nas_ft.toml
-```
+One sample generates the class's `2^(m+1)` random numbers with NPB's 46-bit
+LCG, applies the Gaussian transform, and produces the 10-bin histogram and
+`sx`/`sy` sums. All models use `MK = 8` (NPB allows changing it; results are
+identical), giving 256 pairs per independent stream. Final aggregation is
+untimed.
 
-The cuNumeric FT GPU regression covers repeated S/W/B runs with a 12 GiB
-framebuffer cap (class B previously exhausted even a 24 GiB GPU):
+- **cuNumeric**: broadcasts the stream function into one `NDArray{NASEPPartial}`.
+- **cuPyNumeric**: array skip-ahead in slabs of up to `2^24` pairs.
+  `CUPYNUMERIC_NAS_EP_IMPL=recurrence` selects the older stepwise version.
+- **CUDA.jl, JACC**: per-stream kernels by default; `*_NAS_EP_IMPL=broadcast`
+  (or `nas_ep_compare.toml`) runs the array-broadcast variant.
+- **Dagger**: broadcasts the stream function over a GPU `DArray`.
+
+EP produces two plots: `nas_ep_high_level_*_scaling.png` (array/broadcast
+APIs) and `nas_ep_explicit_kernels_*_scaling.png` (CUDA.jl and JACC kernels).
+cuNumeric saves to `nas_ep_cunumeric_struct.csv`.
+
+## FT
+
+One sample generates the initial field, runs one forward 3-D FFT, then for each
+of the class's `NITER` iterations evolves the spectrum, runs an inverse FFT,
+and takes the 1024-point checksum. All of this is timed; verification (relative
+tolerance `1e-12`) is not.
+
+- **CUDA.jl, JACC**: device RNG and cuFFT (JACC has no FFT API).
+- **cuNumeric**: host RNG, attached upload, unnormalized inverse with a
+  pre-scaled full-volume checksum mask.
+- **cuPyNumeric**: host RNG, `fftn`/`ifftn`, checksum via `take`.
+- **Dagger**: host RNG, distributed FFT, full-volume mask; cross-GPU checksum
+  aggregation is untimed.
+
+cuNumeric GPU regression (S/W/B under a 12 GiB framebuffer cap):
 
 ```sh
 LEGATE_AUTO_CONFIG=0 LEGATE_CONFIG="--gpus=1 --cpus=1 --fbmem=12288" \
   julia --project=environments/cunumeric test/nas_ft_gpu.jl
 ```
 
-## MG execution contract
+## MG
 
-One timed MG sample implements the V-cycle from pinned `CUDA/MG/mg.cu`: starting from the
-official sparse right-hand side, it computes the initial residual, executes
-the class's fixed number of complete multigrid V-cycles, recomputes the finest
-residual after every cycle, and performs the reference's initial and final L2
-norm reductions. Reduction results remain device-side until correctness
-verification. The 46-bit RNG search for the ten positive and ten negative
-impulses is setup work outside NPB-GPU's timer and is likewise performed before
-harness timing.
+One sample clears the hierarchy, computes the initial residual, runs the class's
+fixed number of V-cycles (periodic exchange, 27-point residual, restriction,
+interpolation, smoother), and computes initial and final L2 sums of squares.
+The impulse search is setup; the square root and verification (relative
+tolerance `1e-8`) are untimed. NPB's Linf norm is omitted.
 
-Timing is not identical to standalone NPB: every adapter clears the solution
-hierarchy inside each sample, computes initial/final L2 sum-of-squares, and
-defers square root/normalization and verification to the untimed check. NPB's
-additional Linf reduction is omitted by all adapters. Dagger computes only
-per-slab sum-of-squares during timing and combines these after timing; this
-remaining asymmetry matters particularly for small grids and multi-GPU results.
-
-The V-cycle includes periodic boundary exchange, the 27-point residual,
-full-weight restriction, trilinear interpolation, and the NPB smoother at
-every prescribed level. Correctness compares the final L2 norm with the
-official value at relative tolerance `1.0e-8`.
-
-JACC is single-GPU because it has no distributed 3-D halo API. CUDA.jl is the
-single-GPU baseline. The optional CUDA.jl `separable` variant uses the same
-three-axis restriction and interpolation decomposition as cuNumeric. Its
-separate result shows the cost of that array algorithm on CUDA.jl; the runtimes
-still differ in scheduling, views, and data movement. Dagger now computes all
-eight interpolation components in one tuple-valued stencil, but its restriction
-still evaluates the full fine grid. cuNumeric, cuPyNumeric, and Dagger express
-the hierarchy through their distributed array APIs; implementation headers
-document their communication limitations.
-
-Run class B across all models with:
-
-```sh
-julia --project=. run.jl --config=configs/single_gpu/nas_mg.toml
-```
-
-To include the CUDA.jl separable variant as an additional point, run
-`julia --project=. run.jl --config=configs/single_gpu/nas_mg_compare.toml`.
+- **CUDA.jl**: direct kernels; the `separable` variant (`nas_mg_compare.toml`)
+  uses cuNumeric's three-axis restriction/interpolation decomposition.
+- **JACC**: single GPU (no distributed 3-D halo API).
+- **cuNumeric, cuPyNumeric, Dagger**: distributed arrays. Dagger's restriction
+  evaluates the full fine grid, and it combines per-slab norms after timing.

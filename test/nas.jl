@@ -171,3 +171,33 @@ end
         end
     end
 end
+
+@testset "NAS class sweeps" begin
+    mktempdir() do dir
+        path = joinpath(dir, "weak.toml")
+        write(path, """
+        [Global]
+        n_warmup = 1
+        n_iter = 1
+        models = ["cunumeric"]
+
+        [[nas_mg]]
+        T = "Float64"
+        gpus = [1, 2, 4]
+        cpus = 1
+        kwargs = { class = ["S", "W", "A"] }
+        """)
+        specs = last(parse_config(path))
+        @test [s.gpus for s in specs] == [1, 2, 4]
+        @test [s.kwargs[:class] for s in specs] == ["S", "W", "A"]
+        @test [s.args for s in specs] == [[32, 32], [128, 128], [256, 256]]
+        # One sweep writes one results directory and therefore one figure.
+        @test length(unique(results_subdir(s) for s in specs)) == 1
+
+        write(path, replace(read(path, String), "[1, 2, 4]" => "[1, 2]"))
+        @test_throws ErrorException parse_config(path)
+        write(path, replace(read(path, String),
+            "class = [\"S\", \"W\", \"A\"]" => "class = \"S\", implementation = [\"a\"]"))
+        @test_throws ErrorException parse_config(path)
+    end
+end

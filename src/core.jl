@@ -117,8 +117,7 @@ function build_benchmark(::Type{B}, ::Type{T}, N, M; kwargs...) where {B<:Abstra
     return B{T}(; kwargs..., N=N, M=M)
 end
 
-# Benchmarks whose size is fixed by a kwarg (e.g. a NAS class) return (N, M) so
-# configs may omit N and M. `kwargs` is the raw TOML table.
+# (N, M) implied by kwargs (e.g. a NAS class), or nothing.
 class_dims(::Type{<:AbstractBenchmark}, kwargs) = nothing
 
 # Optional hooks for the generic correctness check (initialize + run!).

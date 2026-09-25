@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-# Generate weak-scaling plots from benchmark CSVs.
+# Generate weak- or strong-scaling plots from benchmark CSVs.
 # Each figure is one `[plot.groups]` entry (or a singleton [[benchmark]]).
 
 using Plots
@@ -93,6 +93,9 @@ const GROUP_TITLES = Dict(
     "montecarlo" => "Monte Carlo",
     "tensor_projection3" => "Tensor projection (3-mode)",
     "tensor_contract4" => "Tensor contraction (rank-4)",
+    "nas_ep" => "NAS EP",
+    "nas_ft" => "NAS FT",
+    "nas_mg" => "NAS MG",
 )
 
 include(joinpath(@__DIR__, "src", "result_rows.jl"))
@@ -248,7 +251,15 @@ function positive_ylim(hi; pad=0.18)
     return (0, hi * (1 + pad))
 end
 
+# Strong = one size at every GPU count. Efficiency is throughput-based either way.
+function scaling_kind(series)
+    sweep = any(length(s.agg) > 1 for s in series)
+    fixed = all(length(unique((x.N, x.M) for x in s.agg)) == 1 for s in series)
+    return sweep && fixed ? "strong" : "weak"
+end
+
 function weak_scaling_figure(series; plot_title, log_values=false)
+    kind = scaling_kind(series)
     common = (
         xscale=:log2, xticks=([1, 2, 4, 8], ["1", "2", "4", "8"]), xlabel="GPUs",
         framestyle=:box, grid=false, gridalpha=0, gridlinewidth=0, minorgrid=false,
@@ -294,7 +305,7 @@ function weak_scaling_figure(series; plot_title, log_values=false)
         base = s.agg[i1].h
         append!(efficiencies, [x.h / (x.gpus * base) for x in s.agg])
     end
-    p3 = plot(; ylabel="Parallel efficiency", title="Weak-scaling efficiency",
+    p3 = plot(; ylabel="Parallel efficiency", title="$(titlecase(kind))-scaling efficiency",
         ylims=positive_ylim(
             max(1.0, isempty(efficiencies) ? 0.0 : maximum(efficiencies)); pad=0.12
         ),
@@ -338,12 +349,13 @@ function main(args=ARGS)
                 series = ep_series(cfg.results_dir, category)
                 isempty(series) && continue
                 validate_series_sizes(series)
+                kind = scaling_kind(series)
                 fig = weak_scaling_figure(
-                    series; plot_title="NAS EP — $title — weak scaling",
+                    series; plot_title="NAS EP — $title — $kind scaling",
                     log_values=category == :high_level
                 )
                 out = joinpath(cfg.out_dir,
-                    "nas_ep_$(category)_weak_scaling$(cfg.output_suffix).png")
+                    "nas_ep_$(category)_$(kind)_scaling$(cfg.output_suffix).png")
                 savefig(fig, out)
                 println("wrote $out")
             end
@@ -352,10 +364,11 @@ function main(args=ARGS)
         series = group_series(cfg.results_dir, group, members)
         isempty(series) && continue
         validate_series_sizes(series)
+        kind = scaling_kind(series)
         fig = weak_scaling_figure(
-            series; plot_title=group_title(group) * " — weak scaling"
+            series; plot_title=group_title(group) * " — $kind scaling"
         )
-        out = joinpath(cfg.out_dir, "$(group)_weak_scaling$(cfg.output_suffix).png")
+        out = joinpath(cfg.out_dir, "$(group)_$(kind)_scaling$(cfg.output_suffix).png")
         savefig(fig, out)
         println("wrote $out")
     end

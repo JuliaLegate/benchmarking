@@ -196,8 +196,14 @@ function memory_estimate(b::NASEmbarrassinglyParallel{T}, c::MemoryContext) wher
     validate_memory_context(b, c)
     p = validate_nas_ep(b)
     streams = cld(big(nas_ep_batches(p)), c.gpus)
+    if c.model == :cunumeric
+        # One Int64 index and one struct partial per stream (AoS store).
+        bytes = streams*(sizeof(Int64) + sizeof(NASEPPartial))
+        return MemoryEstimate(bytes, bytes + streams*sizeof(Float64), 0,
+            "stream indices and struct partials, partitioned across GPUs")
+    end
     masks = (p.m - NAS_EP_MK)*streams*sizeof(Float64)
-    if c.model in (:cunumeric, :cupynumeric)
+    if c.model == :cupynumeric
         persistent = 13streams*sizeof(Float64) + masks
         return MemoryEstimate(
             persistent, 40streams*sizeof(Float64) + masks, 0,

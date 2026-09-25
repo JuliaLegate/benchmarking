@@ -110,6 +110,7 @@ cpus = 1
 Set `N` and `M` explicitly for fixed problem sizes. When `auto_size = true`, an
 omitted dimension is selected from `mem_frac` of the smallest visible GPU.
 NAS benchmarks take their fixed `N` and `M` from `kwargs.class`, so omit them.
+A `class` list zips with `gpus` (see `configs/multi_gpu/nas_*_{strong,weak}.toml`).
 `T` and `fusion` form independent sweeps; `gpus`, `cpus`, `N`, and `M` are
 zipped by position. A benchmark block may override `models`, `n_warmup`,
 `n_iter`, or `n_trial`.
