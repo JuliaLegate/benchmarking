@@ -230,9 +230,13 @@ function preflight_julia_model(
     julia = get(env, "CUNUMERIC_BENCH_JULIA", joinpath(Sys.BINDIR, Base.julia_exename()))
     executable = which(julia)
     executable === nothing && error("Julia executable '$julia' is unavailable")
-    check(`$executable --project=$project -e $imports`) || error(
-        "$(model_label(model)) is enabled, but its isolated environment is not instantiated. " *
-        "Run `julia --project=$project -e 'using Pkg; Pkg.instantiate()'`. " *
+    # Only verify that the environment loads; never start a Legate runtime here.
+    # Match the worker launcher, which clears LD_LIBRARY_PATH.
+    cmd = addenv(`$executable --project=$project -e $imports`,
+        "LEGATE_SKIP_RUNTIME" => "true", "LD_LIBRARY_PATH" => nothing)
+    check(cmd) || error(
+        "$(model_label(model)) is enabled, but its isolated environment failed to load (see the error above). " *
+        "If it is not instantiated, run `julia --project=$project -e 'using Pkg; Pkg.instantiate()'`. " *
         "No benchmarks have been started.",
     )
     return nothing
