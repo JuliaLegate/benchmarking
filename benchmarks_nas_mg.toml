@@ -10,6 +10,4 @@ models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 T = "Float64"
 gpus = 1
 cpus = 8
-N = 32
-M = 32
-kwargs = { class = "S" }
+kwargs = { class = "B" }

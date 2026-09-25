@@ -41,4 +41,8 @@ function total_space(b::NASMultiGrid)
 end
 
 estimate_scaling(b::NASMultiGrid, ::Integer) = dims(b)
+function class_dims(::Type{<:NASMultiGrid}, kwargs)
+    p = nas_mg_parameters(get(kwargs, "class", "S"))
+    return (p.n, p.n)
+end
 register_benchmark("nas_mg", NASMultiGrid)

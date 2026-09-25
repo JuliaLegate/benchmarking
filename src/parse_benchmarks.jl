@@ -129,6 +129,11 @@ function parse_config(path; only=nothing, fusion_override=nothing, models_overri
             fusion = aslist(fusion_override === nothing ? get(e, "fusion", true) : fusion_override)
             nmode, nvals = size_field(get(e, "N", nothing))
             mmode, mvals = size_field(get(e, "M", nothing))
+            fixed = haskey(BENCHMARKS, name) ? class_dims(BENCHMARKS[name], kwargs) : nothing
+            if fixed !== nothing
+                nmode == :omitted && ((nmode, nvals) = (:pinned, [fixed[1]]))
+                mmode == :omitted && ((mmode, mvals) = (:pinned, [fixed[2]]))
+            end
             models = if models_override !== nothing
                 models_override
             elseif haskey(e, "models")

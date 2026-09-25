@@ -42,4 +42,8 @@ function total_space(b::NASFourierTransform)
 end
 
 estimate_scaling(b::NASFourierTransform, ::Integer) = dims(b)
+function class_dims(::Type{<:NASFourierTransform}, kwargs)
+    p = nas_ft_parameters(get(kwargs, "class", "S"))
+    return (p.nx, p.ny)
+end
 register_benchmark("nas_ft", NASFourierTransform)

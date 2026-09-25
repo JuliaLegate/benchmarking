@@ -66,7 +66,7 @@ Use `n_iter = 1`; use `n_trial` for independent complete runs. The common
 throughput value follows NAS EP and counts random numbers generated rather than
 floating-point instructions.
 
-Run class S across all models with:
+Run class B across all models with:
 
 ```sh
 julia --project=. run.jl --config=benchmarks_nas_ep.toml
@@ -137,7 +137,7 @@ CPU threads. On one GPU it creates each DArray input tile directly on the GPU,
 avoiding the full host tile copy in `DArray(host, ...)`; its multi-GPU path
 still uses Dagger's distributed constructor.
 
-Run class S across all models with:
+Run class B across all models with:
 
 ```sh
 julia --project=. run.jl --config=benchmarks_nas_ft.toml
@@ -184,7 +184,7 @@ still evaluates the full fine grid. cuNumeric, cuPyNumeric, and Dagger express
 the hierarchy through their distributed array APIs; implementation headers
 document their communication limitations.
 
-Run class S across all models with:
+Run class B across all models with:
 
 ```sh
 julia --project=. run.jl --config=benchmarks_nas_mg.toml

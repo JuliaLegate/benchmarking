@@ -136,3 +136,32 @@ end
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
     @test all(r.N == 32 && r.M == 32 && r.spec.n_iter == 1 for r in runs)
 end
+
+@testset "NAS classes supply N and M" begin
+    mktempdir() do dir
+        for (name, class, expected, auto) in (
+            ("nas_ep", "B", [2^31, 1], true),
+            ("nas_ft", "B", [512, 256], false),
+            ("nas_mg", "S", [32, 32], true),
+        )
+            path = joinpath(dir, "$name.toml")
+            write(path, """
+            [Global]
+            n_warmup = 1
+            n_iter = 1
+            auto_size = $auto
+            models = ["cunumeric"]
+
+            [[$name]]
+            T = "Float64"
+            gpus = 1
+            cpus = 1
+            kwargs = { class = "$class" }
+            """)
+            spec = only(last(parse_config(path)))
+            @test spec.args == expected
+            @test !spec.autosize
+            validate_spec(spec)
+        end
+    end
+end
