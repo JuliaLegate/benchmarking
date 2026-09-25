@@ -13,7 +13,8 @@ mean throughput with trial standard deviations.
 
 ## Setup
 
-Instantiate the Julia environments once:
+Instantiate the Julia environments once, including the Krylov,
+OrdinaryDiffEq, and Integrals + Optimization composability environments:
 
 ```bash
 ./instantiate_projects.sh
@@ -27,6 +28,13 @@ CUNUMERIC_SOURCE=/path/to/cuNumeric.jl ./instantiate_projects.sh
 ```
 
 Set `CUNUMERIC_BENCH_JULIA` to select a different Julia executable.
+Use Julia 1.13 for the composability workloads. Their environments are created
+under `environments/krylov`, `environments/ordinarydiffeq`, and
+`environments/integrals_optimization`. Set `COMPOSABILITY_ENV_ROOT` to place
+these three environments elsewhere (the benchmark container uses
+`/opt/bench-envs`). The composability launchers use these paths by default;
+`BENCH_PROJECT`, `ODE_PROJECT`, and `INTOPT_PROJECT` remain available as
+per-workload overrides.
 
 In cuNumeric.jl, initialize the pinned harness with
 `git submodule update --init --recursive`. Publish benchmark changes here first,

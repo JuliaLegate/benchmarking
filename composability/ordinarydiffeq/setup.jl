@@ -25,5 +25,5 @@ if get(ENV, "ODE_INSTALL_INTEGRATORS", "0") == "1"
         PackageSpec(name="OrdinaryDiffEqVerner"),
     ])
 end
-Pkg.precompile()
+get(ENV, "CUNUMERIC_BENCH_PRECOMPILE", "1") == "0" || Pkg.precompile()
 Pkg.status()

@@ -16,16 +16,18 @@ configuration. The Dagger checkout used for the original comparison calls CPU
 BLAS from its tile GEMV fallback, so this benchmark adds a CuArray tile method
 that forwards to GPU `mul!`. It does not change Krylov's solver code.
 
-Use Julia 1.13 and cuNumeric's `codex/ode-scalar-broadcast` branch, which
-contains the Krylov extension. Keep the benchmark environment outside the
-checkout:
+Use Julia 1.13 and a cuNumeric checkout containing the Krylov extension. From
+the benchmarking repository root, initialize all benchmark environments with
+the repository's standard setup script:
 
 ```sh
-mkdir -p /opt/bench-envs/krylov
-cp composability/krylov/Project.toml /opt/bench-envs/krylov/Project.toml
-julia --project=/opt/bench-envs/krylov -e 'using Pkg; Pkg.develop([PackageSpec(path="/opt/cuNumeric.jl"), PackageSpec(path="/opt/cuNumeric.jl/lib/CNPreferences")]); Pkg.instantiate()'
-export BENCH_PROJECT=/opt/bench-envs/krylov
+CUNUMERIC_SOURCE=/opt/cuNumeric.jl ./instantiate_projects.sh
 ```
+
+The Krylov environment defaults to `environments/krylov`; set
+`COMPOSABILITY_ENV_ROOT=/opt/bench-envs` when initializing it outside the
+repository (as the container build does). Set `BENCH_PROJECT` to override the
+launcher default.
 
 If cuNumeric uses local backend-library preferences, copy its
 `LocalPreferences.toml` into this environment. Preserve the resulting
@@ -63,7 +65,7 @@ one-GPU point normally with `weak "$BASE_N" 1`.
 
 The runner uses CG only. It writes `results.csv`, `timings.png`, per-case logs,
 the package manifest, sampled GPU-memory log and peak summary, and `environment.txt` together. `BENCH_PROJECT` can point to an
-already-instantiated equivalent environment (the default is this directory).
+already-instantiated equivalent environment.
 Set `JULIA`, `BENCH_THREADS`, or `BENCH_CPUS` for the machine.
 Set `BENCH_TIMEOUT` to a per-case duration accepted by GNU `timeout`
 (default `15m`). Failed or timed-out cases keep their logs; completed CSV

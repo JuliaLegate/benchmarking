@@ -21,5 +21,5 @@ Pkg.add([
     PackageSpec(name="Dagger", version="0.22.5"),
     PackageSpec(name="Plots"),
 ])
-Pkg.precompile()
+get(ENV, "CUNUMERIC_BENCH_PRECOMPILE", "1") == "0" || Pkg.precompile()
 Pkg.status()

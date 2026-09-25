@@ -33,15 +33,18 @@ the same checks before it contributes a timing.
 
 ## Setup and run
 
-On a Linux GPU machine with cuNumeric installed, create an environment outside
-the benchmarking repository. The setup develops the specified cuNumeric
-checkout and its CNPreferences package:
+On a Linux GPU machine with cuNumeric installed, initialize the benchmark
+environments from the repository root. The setup develops the specified
+cuNumeric checkout and its CNPreferences package:
 
 ```sh
 export CUNUMERIC_SOURCE=/path/to/cuNumeric.jl
-julia --startup-file=no composability/integrals_optimization/setup.jl "$HOME/integrals-opt-env"
-export INTOPT_PROJECT="$HOME/integrals-opt-env"
+./instantiate_projects.sh
 ```
+
+The plume launcher defaults to `environments/integrals_optimization`; set
+`COMPOSABILITY_ENV_ROOT` before initialization to place the environment
+elsewhere. `INTOPT_PROJECT` overrides the launcher default.
 
 Apply machine-specific cuNumeric `LocalPreferences.toml` settings to that
 environment if needed. Keep its `Manifest.toml` with benchmark results. Start
