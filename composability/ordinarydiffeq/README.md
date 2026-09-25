@@ -104,6 +104,10 @@ For the one-H100 run, the selected dimensions at 1, 2, 4, and 8 GPUs are
 On the one-GPU H100, set `ODE_DRY_RUN=1` to write `planned-cases.csv` for all
 GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records sampled
 GPU memory as a diagnostic; the reading includes Legate's reserved pool.
+On the eight-GPU host, each Julia case sees exactly its requested GPU count:
+devices `0` through `G-1` by default, or the first `G` entries of an existing
+`CUDA_VISIBLE_DEVICES` list. `planned-cases.csv` records the selected mask;
+the Dagger correctness check verifies distributed CuArray chunk placement.
 
 The weak run uses Dagger and cuNumeric. It sets `N(G) = round(N(1)√G)` and
 checks CUDA chunk placement, backend retention, and the same exact-solution
