@@ -22,8 +22,8 @@ uses [`plot_results.jl`](plot_results.jl) to make a PNG comparison plot.
 
 The `heat.jl` N=128 cuNumeric example completed on one H100 with Julia 1.13
 and returned an `NDArray{Float32,2}`. A five-sample H100 sweep at 20 fixed
-steps passed CUDA.jl, Dagger, and cuNumeric at `N=128, 512, 2048, 4096,
-8192, 16384`, with relative exact-solution errors below `1e-4` and GPU-backed
+steps passed CUDA.jl, Dagger, and cuNumeric at `N=128, 512, 1024, 2048,
+4096, 8192, 16384`, with relative exact-solution errors below `1e-4` and GPU-backed
 outputs. At `N=16384`, mean complete-solve times were 1.112 s for CUDA.jl,
 8.169 s for Dagger, and 1.285 s for cuNumeric. Each standard error comes
 from the sample standard deviation divided by the square root of five.
@@ -74,7 +74,7 @@ For the single-GPU comparison, pass grid dimensions (each problem has `N × N`
 elements):
 
 ```sh
-ODE_OUTPUT=/opt/bench-results/ode-single bash composability/ordinarydiffeq/run_benchmark.sh single 128 512 2048 4096 8192 16384
+ODE_OUTPUT=/opt/bench-results/ode-single bash composability/ordinarydiffeq/run_benchmark.sh single 128 512 1024 2048 4096 8192 16384
 ```
 
 The launcher writes `results.csv`, `timings.png`, `metadata.txt`, and one log
