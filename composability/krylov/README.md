@@ -73,6 +73,10 @@ diagnostic; pool reservation can make it much larger than live array storage.
 The runner sets `LEGATE_CONFIG` separately for every GPU count. Set
 `CUBLAS_WORKSPACE_CONFIG` externally, if desired, so every backend sees the same
 setting. `plot.py` needs Python with Matplotlib.
+On an eight-GPU host, each case launches Julia with exactly its requested
+number of visible GPUs: by default devices `0` through `G-1`, or the first
+`G` entries of an existing `CUDA_VISIBLE_DEVICES` list. The selected mask is
+recorded in `planned-cases.csv`, and Dagger verifies GPU-backed tile placement.
 
 Each case gets a fresh Julia process, two warm-up solves, and five synchronized
 timed solves. Allocation, host-to-device transfer, compilation, explicit GC,

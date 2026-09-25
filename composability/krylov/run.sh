@@ -9,6 +9,26 @@ export BENCH_SAMPLES=${BENCH_SAMPLES:-5}
 export LEGATE_AUTO_CONFIG=1
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 
+# Dagger must see exactly the GPUs assigned to this case. Respect a scheduler's
+# existing device list, then select its first G entries for each Julia process.
+visible_pool=${CUDA_VISIBLE_DEVICES-}
+gpu_mask_for_count() {
+    local count=$1 i mask
+    local -a devices=()
+    if [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
+        [[ -n $visible_pool ]] || { echo "CUDA_VISIBLE_DEVICES is empty" >&2; return 2; }
+        IFS=, read -r -a devices <<< "$visible_pool"
+        (( ${#devices[@]} >= count )) || {
+            echo "CUDA_VISIBLE_DEVICES has fewer than $count devices" >&2
+            return 2
+        }
+    else
+        for ((i=0; i<count; i++)); do devices+=("$i"); done
+    fi
+    printf -v mask '%s,' "${devices[@]:0:count}"
+    printf '%s\n' "${mask%,}"
+}
+
 usage() {
     echo "Usage: $0 single N [N ...] | weak BASE_N GPU_COUNT [GPU_COUNT ...]" >&2
     exit 2
@@ -26,7 +46,7 @@ mkdir -p "$output"
 csv="$output/results.csv"
 echo 'experiment,base_n,backend,solver,mode,eltype,gpus,n,iterations,mean_ms,stderr_ms,median_ms,min_ms,max_ms,relative_residual,samples_ms' > "$csv"
 echo 'backend,gpus,n,peak_gpu_memory_mib' > "$output/memory.csv"
-echo 'backend,mode,gpus,n,legate_config' > "$output/planned-cases.csv"
+echo 'backend,mode,gpus,n,legate_config,cuda_visible_devices' > "$output/planned-cases.csv"
 {
     printf 'benchmark_commit=%s\n' "$(git -C "$script_dir" rev-parse HEAD)"
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
@@ -47,16 +67,18 @@ run_case() {
     local -a time_limit=()
     time_limit=(timeout --signal=TERM --kill-after=30s "${BENCH_TIMEOUT:-15m}")
     local log="$output/$BENCH_ELTYPE-$backend-$solver-$mode-$gpus-$n.log"
+    local gpu_mask
+    gpu_mask=$(gpu_mask_for_count "$gpus")
     export BENCH_GPUS=$gpus
     export LEGATE_CONFIG="--gpus $gpus --cpus ${BENCH_CPUS:-2}"
-    printf '%s,%s,%s,%s,%s\n' "$backend" "$mode" "$gpus" "$n" "$LEGATE_CONFIG" >> "$output/planned-cases.csv"
+    printf '%s,%s,%s,%s,%s,"%s"\n' "$backend" "$mode" "$gpus" "$n" "$LEGATE_CONFIG" "$gpu_mask" >> "$output/planned-cases.csv"
     echo "Running $backend $solver $mode: G=$gpus N=$n"
     [[ ${BENCH_DRY_RUN:-0} != 1 ]] || return 0
     local memory_log="$output/gpu-memory-$BENCH_ELTYPE-$backend-$mode-$gpus-$n.log"
     nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
     local monitor_pid=$!
     local result_line=""
-    if "${time_limit[@]}" "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
+    if CUDA_VISIBLE_DEVICES="$gpu_mask" "${time_limit[@]}" "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
         "$script_dir/krylov.jl" "$backend" "$solver" "$mode" "$n" > "$log" 2>&1; then
         if [[ $(grep -c '^RESULT,' "$log") == 1 ]]; then
             result_line=$(sed -n "s/^RESULT,/$experiment,${base_n:-},/p" "$log")
