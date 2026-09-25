@@ -9,7 +9,7 @@ SHAs before running; every launcher also saves them with its results.
 
 Prepare `/opt/bench-envs/krylov` and `/opt/bench-envs/ode` from the workload
 READMEs. Prefer the `Project.toml`, `Manifest.toml`, and
-`LocalPreferences.toml` used for the final one-GPU run, then run
+`LocalPreferences.toml` saved from the tested single-H100 machine, then run
 `Pkg.instantiate()` with Julia 1.13 on this machine. Verify that the
 preferences point to the installed cuNumeric/Legate libraries. Check
 `nvidia-smi -L` shows eight H100s and that no other job is using them.
@@ -29,6 +29,8 @@ cd /opt/benchmarking-composability
 export CUNUMERIC_SOURCE=/opt/cuNumeric.jl
 export BENCH_PROJECT=/opt/bench-envs/krylov
 export ODE_PROJECT=/opt/bench-envs/ode
+julia --project="$BENCH_PROJECT" -e 'using Pkg; Pkg.instantiate()'
+julia --project="$ODE_PROJECT" -e 'using Pkg; Pkg.instantiate()'
 run_id=$(date -u +%Y%m%dT%H%M%SZ)
 results=/opt/bench-results/final-$run_id
 mkdir -p "$results"
@@ -36,6 +38,7 @@ git rev-parse HEAD > "$results/benchmark-commit.txt"
 git -C "$CUNUMERIC_SOURCE" rev-parse HEAD > "$results/cunumeric-commit.txt"
 julia --version > "$results/julia-version.txt"
 nvidia-smi -L > "$results/gpus.txt"
+free -h > "$results/host-memory.txt"
 ```
 
 First test the multi-GPU launch and correctness paths at inexpensive sizes.
