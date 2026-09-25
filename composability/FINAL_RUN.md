@@ -13,6 +13,10 @@ READMEs. Prefer the `Project.toml`, `Manifest.toml`, and
 `Pkg.instantiate()` with Julia 1.13 on this machine. Verify that the
 preferences point to the installed cuNumeric/Legate libraries. Check
 `nvidia-smi -L` shows eight H100s and that no other job is using them.
+Check host and container memory limits as well: the `G=8` dense CG matrix
+contains about 128 GiB of Float32 values and is first constructed on the
+host, before GPU distribution. Allow substantial room for transfer and
+temporary copies; 512 GiB of available host memory is a sensible target.
 
 The launchers select exactly `G` devices for each case. If
 `CUDA_VISIBLE_DEVICES` is already a comma-separated scheduler allocation,
