@@ -2,9 +2,10 @@
 # as in NPB-GPU, then uploaded once before timing. The V-cycle itself uses
 # cuNumeric views and broadcasts, allowing Legate to partition every level.
 # Restriction/interpolation are separable axis passes with temporary arrays,
-# not JACC's direct per-cell kernels. Views are no-ops; explicit slice/store
-# operations express the regions. The common harness times initial zeroing
-# and L2 sum-of-squares, but omits NPB's Linf norm; see nas/README.md.
+# not JACC's direct per-cell kernels. Every operator is @accelerate, so slices
+# and temporaries are freed at their last use instead of waiting for Julia GC. 
+# The common harness times initial zeroing and L2 sum-of-squares, 
+# but omits NPB's Linf norm; see nas/README.md.
 
 mutable struct CuNumericNASMGState{U,R,V,W}
     u::U
@@ -46,8 +47,8 @@ function Base.setindex!(
     return rhs
 end
 
-# @accelerate releases each temporary view; the library sends disjoint
-# slice-to-slice assignments straight to the native copy path.
+# Disjoint slice-to-slice assignments take cuNumeric's native copy path;
+# @accelerate releases each temporary view.
 cuNumeric.@accelerate function nas_mg_comm3!(u::cuNumeric.NDArray{T,3}) where {T}
     n1, n2, n3 = size(u)
     yi, zi = 2:(n2 - 1), 2:(n3 - 1)
@@ -70,61 +71,128 @@ function initialize(b::NASMultiGrid{Float64}; mod=cuNumeric)
     return (CuNumericNASMGState(u, r, rhs, weights),)
 end
 
-function cunumeric_mg_back(array, axis)
-    axis == 3 && return array, (1, 2, 3)
-    permutation = axis == 1 ? (2, 3, 1) : (1, 3, 2)
-    return permutedims(array, permutation), invperm(permutation)
+cuNumeric.@accelerate function cunumeric_mg_resid!(
+    r::cuNumeric.NDArray{T,3}, u::cuNumeric.NDArray{T,3}, v::cuNumeric.NDArray{T,3},
+) where {T}
+    r[2:(end - 1), 2:(end - 1), 2:(end - 1)] =
+        v[2:(end - 1), 2:(end - 1), 2:(end - 1)] .- NAS_MG_A[1] .* u[2:(end - 1), 2:(end - 1), 2:(end - 1)] .-
+        NAS_MG_A[3] .* (
+            u[2:(end - 1), 1:(end - 2), 1:(end - 2)] .+ u[2:(end - 1), 3:end, 1:(end - 2)] .+
+            u[2:(end - 1), 1:(end - 2), 3:end] .+ u[2:(end - 1), 3:end, 3:end] .+
+            u[1:(end - 2), 2:(end - 1), 1:(end - 2)] .+ u[3:end, 2:(end - 1), 1:(end - 2)] .+
+            u[1:(end - 2), 2:(end - 1), 3:end] .+ u[3:end, 2:(end - 1), 3:end] .+
+            u[1:(end - 2), 1:(end - 2), 2:(end - 1)] .+ u[3:end, 1:(end - 2), 2:(end - 1)] .+
+            u[1:(end - 2), 3:end, 2:(end - 1)] .+ u[3:end, 3:end, 2:(end - 1)]
+        ) .-
+        NAS_MG_A[4] .* (
+            u[1:(end - 2), 1:(end - 2), 1:(end - 2)] .+ u[3:end, 1:(end - 2), 1:(end - 2)] .+
+            u[1:(end - 2), 3:end, 1:(end - 2)] .+ u[3:end, 3:end, 1:(end - 2)] .+
+            u[1:(end - 2), 1:(end - 2), 3:end] .+ u[3:end, 1:(end - 2), 3:end] .+
+            u[1:(end - 2), 3:end, 3:end] .+ u[3:end, 3:end, 3:end]
+        )
+    nas_mg_comm3!(r)
+    return r
 end
 
-function cunumeric_mg_restrict_axis(array, axis)
-    back, inverse = cunumeric_mg_back(array, axis)
-    d1, d2, n = size(back)
-    physical = n - 2
-    # cuNumeric reshapes stores in C order, so move the active dimension to
-    # the back before pairing neighboring points.
-    left = back[:, :, 2:(n - 1)]
-    right = back[:, :, 3:n]
-    paired_shape = (d1, d2, physical ÷ 2, 2)
-    reduced = cuNumeric.reshape(
-        sum(cuNumeric.reshape(left, paired_shape); dims=4) .+
-        sum(cuNumeric.reshape(right, paired_shape); dims=4),
-        d1, d2, physical ÷ 2,
+cuNumeric.@accelerate function cunumeric_mg_psinv!(
+    u::cuNumeric.NDArray{T,3}, r::cuNumeric.NDArray{T,3}, c,
+) where {T}
+    u[2:(end - 1), 2:(end - 1), 2:(end - 1)] =
+        u[2:(end - 1), 2:(end - 1), 2:(end - 1)] .+ c[1] .* r[2:(end - 1), 2:(end - 1), 2:(end - 1)] .+
+        c[2] .* (
+            r[1:(end - 2), 2:(end - 1), 2:(end - 1)] .+ r[3:end, 2:(end - 1), 2:(end - 1)] .+
+            r[2:(end - 1), 1:(end - 2), 2:(end - 1)] .+ r[2:(end - 1), 3:end, 2:(end - 1)] .+
+            r[2:(end - 1), 2:(end - 1), 1:(end - 2)] .+ r[2:(end - 1), 2:(end - 1), 3:end]
+        ) .+
+        c[3] .* (
+            r[2:(end - 1), 1:(end - 2), 1:(end - 2)] .+ r[2:(end - 1), 3:end, 1:(end - 2)] .+
+            r[2:(end - 1), 1:(end - 2), 3:end] .+ r[2:(end - 1), 3:end, 3:end] .+
+            r[1:(end - 2), 2:(end - 1), 1:(end - 2)] .+ r[3:end, 2:(end - 1), 1:(end - 2)] .+
+            r[1:(end - 2), 2:(end - 1), 3:end] .+ r[3:end, 2:(end - 1), 3:end] .+
+            r[1:(end - 2), 1:(end - 2), 2:(end - 1)] .+ r[3:end, 1:(end - 2), 2:(end - 1)] .+
+            r[1:(end - 2), 3:end, 2:(end - 1)] .+ r[3:end, 3:end, 2:(end - 1)]
+        )
+    nas_mg_comm3!(u)
+    return u
+end
+
+# Restriction and interpolation are separable axis passes. cuNumeric reshapes in
+# C order, so each pass moves its axis last; one function per axis keeps every
+# scope straight-line for @accelerate, which frees each named temporary.
+cuNumeric.@accelerate function cunumeric_mg_pair_sum(back::cuNumeric.NDArray{T,3}) where {T}
+    left = cuNumeric.reshape(
+        back[:, :, 2:(end - 1)], size(back, 1), size(back, 2), (size(back, 3) - 2) ÷ 2, 2
     )
-    return axis == 3 ? reduced : permutedims(reduced, inverse)
+    right = cuNumeric.reshape(
+        back[:, :, 3:end], size(back, 1), size(back, 2), (size(back, 3) - 2) ÷ 2, 2
+    )
+    total = sum(left; dims=4) .+ sum(right; dims=4)
+    return cuNumeric.reshape(total, size(back, 1), size(back, 2), (size(back, 3) - 2) ÷ 2)
 end
 
-function cunumeric_mg_restrict!(coarse, fine)
-    reduced = cunumeric_mg_restrict_axis(fine, 1)
-    reduced = cunumeric_mg_restrict_axis(reduced, 2)
-    reduced = cunumeric_mg_restrict_axis(reduced, 3)
-    n = size(coarse, 1)
-    interior = coarse[2:(n - 1), 2:(n - 1), 2:(n - 1)]
-    interior .= reduced ./ 16.0
-    cuNumeric.destroy!(interior)
-    return nas_mg_comm3!(coarse)
+cuNumeric.@accelerate function cunumeric_mg_restrict_x(fine::cuNumeric.NDArray{T,3}) where {T}
+    back = permutedims(fine, (2, 3, 1))
+    reduced = cunumeric_mg_pair_sum(back)
+    return permutedims(reduced, (3, 1, 2))
 end
 
-function cunumeric_mg_interp_axis(array, axis, weights)
-    back, inverse = cunumeric_mg_back(array, axis)
-    d1, d2, n = size(back)
-    lo = back[:, :, 1:(n - 1)]
-    hi = back[:, :, 2:n]
-    lo4 = cuNumeric.reshape(lo, d1, d2, n - 1, 1)
-    hi4 = cuNumeric.reshape(hi, d1, d2, n - 1, 1)
-    mixed = lo4 .+ weights .* (hi4 .- lo4)
-    interpolated = cuNumeric.reshape(mixed, d1, d2, 2(n - 1))
-    if axis == 3
-        return interpolated
-    end
-    # Legate cannot slice the composed reshape/transpose in the next pass.
-    return copy(permutedims(interpolated, inverse))
+cuNumeric.@accelerate function cunumeric_mg_restrict_y(fine::cuNumeric.NDArray{T,3}) where {T}
+    back = permutedims(fine, (1, 3, 2))
+    reduced = cunumeric_mg_pair_sum(back)
+    return permutedims(reduced, (1, 3, 2))
 end
 
-function cunumeric_mg_interp!(fine, coarse, weights)
-    interpolated = cunumeric_mg_interp_axis(coarse, 1, weights)
-    interpolated = cunumeric_mg_interp_axis(interpolated, 2, weights)
-    interpolated = cunumeric_mg_interp_axis(interpolated, 3, weights)
-    fine .+= interpolated
+cuNumeric.@accelerate function cunumeric_mg_restrict!(
+    coarse::cuNumeric.NDArray{T,3}, fine::cuNumeric.NDArray{T,3},
+) where {T}
+    rx = cunumeric_mg_restrict_x(fine)
+    rxy = cunumeric_mg_restrict_y(rx)
+    rxyz = cunumeric_mg_pair_sum(rxy)
+    coarse[2:(end - 1), 2:(end - 1), 2:(end - 1)] = rxyz ./ 16.0
+    nas_mg_comm3!(coarse)
+    return coarse
+end
+
+cuNumeric.@accelerate function cunumeric_mg_interp_last(
+    back::cuNumeric.NDArray{T,3}, weights,
+) where {T}
+    lo = cuNumeric.reshape(
+        back[:, :, 1:(end - 1)], size(back, 1), size(back, 2), size(back, 3) - 1, 1
+    )
+    hi = cuNumeric.reshape(
+        back[:, :, 2:end], size(back, 1), size(back, 2), size(back, 3) - 1, 1
+    )
+    mixed = lo .+ weights .* (hi .- lo)
+    return cuNumeric.reshape(mixed, size(back, 1), size(back, 2), 2(size(back, 3) - 1))
+end
+
+# Legate cannot slice the composed reshape/transpose in the next pass, so the
+# x and y passes copy their result.
+cuNumeric.@accelerate function cunumeric_mg_interp_x(
+    coarse::cuNumeric.NDArray{T,3}, weights,
+) where {T}
+    back = permutedims(coarse, (2, 3, 1))
+    mixed = cunumeric_mg_interp_last(back, weights)
+    front = permutedims(mixed, (3, 1, 2))
+    return copy(front)
+end
+
+cuNumeric.@accelerate function cunumeric_mg_interp_y(
+    coarse::cuNumeric.NDArray{T,3}, weights,
+) where {T}
+    back = permutedims(coarse, (1, 3, 2))
+    mixed = cunumeric_mg_interp_last(back, weights)
+    front = permutedims(mixed, (1, 3, 2))
+    return copy(front)
+end
+
+cuNumeric.@accelerate function cunumeric_mg_interp!(
+    fine::cuNumeric.NDArray{T,3}, coarse::cuNumeric.NDArray{T,3}, weights,
+) where {T}
+    ix = cunumeric_mg_interp_x(coarse, weights)
+    ixy = cunumeric_mg_interp_y(ix, weights)
+    ixyz = cunumeric_mg_interp_last(ixy, weights)
+    fine .= fine .+ ixyz
     return fine
 end
 
@@ -134,16 +202,16 @@ function cunumeric_mg_cycle!(s, c)
         cunumeric_mg_restrict!(s.r[level - 1], s.r[level])
     end
     fill!(s.u[1], 0.0)
-    nas_mg_psinv!(s.u[1], s.r[1], c)
+    cunumeric_mg_psinv!(s.u[1], s.r[1], c)
     for level in 2:(finest - 1)
         fill!(s.u[level], 0.0)
         cunumeric_mg_interp!(s.u[level], s.u[level - 1], s.interp_weights)
-        nas_mg_resid!(s.r[level], s.u[level], s.r[level])
-        nas_mg_psinv!(s.u[level], s.r[level], c)
+        cunumeric_mg_resid!(s.r[level], s.u[level], s.r[level])
+        cunumeric_mg_psinv!(s.u[level], s.r[level], c)
     end
     cunumeric_mg_interp!(s.u[end], s.u[end - 1], s.interp_weights)
-    nas_mg_resid!(s.r[end], s.u[end], s.rhs)
-    nas_mg_psinv!(s.u[end], s.r[end], c)
+    cunumeric_mg_resid!(s.r[end], s.u[end], s.rhs)
+    cunumeric_mg_psinv!(s.u[end], s.r[end], c)
     return nothing
 end
 
@@ -159,11 +227,11 @@ function run!(b::NASMultiGrid, s::CuNumericNASMGState)
     p = nas_mg_parameters(b.class)
     c = nas_mg_smoother(b.class)
     foreach(x -> fill!(x, 0.0), s.u)
-    nas_mg_resid!(s.r[end], s.u[end], s.rhs)
+    cunumeric_mg_resid!(s.r[end], s.u[end], s.rhs)
     cunumeric_mg_norm2(s.r[end])
     for _ in 1:p.niter
         cunumeric_mg_cycle!(s, c)
-        nas_mg_resid!(s.r[end], s.u[end], s.rhs)
+        cunumeric_mg_resid!(s.r[end], s.u[end], s.rhs)
     end
     return cunumeric_mg_norm2(s.r[end])
 end
