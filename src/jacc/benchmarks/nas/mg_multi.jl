@@ -47,17 +47,17 @@ function mg_multi_alloc(ops, L::MGLayout, ndev, host=nothing)
     return jm_array(ops, x; ghost_dims=L.rep ? 0 : 1)
 end
 
-# Kernels take (q, jl): plane item q and local column jl. Launch them through
-# the 1-D Multi.parallel_for so consecutive threads walk one plane; the 2-D
-# launch's 16x16 blocks split warps across planes (about 5x slower here).
-function mgm_flat(i, f, m, args...)
+# Kernels take (q, jl): plane item q and local column jl, via a flat 1-D launch.
+# Every kernel is @inline: Multi.parallel_for calls `f(i, x...)` without inlining, 
+# which makes these kernels 3-5x slower.
+@inline function mgm_flat(i, f, m, args...)
     return f((i - 1) % m + 1, (i - 1) ÷ m + 1, args...)
 end
 
 mg_launch(ops, m, cols, f, args...) = jm_for(ops, m*cols, mgm_flat, f, m, args...)
 mg_for(ops, L::MGLayout, m, f, args...) = mg_launch(ops, m, mg_cols(L, jm_ndev(ops)), f, args...)
 
-function mgm_zero(q, jl, out, n)
+@inline function mgm_zero(q, jl, out, n)
     col = q + n*n*(jl - 1)
     col <= length(out) && (@inbounds out[col] = 0.0)
     return nothing
@@ -69,7 +69,7 @@ function mgm_fill!(ops, out, L)
     return mg_launch(ops, L.n*L.n, jm_ndev(ops)*cols, mgm_zero, out, L.n)
 end
 
-function mgm_comm_x(q, jl, out, L)
+@inline function mgm_comm_x(q, jl, out, L)
     k = mg_k(out, L, jl)
     n = L.n
     if 2 <= k <= n - 1
@@ -82,7 +82,7 @@ function mgm_comm_x(q, jl, out, L)
     return nothing
 end
 
-function mgm_comm_y(q, jl, out, L)
+@inline function mgm_comm_y(q, jl, out, L)
     k = mg_k(out, L, jl)
     n = L.n
     if 2 <= k <= n - 1
@@ -94,7 +94,7 @@ function mgm_comm_y(q, jl, out, L)
     return nothing
 end
 
-function mgm_comm_z_local(q, _, out, L)
+@inline function mgm_comm_z_local(q, _, out, L)
     n = L.n
     i, j = (q - 1) % n + 1, (q - 1) ÷ n + 1
     @inbounds begin
@@ -140,13 +140,15 @@ end
     return (q - 1) % (n - 2) + 2, (q - 1) ÷ (n - 2) + 2
 end
 
-function mgm_resid(q, jl, r, u, v, L)
+@inline function mgm_resid(q, jl, r, u, v, L)
     k = mg_k(r, L, jl)
     (2 <= k <= L.n - 1) || return nothing
     i, j = mgm_interior(q, L.n)
-    U(di, dj, dk) = @inbounds u[mg_at(u, L, i + di, j + dj, k + dk)]
-    @inbounds r[mg_at(r, L, i, j, k)] =
-        v[mg_at(v, L, i, j, k)] - NAS_MG_A[1]*U(0, 0, 0) -
+    # r, u, and v share a layout, so one center index serves all three.
+    c, n, n2 = mg_at(r, L, i, j, k), L.n, L.n*L.n
+    U(di, dj, dk) = @inbounds u[c + di + n*dj + n2*dk]
+    @inbounds r[c] =
+        v[c] - NAS_MG_A[1]*U(0, 0, 0) -
         NAS_MG_A[3] * (
             U(0, -1, -1) + U(0, 1, -1) + U(0, -1, 1) + U(0, 1, 1) +
             U(-1, 0, -1) + U(1, 0, -1) + U(-1, 0, 1) + U(1, 0, 1) +
@@ -164,12 +166,13 @@ function mgm_resid!(ops, r, u, v, L)
     return mgm_comm3!(ops, r, L)
 end
 
-function mgm_psinv(q, jl, u, r, L, c)
+@inline function mgm_psinv(q, jl, u, r, L, c)
     k = mg_k(u, L, jl)
     (2 <= k <= L.n - 1) || return nothing
     i, j = mgm_interior(q, L.n)
-    R(di, dj, dk) = @inbounds r[mg_at(r, L, i + di, j + dj, k + dk)]
-    @inbounds u[mg_at(u, L, i, j, k)] +=
+    ci, n, n2 = mg_at(u, L, i, j, k), L.n, L.n*L.n
+    R(di, dj, dk) = @inbounds r[ci + di + n*dj + n2*dk]
+    @inbounds u[ci] +=
         c[1]*R(0, 0, 0) +
         c[2]*(R(-1, 0, 0) + R(1, 0, 0) + R(0, -1, 0) + R(0, 1, 0) + R(0, 0, -1) + R(0, 0, 1)) +
         c[3] * (
@@ -185,12 +188,13 @@ function mgm_psinv!(ops, u, r, L, c)
     return mgm_comm3!(ops, u, L)
 end
 
-function mgm_restrict(q, jl, coarse, fine, Lc, Lf)
+@inline function mgm_restrict(q, jl, coarse, fine, Lc, Lf)
     k = mg_k(coarse, Lc, jl)
     (2 <= k <= Lc.n - 1) || return nothing
     i, j = mgm_interior(q, Lc.n)
     fi, fj, fk = 2i - 1, 2j - 1, 2k - 1
-    F(di, dj, dk) = @inbounds fine[mg_at(fine, Lf, fi + di, fj + dj, fk + dk)]
+    fc, n, n2 = mg_at(fine, Lf, fi, fj, fk), Lf.n, Lf.n*Lf.n
+    F(di, dj, dk) = @inbounds fine[fc + di + n*dj + n2*dk]
     @inbounds coarse[mg_at(coarse, Lc, i, j, k)] =
         0.5*F(0, 0, 0) +
         0.25*(F(-1, 0, 0) + F(1, 0, 0) + F(0, -1, 0) + F(0, 1, 0) + F(0, 0, -1) + F(0, 0, 1)) +
@@ -213,7 +217,7 @@ end
 
 @inline mgm_lerp(a, b, weight) = muladd(weight, b - a, a)
 
-function mgm_interp(q, jl, fine, coarse, Lf, Lc)
+@inline function mgm_interp(q, jl, fine, coarse, Lf, Lc)
     k = mg_k(fine, Lf, jl)
     k <= Lf.n || return nothing
     n = Lf.n
@@ -222,11 +226,13 @@ function mgm_interp(q, jl, fine, coarse, Lf, Lc)
     i0, j0, k0 = qi ÷ 2 + 1, qj ÷ 2 + 1, qk ÷ 2 + 1
     i1, j1, k1 = i0 + (qi % 2), j0 + (qj % 2), k0 + (qk % 2)
     wi, wj, wk = 0.5*(qi % 2), 0.5*(qj % 2), 0.5*(qk % 2)
-    C(a, b, c) = @inbounds coarse[mg_at(coarse, Lc, a, b, c)]
-    z00 = mgm_lerp(C(i0, j0, k0), C(i1, j0, k0), wi)
-    z10 = mgm_lerp(C(i0, j1, k0), C(i1, j1, k0), wi)
-    z01 = mgm_lerp(C(i0, j0, k1), C(i1, j0, k1), wi)
-    z11 = mgm_lerp(C(i0, j1, k1), C(i1, j1, k1), wi)
+    base, nc = mg_at(coarse, Lc, i0, j0, k0), Lc.n
+    di, dj, dk = i1 - i0, nc*(j1 - j0), nc*nc*(k1 - k0)
+    C(a, b, c) = @inbounds coarse[base + a + b + c]
+    z00 = mgm_lerp(C(0, 0, 0), C(di, 0, 0), wi)
+    z10 = mgm_lerp(C(0, dj, 0), C(di, dj, 0), wi)
+    z01 = mgm_lerp(C(0, 0, dk), C(di, 0, dk), wi)
+    z11 = mgm_lerp(C(0, dj, dk), C(di, dj, dk), wi)
     @inbounds fine[mg_at(fine, Lf, i, j, k)] +=
         mgm_lerp(mgm_lerp(z00, z10, wj), mgm_lerp(z01, z11, wj), wk)
     return nothing
@@ -238,7 +244,7 @@ function mgm_interp!(ops, fine, coarse, Lf, Lc)
     return fine
 end
 
-function mgm_norm_term(q, jl, r, L)
+@inline function mgm_norm_term(q, jl, r, L)
     k = mg_k(r, L, jl)
     (2 <= k <= L.n - 1) || return 0.0
     i, j = mgm_interior(q, L.n)

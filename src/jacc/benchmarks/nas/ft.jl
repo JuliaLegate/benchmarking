@@ -1,3 +1,5 @@
+# Default (`multi`): JACC.Multi slabs on every GPU count; see ft_multi.jl.
+# `JACC_NAS_FT_IMPL=single` selects the original single-GPU version below.
 # LIMITATION: JACC has no FFT API. This single-GPU implementation therefore
 # applies cuFFT through AbstractFFTs to JACC's CUDA-backed arrays. The NPB RNG,
 # index map, evolution, and checksum are JACC parallel_for/parallel_reduce
@@ -8,11 +10,13 @@
 # checksums use separate 1024-element reductions. ifft! normalizes the full array.
 
 include(joinpath(@__DIR__, "..", "..", "..", "nas", "ft.jl"))
+include(joinpath(@__DIR__, "ft_multi.jl"))
 
 struct JACCNASFT
     class::String
     N::Int
     M::Int
+    impl::String
 end
 
 struct JACCNASFTState
@@ -33,16 +37,25 @@ end
 
 function model_build_nas_ft(config::ModelWorkerConfig)
     config.T === Float64 || error("NAS FT requires Float64")
-    config.gpus == 1 || error("JACC NAS FT currently supports one GPU")
+    impl = get(ENV, "JACC_NAS_FT_IMPL", "multi")
+    impl in ("multi", "single") || error("JACC_NAS_FT_IMPL must be multi or single")
+    if impl == "single"
+        config.gpus == 1 || error("JACC_NAS_FT_IMPL=single supports one GPU")
+    else
+        JACC.Multi.ndev() == config.gpus || error(
+            "JACC sees $(JACC.Multi.ndev()) GPU(s), but this run requested $(config.gpus)"
+        )
+    end
     class = uppercase(string(get(config.kwargs, :class, "S")))
     p = nas_ft_parameters(class)
     (config.N, config.M) == (p.nx, p.ny) || error(
         "NAS FT class $class requires N=$(p.nx), M=$(p.ny)"
     )
-    return JACCNASFT(class, config.N, config.M)
+    return JACCNASFT(class, config.N, config.M, impl)
 end
 
 function model_initialize(b::JACCNASFT)
+    b.impl == "multi" && return jacc_multi_ft(JACCMultiOps(), b.class)
     p = nas_ft_parameters(b.class)
     u0 = JACC.zeros(ComplexF64, p.nx, p.ny, p.nz)
     u1 = JACC.zeros(ComplexF64, p.nx, p.ny, p.nz)
@@ -143,14 +156,21 @@ function model_run!(b::JACCNASFT, s::JACCNASFTState)
     return s.checksum_real, s.checksum_imag
 end
 
-model_synchronize(::JACCNASFT) = JACC.synchronize()
+model_run!(::JACCNASFT, s::JACCMultiFT) = ftm_run!(s)
+
+# JACC.Multi launches, copies, and per-part FFTs synchronize every device.
+model_synchronize(b::JACCNASFT) = b.impl == "multi" ? nothing : JACC.synchronize()
+model_save_id(b::JACCNASFT, ::Symbol) = b.impl == "multi" ? :jacc : :jacc_single
+model_worker_label(b::JACCNASFT, ::String) = "JACC.jl ($(b.impl))"
 
 function model_check_correctness(b::JACCNASFT, config)
     state = model_initialize(b)
-    model_run!(b, state)
+    got = model_run!(b, state)
     model_synchronize(b)
-    re, im = JACC.to_host(state.checksum_real), JACC.to_host(state.checksum_imag)
-    return nas_ft_verified(b.class, complex.(re, im)) ? "pass" : "fail"
+    if !(state isa JACCMultiFT)
+        got = complex.(JACC.to_host(state.checksum_real), JACC.to_host(state.checksum_imag))
+    end
+    return nas_ft_verified(b.class, got) ? "pass" : "fail"
 end
 
 function model_correctness_context(b::JACCNASFT, config)

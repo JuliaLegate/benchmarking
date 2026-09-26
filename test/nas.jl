@@ -83,7 +83,7 @@ end
         supports_benchmark(execution_model(model), "nas_ft") for
         model in (:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger)
     )
-    @test !supports_run(execution_model(:jacc), "nas_ft", 2)
+    @test supports_run(execution_model(:jacc), "nas_ft", 2)
 
     config = joinpath(@__DIR__, "..", "configs", "single_gpu", "nas_ft.toml")
     settings, specs = parse_config(config)

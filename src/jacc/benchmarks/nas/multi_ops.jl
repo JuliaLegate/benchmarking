@@ -42,3 +42,12 @@ function jm_each_part(f, ::JACCMultiOps, a)
     CUDA.device!(0)
     return a
 end
+
+# In-place cuFFT over `dims` of each part viewed as `shape` (JACC has no FFT).
+# The inverse is unnormalized (bfft!).
+function jm_fft!(ops::JACCMultiOps, a, shape, dims, inverse)
+    return jm_each_part(ops, a) do part, _
+        v = reshape(part, shape)
+        inverse ? bfft!(v, dims) : fft!(v, dims)
+    end
+end

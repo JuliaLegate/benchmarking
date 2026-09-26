@@ -1,6 +1,7 @@
 # JACC.Multi NAS adapters on a CPU mock of JACC.Multi with simulated devices.
 include(joinpath(@__DIR__, "jacc_multi_mock.jl"))
 include(joinpath(@__DIR__, "..", "src", "jacc", "benchmarks", "nas", "mg_multi.jl"))
+include(joinpath(@__DIR__, "..", "src", "jacc", "benchmarks", "nas", "ft_multi.jl"))
 
 @testset "JACC.Multi MG on simulated devices" begin
     p = nas_mg_parameters("S")
@@ -14,4 +15,11 @@ include(joinpath(@__DIR__, "..", "src", "jacc", "benchmarks", "nas", "mg_multi.j
     @test length(slabs) >= 2
     @test all(slabs[i + 1].P == 2slabs[i].P for i in 1:(length(slabs) - 1))
     @test all(8L.P >= L.n for L in slabs)
+end
+
+@testset "JACC.Multi FT on simulated devices" begin
+    for nd in (1, 2, 4, 8)
+        @test nas_ft_verified("S", ftm_run!(jacc_multi_ft(MockOps(nd), "S")))
+    end
+    @test_throws ErrorException FTLayout(nas_ft_parameters("W"), 64)
 end

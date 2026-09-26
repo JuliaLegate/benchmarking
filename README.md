@@ -138,9 +138,9 @@ a known limitation, and — is not supported by the harness.
 | GEMM | ✅ / ✅ | ✅ / ✅ | ✅ / — | ✅ / ✅ | ✅ / ✅ |
 | 2D Gray–Scott | ✅ / ✅ | ✅ / ✅ | ✅ / — | ✅ / — | ✅ / ⚠ |
 | Conjugate gradient | ✅ / ✅ | ✅ / ✅ | ✅ / — | ✅ / ✅ | ✅ / ⚠ |
-| NAS embarrassingly parallel | ⚠ / ⚠ | ⚠ / ⚠ | ✅ / — | ✅ / ✅ | ✅ / ✅ |
-| NAS Fourier transform | ⚠ / ⚠ | ⚠ / ⚠ | ✅ / — | ⚠ / — | ⚠ / ⚠ |
-| NAS multigrid | ✅ / ✅ | ✅ / ✅ | ✅ / — | ✅ / — | ✅ / ⚠ |
+| NAS embarrassingly parallel | ✅ / ✅ | ✅ / ✅ | ✅ / — | ✅ / ✅ | ✅ / ✅ |
+| NAS Fourier transform | ✅ / ✅ | ✅ / ✅ | ✅ / — | ✅ / ⚠ | ⚠ / ⚠ |
+| NAS multigrid | ✅ / ✅ | ✅ / ✅ | ✅ / — | ✅ / ⚠ | ✅ / ⚠ |
 
 The Dagger Gray–Scott implementation is correct on multiple GPUs, but Dagger's
 current fused stencil path transfers whole neighboring chunks before slicing
@@ -156,16 +156,14 @@ are comparison variants rather than separate workloads.
 ordinary reduction for an explicit implementation comparison. Run both with
 `julia --project=. run.jl --config=configs/multi_gpu/montecarlo.toml`.
 
-NAS EP reproduces the official 46-bit RNG sequence and verification sums. The
-cuNumeric and cuPyNumeric implementations express that RNG as Float64 array
-algebra because neither model provides it as a primitive, resulting in extra
-task-launch overhead. JACC and Dagger partition independent streams across all
-requested GPUs. See `nas/README.md` for the shared batching contract.
+NAS EP reproduces the official 46-bit RNG sequence and verification sums; every
+model except CUDA.jl partitions the independent streams across GPUs.
 
-NAS FT runs a complete official class per timed sample. cuNumeric and
-cuPyNumeric submit native Legate FFT auto tasks, but transformed axes cannot
-partition: their full 3-D FFT is not distributed. Dagger uses a distributed
-FFT. See `nas/README.md` for initialization, checksum, and timing differences.
+NAS FT runs a complete official class per timed sample. cuNumeric, cuPyNumeric,
+and JACC split the 3-D FFT into slab passes (2-D over x/y, then 1-D over z)
+that each partition across GPUs; Dagger uses its distributed FFT. JACC uses
+cuFFT per GPU, since JACC has no FFT. Dagger's cross-GPU checksum aggregation
+is untimed.
 
 NAS MG runs the official periodic multigrid V-cycle and verifies its final L2
 norm. Its exact sparse RNG-generated right-hand side is setup outside timing,
@@ -173,7 +171,10 @@ matching NPB-GPU. Dagger uses distributed periodic stencils, but currently
 constructs a tuple-valued distributed array for interpolation and temporary
 arrays for restriction; its GPU scaling still needs measurement. An optional
 CUDA.jl separable-array point uses cuNumeric's three-axis transfer algorithm.
-See `nas/README.md` for backend limitations.
+
+JACC FT and MG use `JACC.Multi` at every GPU count; their multi-GPU paths pass
+on simulated devices but still need validation on multiple GPUs. See
+`nas/README.md` for details.
 
 ## Results
 

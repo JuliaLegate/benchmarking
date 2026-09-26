@@ -102,3 +102,20 @@ function jm_each_part(f, ::MockOps, a::MockMulti)
     end
     return a
 end
+
+# Direct DFT (unnormalized inverse, like bfft!) so tests need no FFT package.
+function mock_dft!(A::AbstractArray{ComplexF64,3}, dim, inverse)
+    n = size(A, dim)
+    F = [cis((inverse ? 2 : -2)*pi*j*k/n) for j in 0:(n - 1), k in 0:(n - 1)]
+    perm = (dim, filter(!=(dim), 1:3)...)
+    B = reshape(permutedims(A, perm), n, :)
+    A .= permutedims(reshape(F*B, size(A)[collect(perm)]), invperm(perm))
+    return A
+end
+
+function jm_fft!(ops::MockOps, a, shape, dims, inverse)
+    return jm_each_part(ops, a) do part, _
+        v = reshape(part, shape)
+        foreach(d -> mock_dft!(v, d, inverse), dims)
+    end
+end

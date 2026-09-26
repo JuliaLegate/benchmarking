@@ -6,7 +6,6 @@
 # but omits NPB's Linf norm; see nas/README.md.
 
 include(joinpath(@__DIR__, "..", "..", "..", "nas", "mg.jl"))
-include(joinpath(@__DIR__, "multi_ops.jl"))
 include(joinpath(@__DIR__, "mg_multi.jl"))
 
 struct JACCNASMG

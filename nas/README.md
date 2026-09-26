@@ -33,7 +33,7 @@ weak-scaling ladder. The efficiency plot uses throughput, h(P) / (P · h(1)).
 | --- | --- | --- | --- |
 | cuNumeric, cuPyNumeric | partitioned | slab-partitioned FFT | partitioned |
 | Dagger | partitioned | distributed FFT | partitioned |
-| JACC | partitioned | 1 GPU | `JACC.Multi` z-slabs |
+| JACC | partitioned | slab-partitioned FFT | `JACC.Multi` z-slabs |
 | CUDA.jl | 1 GPU | 1 GPU | 1 GPU |
 
 cuNumeric and cuPyNumeric's FFT task broadcasts every transformed axis
@@ -74,7 +74,11 @@ of the class's `NITER` iterations evolves the spectrum, runs an inverse FFT,
 and takes the 1024-point checksum. All of this is timed; verification (relative
 tolerance `1e-12`) is not.
 
-- **CUDA.jl, JACC**: device RNG and cuFFT (JACC has no FFT API).
+- **CUDA.jl**: device RNG and cuFFT.
+- **JACC**: `JACC.Multi` on every GPU count (`ft_multi.jl`): z-slabs for the
+  x/y FFTs, y-slabs for the z FFT, cuFFT per GPU (JACC has no FFT API), and a
+  JACC pack/unpack plus GPU-to-GPU all-to-all between them. Checksums are
+  fetched each iteration. `JACC_NAS_FT_IMPL=single` runs the original version.
 - **cuNumeric**: host RNG, attached upload, unnormalized inverse with a
   pre-scaled full-volume checksum mask.
 - **cuPyNumeric**: host RNG, `fftn`/`ifftn`, checksum via `take`.

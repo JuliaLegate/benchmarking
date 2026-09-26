@@ -16,6 +16,7 @@ include(joinpath(@__DIR__, "benchmarks", "gemm.jl"))
 include(joinpath(@__DIR__, "benchmarks", "grayscott.jl"))
 
 include(joinpath(@__DIR__, "benchmarks", "cg.jl"))
+include(joinpath(@__DIR__, "benchmarks", "nas", "multi_ops.jl"))
 include(joinpath(@__DIR__, "benchmarks", "nas", "ep.jl"))
 include(joinpath(@__DIR__, "benchmarks", "nas", "ft.jl"))
 include(joinpath(@__DIR__, "benchmarks", "nas", "mg.jl"))
