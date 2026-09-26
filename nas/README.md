@@ -33,7 +33,7 @@ weak-scaling ladder. The efficiency plot uses throughput, h(P) / (P · h(1)).
 | --- | --- | --- | --- |
 | cuNumeric, cuPyNumeric | partitioned | slab-partitioned FFT | partitioned |
 | Dagger | partitioned | distributed FFT | partitioned |
-| JACC | partitioned | 1 GPU | 1 GPU |
+| JACC | partitioned | 1 GPU | `JACC.Multi` z-slabs |
 | CUDA.jl | 1 GPU | 1 GPU | 1 GPU |
 
 cuNumeric and cuPyNumeric's FFT task broadcasts every transformed axis
@@ -98,6 +98,9 @@ tolerance `1e-8`) are untimed. NPB's Linf norm is omitted.
 
 - **CUDA.jl**: direct kernels; the `separable` variant (`nas_mg_compare.toml`)
   uses cuNumeric's three-axis restriction/interpolation decomposition.
-- **JACC**: single GPU (no distributed 3-D halo API).
+- **JACC**: `JACC.Multi` z-slabs on every GPU count (`mg_multi.jl`): ghost
+  planes via `sync_ghost_elems!` (host-staged), small levels replicated per GPU,
+  custom GPU-to-GPU copies for the periodic wrap and the slab-to-replicated
+  gather. `JACC_NAS_MG_IMPL=single` runs the original single-GPU kernels.
 - **cuNumeric, cuPyNumeric, Dagger**: distributed arrays. Dagger's restriction
   evaluates the full fine grid, and it combines per-slab norms after timing.

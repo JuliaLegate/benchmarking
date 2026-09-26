@@ -1,17 +1,19 @@
-# LIMITATION: JACC does not provide distributed three-dimensional halo
-# exchange, so this implementation is single-GPU. Every MG operator and the
-# final norm are nevertheless JACC kernels/reductions; no CUDA.jl kernel is
-# used directly.
+# Default (`multi`): JACC.Multi z-slabs on every GPU count; see mg_multi.jl.
+# `JACC_NAS_MG_IMPL=single`: the original single-GPU version below, where every
+# operator and the norm are JACC kernels/reductions with no CUDA.jl kernels.
 # Transfers use direct per-cell kernels, unlike the array adapters' staged
 # transfers. The common harness times initial zeroing and L2 sum-of-squares,
 # but omits NPB's Linf norm; see nas/README.md.
 
 include(joinpath(@__DIR__, "..", "..", "..", "nas", "mg.jl"))
+include(joinpath(@__DIR__, "multi_ops.jl"))
+include(joinpath(@__DIR__, "mg_multi.jl"))
 
 struct JACCNASMG
     class::String
     N::Int
     M::Int
+    impl::String
 end
 
 struct JACCNASMGState
@@ -24,16 +26,25 @@ end
 
 function model_build_nas_mg(config::ModelWorkerConfig)
     config.T === Float64 || error("NAS MG requires Float64")
-    config.gpus == 1 || error("JACC NAS MG currently supports one GPU")
+    impl = get(ENV, "JACC_NAS_MG_IMPL", "multi")
+    impl in ("multi", "single") || error("JACC_NAS_MG_IMPL must be multi or single")
+    if impl == "single"
+        config.gpus == 1 || error("JACC_NAS_MG_IMPL=single supports one GPU")
+    else
+        JACC.Multi.ndev() == config.gpus || error(
+            "JACC sees $(JACC.Multi.ndev()) GPU(s), but this run requested $(config.gpus)"
+        )
+    end
     class = uppercase(string(get(config.kwargs, :class, "S")))
     p = nas_mg_parameters(class)
     (config.N, config.M) == (p.n, p.n) || error(
         "NAS MG class $class requires N=M=$(p.n)"
     )
-    return JACCNASMG(class, config.N, config.M)
+    return JACCNASMG(class, config.N, config.M, impl)
 end
 
 function model_initialize(b::JACCNASMG)
+    b.impl == "multi" && return jacc_multi_mg(JACCMultiOps(), b.class)
     p = nas_mg_parameters(b.class)
     sizes = nas_mg_level_sizes(p)
     u = [JACC.zeros(Float64, n, n, n) for n in sizes]
@@ -241,13 +252,19 @@ function model_run!(b::JACCNASMG, s::JACCNASMGState)
     return s.norm_reducer.workspace.ret
 end
 
-model_synchronize(::JACCNASMG) = JACC.synchronize()
+model_run!(b::JACCNASMG, s::JACCMultiMG) = mgm_run!(s, b.class)
+
+# JACC.Multi launches and copies synchronize every device before returning.
+model_synchronize(b::JACCNASMG) = b.impl == "multi" ? nothing : JACC.synchronize()
+model_save_id(b::JACCNASMG, ::Symbol) = b.impl == "multi" ? :jacc : :jacc_single
+model_worker_label(b::JACCNASMG, ::String) = "JACC.jl ($(b.impl))"
 
 function model_check_correctness(b::JACCNASMG, config)
     p = nas_mg_parameters(b.class)
     result = model_run!(b, model_initialize(b))
     model_synchronize(b)
-    norm = sqrt(only(JACC.to_host(result))/Float64(p.n)^3)
+    sumsq = result isa Real ? result : only(JACC.to_host(result))
+    norm = sqrt(sumsq/Float64(p.n)^3)
     return nas_mg_verified(b.class, norm) ? "pass" : "fail"
 end
 
