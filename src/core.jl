@@ -46,6 +46,10 @@ cleanup_result!(::AbstractBenchmark, result, state...) = nothing
 # `estimate_scaling` without loading Legion; those files skip `@accelerate`
 # and `::NDArray` methods in that case.
 const CUNUMERIC_BENCH_RUNTIME = isdefined(@__MODULE__, :cuNumeric)
+# Older cuNumeric releases (e.g. 0.2) predate `@accelerate`; their workers skip
+# the accelerated definitions so the remaining benchmarks still run.
+const CUNUMERIC_BENCH_ACCELERATE =
+    CUNUMERIC_BENCH_RUNTIME && isdefined(cuNumeric, Symbol("@accelerate"))
 
 # Interface each benchmark implements (see benchmarks/gemm.jl for a template).
 function name end
@@ -212,6 +216,11 @@ if CUNUMERIC_BENCH_RUNTIME
     end
 end
 
+# Newer cuNumeric returns reductions as CNScalars, which unwrap to host values
+# only inside allowautofetch. Older releases (e.g. 0.2) and other backends lack it.
+const _AUTOFETCH = CUNUMERIC_BENCH_RUNTIME && isdefined(cuNumeric, :allowautofetch)
+_with_autofetch(f) = _AUTOFETCH ? cuNumeric.allowautofetch(f) : f()
+
 _all_approx(a, b, ::Type{T}; kwargs...) where {T} = isapprox_ref(a, b, T; kwargs...)
 function _all_approx(a::Tuple, b::Tuple, ::Type{T}; kwargs...) where {T}
     length(a) == length(b) || return false
@@ -238,7 +247,7 @@ function check_benchmark_correctness(
     got = run_on(mod, check_problem)
     reference_kernel = reference === Base ? check_problem : cuda_runnable(check_problem)
     expected = run_on(reference, reference_kernel)
-    return _all_approx(got, expected, T; atol, rtol) ? "pass" : "fail"
+    return _with_autofetch(() -> _all_approx(got, expected, T; atol, rtol)) ? "pass" : "fail"
 end
 
 # One timed trial: warmup, then time `n_iter` iterations of `run!`.
