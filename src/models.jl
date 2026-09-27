@@ -100,8 +100,6 @@ supports_gpu_count(::CUDAJLModel, gpus::Integer) = gpus == 1
 
 function supports_run(model::ExecutionModel, name::AbstractString, gpus::Integer)
     supports_benchmark(model, name) || return false
-    # JACC Gray-Scott is single-GPU pending its 2D ghost fix.
-    model isa JACCModel && startswith(name, "grayscott") && gpus != 1 && return false
     return supports_gpu_count(model, gpus)
 end
 

@@ -143,7 +143,7 @@ end
     @test supports_benchmark(execution_model(:jacc), "gemm")
     @test supports_benchmark(execution_model(:dagger), "gemm")
     @test !supports_gpu_count(execution_model(:cudajl), 2)
-    @test !supports_run(execution_model(:jacc), "grayscott", 2)
+    @test supports_run(execution_model(:jacc), "grayscott", 2)
     @test supports_run(execution_model(:dagger), "grayscott", 2)
 
     gs_gray, specs_gray = parse_config(GRAYSCOTT_MULTIGPU_CONFIG)
