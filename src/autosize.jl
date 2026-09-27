@@ -78,13 +78,20 @@ function selected_gpu_budget(mem_frac, count;
     0 < count <= length(devices) ||
         error("Requested $count GPUs, but only $(length(devices)) are visible")
     # All visible devices are eligible for the runtime; use the smallest pool.
-    pools = [parse(Int, r[3])*1024^2 for r in devices]
-    free = minimum(parse(Int, r[4])*1024^2 for r in devices)
+    # Containers may deny nvidia-smi memory queries ("[Insufficient Permissions]");
+    # CUNUMERIC_BENCH_FBMEM_MB then stands in for the unreadable values.
+    mib(x) = (v = tryparse(Int, x); v === nothing ? nothing : v*1024^2)
+    pools = [mib(r[3]) for r in devices]
+    frees = [mib(r[4]) for r in devices]
     if fbmem !== nothing
         cap = parse(Int, fbmem)*1024^2
         cap > 0 || error("CUNUMERIC_BENCH_FBMEM_MB must be positive")
-        pools = min.(pools, cap)
+        pools = [p === nothing ? cap : min(p, cap) for p in pools]
+        frees = [f === nothing ? cap : f for f in frees]
     end
+    (any(isnothing, pools) || any(isnothing, frees)) &&
+        error("nvidia-smi could not report GPU memory; set CUNUMERIC_BENCH_FBMEM_MB")
+    free = minimum(frees)
     budget = floor(Int, frac*minimum(pools))
     # Do not silently shrink for transient other workloads.
     free >= budget || error(
