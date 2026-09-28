@@ -75,7 +75,7 @@ function model_check_correctness(b::DaggerNASEP, config)
     model_run!(b, state)
     model_synchronize(b)
     partials = nas_ep_combine(collect(state.partials))
-    return nas_ep_verified(b.class, partials.sx, partials.sy) ? "pass" : "fail"
+    return nas_ep_status(b.class, partials.sx, partials.sy)
 end
 
 function model_correctness_context(b::DaggerNASEP, config)

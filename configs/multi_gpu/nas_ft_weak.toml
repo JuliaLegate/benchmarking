@@ -1,4 +1,5 @@
-# NAS FT weak scaling; class[i] runs on gpus[i].
+# NAS FT weak scaling; class[i] runs on gpus[i]. Every point is class A's per-GPU
+# grid and 6 iterations; A and A.4 (class B's grid) verify, A.2 and A.8 skip.
 #   julia --project=. run.jl --config=configs/multi_gpu/nas_ft_weak.toml
 [Global]
 n_warmup = 1
@@ -12,4 +13,4 @@ models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 T = "Float64"
 gpus = [1, 2, 4, 8]
 cpus = 8
-kwargs = { class = ["A", "B", "C", "D"] }
+kwargs = { class = ["A", "A.2", "A.4", "A.8"] }

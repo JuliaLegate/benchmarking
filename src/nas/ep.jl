@@ -13,6 +13,9 @@ const NAS_EP_CLASSES = Dict(
     "C" => (; m=32, sx=4.764367927995374e4, sy=-8.084072988043731e4),
     "D" => (; m=36, sx=1.982481200946593e5, sy=-1.020596636361769e5),
     "E" => (; m=40, sx=-5.319717441530e5, sy=-3.688834557731e5),
+    # Weak scaling: class B's per-GPU samples on 2 and 8 GPUs (4 GPUs is class C).
+    "B.2" => (; m=31, sx=nothing, sy=nothing),
+    "B.8" => (; m=33, sx=nothing, sy=nothing),
 )
 
 function nas_ep_parameters(class::AbstractString)
@@ -147,6 +150,12 @@ function nas_ep_combine(partials)
         sy += partial.sy
     end
     return (; q, sx, sy)
+end
+
+# "skipped" for weak-scaling sizes that have no NAS reference.
+function nas_ep_status(class::AbstractString, sx::Real, sy::Real)
+    nas_ep_parameters(class).sx === nothing && return "skipped"
+    return nas_ep_verified(class, sx, sy) ? "pass" : "fail"
 end
 
 function nas_ep_verified(class::AbstractString, sx::Real, sy::Real)

@@ -170,7 +170,7 @@ function model_check_correctness(b::JACCNASFT, config)
     if !(state isa JACCMultiFT)
         got = complex.(JACC.to_host(state.checksum_real), JACC.to_host(state.checksum_imag))
     end
-    return nas_ft_verified(b.class, got) ? "pass" : "fail"
+    return nas_ft_status(b.class, got)
 end
 
 function model_correctness_context(b::JACCNASFT, config)

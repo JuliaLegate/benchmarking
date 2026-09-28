@@ -27,6 +27,9 @@ CLASSES = {
     "C": (32, 4.764367927995374e4, -8.084072988043731e4),
     "D": (36, 1.982481200946593e5, -1.020596636361769e5),
     "E": (40, -5.319717441530e5, -3.688834557731e5),
+    # Weak scaling: class B's per-GPU samples on 2 and 8 GPUs (4 GPUs is class C).
+    "B.2": (31, None, None),
+    "B.8": (33, None, None),
 }
 
 
@@ -230,6 +233,8 @@ class NASEmbarrassinglyParallel:
         sx = float(host_np.asarray(values[11]).sum())
         sy = float(host_np.asarray(values[12]).sum())
         _, expected_x, expected_y = CLASSES[self.class_name]
+        if expected_x is None:  # weak-scaling size without a NAS reference
+            return "skipped"
         ok = (abs((sx-expected_x)/expected_x) <= EPSILON and
               abs((sy-expected_y)/expected_y) <= EPSILON)
         if ok and self.impl == "vectorized":

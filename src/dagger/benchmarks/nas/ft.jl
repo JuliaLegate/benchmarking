@@ -151,7 +151,7 @@ function model_check_correctness(b::DaggerNASFT, config)
     got = ComplexF64[
         sum(only(fetch(task)) for task in tasks) for tasks in results
     ]
-    return nas_ft_verified(b.class, got) ? "pass" : "fail"
+    return nas_ft_status(b.class, got)
 end
 
 function model_correctness_context(b::DaggerNASFT, config)

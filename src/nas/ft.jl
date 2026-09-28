@@ -12,6 +12,10 @@ const NAS_FT_CLASSES = Dict(
     "C" => (; nx=512, ny=512, nz=512, niter=20),
     "D" => (; nx=2048, ny=1024, nz=1024, niter=25),
     "E" => (; nx=4096, ny=2048, nz=2048, niter=25),
+    # Weak scaling: class A's per-GPU grid and iterations on 2, 4 and 8 GPUs.
+    "A.2" => (; nx=256, ny=256, nz=256, niter=6),
+    "A.4" => (; nx=512, ny=256, nz=256, niter=6),
+    "A.8" => (; nx=512, ny=512, nz=256, niter=6),
 )
 
 # CUDA/FT/ft.cu::verify at NAS_FT_NPB_GPU_COMMIT.
@@ -139,6 +143,9 @@ const NAS_FT_CHECKSUMS = Dict(
         5.119876028049e2 + 5.120550079284e2im,
     ],
 )
+
+# A.4 is class B's grid for 6 iterations; checksums are per iteration.
+NAS_FT_CHECKSUMS["A.4"] = NAS_FT_CHECKSUMS["B"][1:6]
 
 function nas_ft_parameters(class::AbstractString)
     key = uppercase(class)
@@ -271,6 +278,12 @@ function nas_ft_checksum_mask(p)
         mask[index] += 1.0
     end
     return mask
+end
+
+# "skipped" for weak-scaling sizes that have no NAS reference.
+function nas_ft_status(class::AbstractString, got)
+    haskey(NAS_FT_CHECKSUMS, uppercase(class)) || return "skipped"
+    return nas_ft_verified(class, got) ? "pass" : "fail"
 end
 
 function nas_ft_verified(class::AbstractString, got; tolerance=1.0e-12)

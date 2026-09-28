@@ -62,7 +62,7 @@ function check_benchmark_correctness(
             p = nas_ep_batch(i - 1)
             all(q[bin][i] == getfield(p, bin) for bin in 1:NAS_EP_NQ)
         end
-        return histogram_ok && nas_ep_verified(b.class, sx, sy) ? "pass" : "fail"
+        return histogram_ok ? nas_ep_status(b.class, sx, sy) : "fail"
     finally
         cleanup!(b, state)
     end

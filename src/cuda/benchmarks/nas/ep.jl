@@ -57,5 +57,5 @@ function check_benchmark_correctness(
 )
     state = only(initialize(b; mod))
     result = nas_ep_combine(Array(run!(b, state)))
-    return nas_ep_verified(b.class, result.sx, result.sy) ? "pass" : "fail"
+    return nas_ep_status(b.class, result.sx, result.sy)
 end

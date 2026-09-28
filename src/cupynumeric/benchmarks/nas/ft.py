@@ -24,6 +24,8 @@ CLASSES = {
     "A": (256, 256, 128, 6), "B": (512, 256, 256, 20),
     "C": (512, 512, 512, 20), "D": (2048, 1024, 1024, 25),
     "E": (4096, 2048, 2048, 25),
+    # Weak scaling: class A's per-GPU grid and iterations on 2, 4 and 8 GPUs.
+    "A.2": (256, 256, 256, 6), "A.4": (512, 256, 256, 6), "A.8": (512, 512, 256, 6),
 }
 CHECKSUMS = {
     "S": [
@@ -96,6 +98,8 @@ CHECKSUMS = {
         511.9876028049+512.0550079284j,
     ],
 }
+# A.4 is class B's grid for 6 iterations; checksums are per iteration.
+CHECKSUMS["A.4"] = CHECKSUMS["B"][:6]
 
 def initial_conditions(out, scratch):
     flat = out.reshape(-1)
@@ -162,6 +166,8 @@ class NASFourierTransform:
     def correctness_dims(self):
         return self.N, self.M
     def check_correctness(self):
+        if self.class_name not in CHECKSUMS:  # weak-scaling size without a NAS reference
+            return "skipped"
         got = [complex(host_np.asarray(x)) for x in self.run(self.initialize())]
         ok = all(abs((x-r)/r) <= 1.0e-12 for x, r in zip(got, CHECKSUMS[self.class_name]))
         return "pass" if ok else "fail"

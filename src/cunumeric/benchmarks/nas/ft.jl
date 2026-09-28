@@ -105,7 +105,7 @@ function check_benchmark_correctness(
     state = only(initialize(b; mod))
     try
         got = ComplexF64[cuNumeric.@allowscalar(x[]) for x in run!(b, state)]
-        return nas_ft_verified(b.class, got) ? "pass" : "fail"
+        return nas_ft_status(b.class, got)
     finally
         cleanup!(b, state)
     end

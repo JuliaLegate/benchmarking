@@ -112,10 +112,10 @@ function model_check_correctness(b::JACCNASEP, config)
     model_run!(b, state)
     if state isa JACCNASEPBroadcastState
         partials = nas_ep_combine(JACC.to_host(state.partials))
-        return nas_ep_verified(b.class, partials.sx, partials.sy) ? "pass" : "fail"
+        return nas_ep_status(b.class, partials.sx, partials.sy)
     end
     sx, sy = sum(JACC.to_host(state.sx)), sum(JACC.to_host(state.sy))
-    return nas_ep_verified(b.class, sx, sy) ? "pass" : "fail"
+    return nas_ep_status(b.class, sx, sy)
 end
 
 function model_correctness_context(b::JACCNASEP, config)

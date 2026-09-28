@@ -118,5 +118,5 @@ function check_benchmark_correctness(
 )
     state = only(initialize(b; mod))
     got = ComplexF64[only(Array(x)) for x in run!(b, state)]
-    return nas_ft_verified(b.class, got) ? "pass" : "fail"
+    return nas_ft_status(b.class, got)
 end
