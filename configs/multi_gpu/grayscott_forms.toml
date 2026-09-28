@@ -8,8 +8,7 @@ n_trial = 5
 models = ["cunumeric"]
 check_correctness = true
 n_correctness_iter = 5
-auto_size = true
-mem_frac = 0.75
+auto_size = false
 
 [plot.groups]
 grayscott = [
@@ -25,27 +24,37 @@ T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
 fusion = true
+N = [24000, 33944, 48000, 67888]
+M = [24000, 33944, 48000, 67888]
 
 [[grayscott_function_accelerated]]
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
 fusion = true
+N = [24000, 33944, 48000, 67888]
+M = [24000, 33944, 48000, 67888]
 
 [[grayscott_begin_accelerated]]
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
 fusion = true
+N = [24000, 33944, 48000, 67888]
+M = [24000, 33944, 48000, 67888]
 
 [[grayscott_let_accelerated]]
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
 fusion = true
+N = [24000, 33944, 48000, 67888]
+M = [24000, 33944, 48000, 67888]
 
 [[grayscott_expression_accelerated]]
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
 fusion = true
+N = [24000, 33944, 48000, 67888]
+M = [24000, 33944, 48000, 67888]
