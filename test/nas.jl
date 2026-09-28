@@ -172,6 +172,32 @@ end
     end
 end
 
+@testset "Repeated cuNumeric NAS solves" begin
+    mktempdir() do dir
+        path = joinpath(dir, "repeated.toml")
+        for name in ("nas_ep", "nas_mg", "nas_ft"),
+            models in (["cunumeric"], ["cudajl"], ["cunumeric", "cudajl"])
+            config = Dict(
+                "Global" => Dict("n_warmup" => 1, "n_iter" => 3,
+                    "n_trial" => 5, "models" => models),
+                name => [Dict("T" => "Float64", "gpus" => 1, "cpus" => 1,
+                    "kwargs" => Dict("class" => "S"))],
+            )
+            open(io -> TOML.print(io, config), path, "w")
+            gs, specs = parse_config(path)
+            if models == ["cunumeric"]
+                runs = plan_runs(specs, gs, config, parse_plot_groups(path), 10^12)
+                @test length(runs) == 1
+                @test only(runs).spec.n_iter == 3
+                @test only(runs).spec.n_warmup == 1
+                @test only(runs).spec.n_trial == 5
+            else
+                @test_throws ErrorException validate_spec(only(specs))
+            end
+        end
+    end
+end
+
 @testset "NAS class sweeps" begin
     mktempdir() do dir
         path = joinpath(dir, "weak.toml")
