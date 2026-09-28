@@ -73,7 +73,8 @@ end
 # handling; vector updates use broadcasts and dot products reduce each chunk.
 function model_run!(b::DaggerCG{T}, s::DaggerCGState) where {T}
     x, r, p, Ap = s.x, s.r, s.p, s.Ap
-    Dagger.with_options(; scope=b.scope) do
+    # `return` in the do-block only exits the closure.
+    iterations = Dagger.with_options(; scope=b.scope) do
         x .= zero(T)
         r .= T(0.5)
         p .= r
@@ -95,8 +96,10 @@ function model_run!(b::DaggerCG{T}, s::DaggerCGState) where {T}
                 (rho <= target || b.max_iter == 1) && return k
             end
         end
+        return nothing
     end
-    return error("CG did not converge within max_iter")
+    iterations === nothing && error("CG did not converge within max_iter")
+    return iterations
 end
 
 model_synchronize(::DaggerCG) = Dagger.gpu_synchronize(:CUDA)

@@ -223,8 +223,8 @@ The problem is `tridiag(1,4,1) x = 1/2` from `x = 0`. Each solve checks converge
 `k == max_iter`, and fails if it does not converge (relative tolerance 1e-8 for
 Float64, 1e-5 for Float32); use `max_iter = 1` for a single-update comparison.
 
-`n_iter` counts complete solves per trial. Convergence determines the work, so
-compare elapsed time — the CSV's GFLOP/s field is zero. Auto-sizing depends on
+`n_iter` counts complete solves per trial. GFLOP/s uses 15N FLOPs per executed
+iteration, counted by a one-time CPU replay (~30 s at N=10^8). Auto-sizing depends on
 `max_iter`, so keep N fixed when comparing check intervals. The config pins
 N=65,536 (set N=100,000,000 for the paper-sized workload); JACC additionally
 requires N divisible by the GPU count. Validate the JACC partition kernels with
