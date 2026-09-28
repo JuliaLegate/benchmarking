@@ -172,24 +172,25 @@ function group_series(results_dir, group, members)
     return filter(!isnothing, series)
 end
 
-# Separate EP's high-level API paths from explicitly written stream kernels.
-# Both groups perform the same workload under the same timing contract.
-function ep_series(results_dir, category)
-    entries = if category == :high_level
-        (("cunumeric_struct", "cuNumeric.jl (struct broadcast)",
-          COLOR_CUNUMERIC, MARKER_CUNUMERIC),
-         ("dagger", "Dagger.jl (broadcast)", COLOR_DAGGER, MARKER_DAGGER),
-         ("cupynumeric", "cuPyNumeric (array skip-ahead)", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC),
-         ("CUDA.jl_broadcast", "CUDA.jl (broadcast)", COLOR_CUDA, MARKER_CUDA),
-         ("jacc_broadcast", "JACC.jl (array broadcast)", COLOR_JACC, MARKER_JACC),
-         ("cupynumeric_recurrence", "cuPyNumeric (array recurrence)", COLOR_CUPYNUMERIC, :diamond))
-    else
-        (("CUDA.jl", "CUDA.jl (kernel)", COLOR_CUDA, MARKER_CUDA),
-         ("jacc", "JACC.jl (kernel)", COLOR_JACC, MARKER_JACC))
-    end
+# EP's high-level API paths and explicitly written stream kernels share one
+# figure; kernels are dashed. All perform the same workload and timing contract.
+function ep_series(results_dir)
+    entries = (
+        ("cunumeric_struct", "cuNumeric.jl (struct broadcast)",
+         COLOR_CUNUMERIC, MARKER_CUNUMERIC, :solid),
+        ("dagger", "Dagger.jl (broadcast)", COLOR_DAGGER, MARKER_DAGGER, :solid),
+        ("cupynumeric", "cuPyNumeric (array skip-ahead)",
+         COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC, :solid),
+        ("CUDA.jl_broadcast", "CUDA.jl (broadcast)", COLOR_CUDA, MARKER_CUDA, :solid),
+        ("jacc_broadcast", "JACC.jl (array broadcast)", COLOR_JACC, MARKER_JACC, :solid),
+        ("cupynumeric_recurrence", "cuPyNumeric (array recurrence)",
+         COLOR_CUPYNUMERIC, :diamond, :solid),
+        ("CUDA.jl", "CUDA.jl (kernel)", COLOR_CUDA, MARKER_CUDA, :dash),
+        ("jacc", "JACC.jl (kernel)", COLOR_JACC, MARKER_JACC, :dash),
+    )
     series = []
-    for (key, label, color, marker) in entries
-        s = load_csv_series(results_dir, "nas_ep", key, label, color, marker, :solid)
+    for (key, label, color, marker, ls) in entries
+        s = load_csv_series(results_dir, "nas_ep", key, label, color, marker, ls)
         s === nothing || push!(series, s)
     end
     return series
@@ -344,21 +345,17 @@ function main(args=ARGS)
     mkpath(cfg.out_dir)
     for (group, members) in parse_plot_groups(cfg.config)
         if group == "nas_ep" && members == ["nas_ep"]
-            for (category, title) in ((:high_level, "High-level APIs"),
-                                      (:explicit_kernels, "Explicit stream kernels"))
-                series = ep_series(cfg.results_dir, category)
-                isempty(series) && continue
-                validate_series_sizes(series)
-                kind = scaling_kind(series)
-                fig = weak_scaling_figure(
-                    series; plot_title="NAS EP — $title — $kind scaling",
-                    log_values=category == :high_level
-                )
-                out = joinpath(cfg.out_dir,
-                    "nas_ep_$(category)_$(kind)_scaling$(cfg.output_suffix).png")
-                savefig(fig, out)
-                println("wrote $out")
-            end
+            series = ep_series(cfg.results_dir)
+            isempty(series) && continue
+            validate_series_sizes(series)
+            kind = scaling_kind(series)
+            # Implementations span orders of magnitude; log axes keep all visible.
+            fig = weak_scaling_figure(
+                series; plot_title="NAS EP — $kind scaling", log_values=true
+            )
+            out = joinpath(cfg.out_dir, "nas_ep_$(kind)_scaling$(cfg.output_suffix).png")
+            savefig(fig, out)
+            println("wrote $out")
             continue
         end
         series = group_series(cfg.results_dir, group, members)

@@ -2,17 +2,17 @@
 
 The default path computes pair seeds with timed skip-ahead powers, so each
 stream's 256 pairs can be evaluated as an array. It still materializes large
-intermediates and evaluates masked rejected-pair math. It does not use custom
+intermediates and evaluates masked rejected-pair math, unlike cuNumeric's
+single fused per-batch kernel. It does not use custom
 tasks or host-generated random samples. The earlier stepwise recurrence is
 available with CUPYNUMERIC_NAS_EP_IMPL=recurrence for comparison.
 """
 
-import gc
 import math
 import os
 import cupynumeric as np
 import numpy as host_np
-from legate.core import get_legate_runtime
+from legate.core import TaskTarget, get_legate_runtime
 
 from core import register_benchmark
 
@@ -195,12 +195,14 @@ class NASEmbarrassinglyParallel:
 
         powers = pair_powers()
         q, sx, sy = values[1:11], values[11], values[12]
-        # Cap each slab at 2^24 pairs of Float64 values. Class S fits in one
-        # slab; larger classes use more slabs rather than growing temporaries.
-        chunk = min(1 << MK, max(1, (1 << 24)//self.batches))
+        # Cap each slab at 2^25 pairs per GPU, so weak scaling keeps the
+        # per-GPU slab size. Slabs are (pairs, batches): row-major sums over
+        # axis 0 are much faster than over a short trailing axis.
+        gpus = max(1, get_legate_runtime().get_machine().count(TaskTarget.GPU))
+        chunk = min(1 << MK, max(1, (gpus << 25)//self.batches))
         for lo in range(0, 1 << MK, chunk):
             hi = min(lo + chunk, 1 << MK)
-            seed1 = mul_mod46_powers(seed[:, None], powers[None, lo:hi])
+            seed1 = mul_mod46_powers(seed[None, :], powers[lo:hi, None])
             seed2 = mul_mod46(seed1, MULTIPLIER)
             u1, u2 = (2.0**-46)*seed1, (2.0**-46)*seed2
             x1, x2 = 2.0*u1-1.0, 2.0*u2-1.0
@@ -213,14 +215,10 @@ class NASEmbarrassinglyParallel:
             for bin in range(NQ):
                 q[bin] += np.sum(
                     accepted*np.maximum(0.0, 1.0-np.abs(bins-float(bin))),
-                    axis=1,
+                    axis=0,
                 )
-            sx += np.sum(accepted*g1, axis=1)
-            sy += np.sum(accepted*g2, axis=1)
-            # Complete the slab before releasing its large temporary arrays.
-            # This synchronization and collection are inside the timed run.
-            get_legate_runtime().issue_execution_fence(block=True)
-            gc.collect()
+            sx += np.sum(accepted*g1, axis=0)
+            sy += np.sum(accepted*g2, axis=0)
         return values
 
     def run(self, state):
