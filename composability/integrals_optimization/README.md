@@ -42,9 +42,8 @@ export CUNUMERIC_SOURCE=/path/to/cuNumeric.jl
 ./instantiate_projects.sh
 ```
 
-The plume launcher defaults to `environments/integrals_optimization`; set
-`COMPOSABILITY_ENV_ROOT` before initialization to place the environment
-elsewhere. `INTOPT_PROJECT` overrides the launcher default.
+The plume launcher uses the shared `environments/composability` project in local
+runs and Docker. `INTOPT_PROJECT` selects an alternate instantiated project.
 
 Apply machine-specific cuNumeric `LocalPreferences.toml` settings to that
 environment if needed. Keep its `Manifest.toml` with benchmark results. Start

@@ -24,10 +24,8 @@ the repository's standard setup script:
 CUNUMERIC_SOURCE=/opt/cuNumeric.jl ./instantiate_projects.sh
 ```
 
-The Krylov environment defaults to `environments/krylov`; set
-`COMPOSABILITY_ENV_ROOT=/opt/bench-envs` when initializing it outside the
-repository (as the container build does). Set `BENCH_PROJECT` to override the
-launcher default.
+Krylov uses the shared `environments/composability` project in both local runs
+and Docker. Set `BENCH_PROJECT` to select an alternate instantiated project.
 
 If cuNumeric uses local backend-library preferences, copy its
 `LocalPreferences.toml` into this environment. Preserve the resulting

@@ -2,7 +2,7 @@
 
 ## Composability
 
-The [composability benchmark plan](composability/README.md) covers Krylov CG,
+The [composability setup and running guide](composability/README.md) covers Krylov CG,
 the OrdinaryDiffEq heat equation, and the Integrals.jl + Optimization.jl gas
 plume fit. These workloads run independently of the benchmark orchestrator.
 
@@ -13,8 +13,8 @@ mean throughput with trial standard deviations.
 
 ## Setup
 
-Instantiate the Julia environments once, including the Krylov,
-OrdinaryDiffEq, and Integrals + Optimization composability environments:
+Instantiate the Julia environments once, including the shared environment for
+Krylov, OrdinaryDiffEq, and Integrals + Optimization:
 
 ```bash
 ./instantiate_projects.sh
@@ -28,13 +28,20 @@ CUNUMERIC_SOURCE=/path/to/cuNumeric.jl ./instantiate_projects.sh
 ```
 
 Set `CUNUMERIC_BENCH_JULIA` to select a different Julia executable.
-Use Julia 1.13 for the composability workloads. Their environments are created
-under `environments/krylov`, `environments/ordinarydiffeq`, and
-`environments/integrals_optimization`. Set `COMPOSABILITY_ENV_ROOT` to place
-these three environments elsewhere (the benchmark container uses
-`/opt/bench-envs`). The composability launchers use these paths by default;
+Use Julia 1.13 for the composability workloads. All three share the versioned
+[`environments/composability/Project.toml`](environments/composability/Project.toml).
+Setup and launchers use this directory directly, including inside the container.
+Dagger is pinned to the registered `0.22.5` release in both the composability
+and Dagger environments. Setup also releases old Dagger branch pins in existing
+Dagger manifests; rerun `./instantiate_projects.sh` after updating.
+These workloads do not use JACC.
 `BENCH_PROJECT`, `ODE_PROJECT`, and `INTOPT_PROJECT` remain available as
-per-workload overrides.
+per-workload launcher overrides. Launchers also accept `JULIA`, which takes
+precedence over `CUNUMERIC_BENCH_JULIA`.
+
+Existing checkouts/images using the old per-workload environments must rerun
+`./instantiate_projects.sh`. Apply any machine-specific `LocalPreferences.toml`
+to the shared environment; old manifests and preferences are not migrated.
 
 In cuNumeric.jl, initialize the pinned harness with
 `git submodule update --init --recursive`. Publish benchmark changes here first,
@@ -51,7 +58,29 @@ cuPyNumeric also needs its conda environment:
 Set `CUNUMERIC_BENCH_CONDA` if `conda` is not on `PATH`, or
 `CUPYNUMERIC_ENV` to use an existing environment.
 
-## Run
+## Run composability benchmarks
+
+Run composability benchmarks through their unified entry point. It defaults to
+all three workloads with fixed Float32 sizes for an 80 GB H100:
+
+```bash
+julia --project=. run_composability.jl
+julia --project=. run_composability.jl --only=krylov,ordinarydiffeq
+julia --project=. run_composability.jl --mode=multi --gpus=1,2,4,8
+julia --project=. run_composability.jl --mode=both --output=results/composability-paper
+julia --project=. run_composability.jl --only=integrals_optimization --dry-run
+```
+
+Set N in [`composability/sizes.toml`](composability/sizes.toml): `single` lists
+the one-GPU dimensions and `weak_base` sets N for the one-GPU weak-scaling
+baseline. Use `--config=/path/to/sizes.toml` to select a separate config.
+
+`--mode=single` runs size sweeps on one GPU; `--mode=multi` runs weak scaling.
+`--only=all` is the default. `--dry-run` previews commands without requiring a
+GPU or initialized environment. Use `--help` for all options and the
+[composability guide](composability/README.md) for sizes and smoke checks.
+
+## Run the benchmark suite
 
 Use the smoke test for a quick end-to-end check:
 
@@ -83,6 +112,32 @@ check on 1, 2, 4, and 8 GPUs with:
 ```bash
 julia --project=. run.jl --config=configs/multi_gpu/grayscott.toml --verbose
 ```
+
+## Setup tests and CI
+
+[Environment setup tests](.github/workflows/setup-tests.yml) run on every pull
+request update and pushes to `main`, using **Julia 1.13.1** on a hosted Ubuntu
+runner. The job checks out `JuliaLegate/cuNumeric.jl` at `main`, runs the setup
+path and composability CLI tests, then runs the real `instantiate_projects.sh`
+in fresh copies of all project directories. It verifies the generated
+manifests, local cuNumeric/CNPreferences paths, and released Dagger version.
+
+The job disables automatic precompilation and GPU runtime startup. It tests
+installation rather than GPU execution; it does not need a GPU or build the
+benchmark container. Downloaded packages may be cached, but project manifests
+are always created afresh. Logs, tested commit IDs, and resolved project files
+are uploaded as `setup-julia-1.13.1`, including on failure.
+
+Run the same integration test locally on Linux with Julia 1.13.1:
+
+```bash
+CUNUMERIC_SOURCE=/path/to/cuNumeric.jl \
+  julia --startup-file=no --project=. test/instantiate_projects.jl
+```
+
+It leaves your benchmark environments unchanged and saves diagnostics under
+`results/instantiate-tests/`. The cuNumeric checkout should be clean, without
+stale local manifests or machine-specific preferences.
 
 ## Configure
 

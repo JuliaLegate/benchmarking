@@ -1,5 +1,6 @@
 *Manifest.toml
 *LocalPreferences.toml
+# Legacy generated environments; the shared composability project is versioned.
 /environments/krylov/
 /environments/ordinarydiffeq/
 /environments/integrals_optimization/

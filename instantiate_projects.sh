@@ -11,9 +11,6 @@ if [[ ! -f "$source_dir/Project.toml" || ! -f "$source_dir/lib/CNPreferences/Pro
 fi
 source_dir="$(cd -- "$source_dir" && pwd)"
 export CUNUMERIC_SOURCE="$source_dir"
-composability_env_root="${COMPOSABILITY_ENV_ROOT:-$benchmark_dir/environments}"
-mkdir -p "$composability_env_root"
-composability_env_root="$(cd -- "$composability_env_root" && pwd)"
 
 cd "$benchmark_dir"
 
@@ -25,8 +22,19 @@ echo "Instantiating the benchmark orchestrator"
 
 for environment in cuda jacc dagger; do
     echo "Instantiating environments/$environment"
-    "$julia_bin" --project="environments/$environment" \
-        -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
+    "$julia_bin" --project="environments/$environment" -e '
+        using Pkg
+        Pkg.resolve()
+        # Existing manifests may still track the old Dagger development branch.
+        for (uuid, info) in Pkg.dependencies()
+            if info.name == "Dagger" && info.is_direct_dep
+                # Pkg.free first unpins a pinned repo; a second call releases it.
+                info.is_pinned && Pkg.free(PackageSpec(uuid=uuid))
+                !info.is_tracking_registry && Pkg.free(PackageSpec(uuid=uuid))
+            end
+        end
+        Pkg.instantiate()
+    '
 done
 
 echo "Setting JACC backend to cuda"
@@ -38,15 +46,7 @@ echo "Developing local packages and instantiating environments/cunumeric"
     -e 'using Pkg; Pkg.develop([PackageSpec(path=ARGS[1]), PackageSpec(path=ARGS[2])]); Pkg.instantiate()' \
     "$source_dir" "$source_dir/lib/CNPreferences"
 
-echo "Instantiating Krylov composability environment"
-mkdir -p "$composability_env_root/krylov"
-cp composability/krylov/Project.toml "$composability_env_root/krylov/Project.toml"
-"$julia_bin" --project="$composability_env_root/krylov" \
+echo "Developing local packages and instantiating environments/composability"
+"$julia_bin" --project="environments/composability" \
     -e 'using Pkg; Pkg.develop([PackageSpec(path=ARGS[1]), PackageSpec(path=ARGS[2])]); Pkg.instantiate()' \
     "$source_dir" "$source_dir/lib/CNPreferences"
-
-for workload in ordinarydiffeq integrals_optimization; do
-    echo "Instantiating $workload composability environment"
-    "$julia_bin" --startup-file=no "composability/$workload/setup.jl" \
-        "$composability_env_root/$workload"
-done

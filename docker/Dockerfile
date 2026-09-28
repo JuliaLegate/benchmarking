@@ -6,7 +6,6 @@ ENV CONDA_DIR=/opt/conda
 ENV PATH="${CONDA_DIR}/bin:${PATH}"
 ENV CUNUMERIC_BENCH_CONDA="${CONDA_DIR}/bin/conda"
 ENV CUNUMERIC_SOURCE=/opt/cuNumeric.jl
-ENV COMPOSABILITY_ENV_ROOT=/opt/bench-envs
 
 COPY docker/profile.sh /etc/profile.d/cunumeric.sh
 COPY docker/entrypoint.sh /usr/local/bin/cunumeric-entrypoint
@@ -25,15 +24,13 @@ COPY environments/cuda/Project.toml environments/cuda/Project.toml
 COPY environments/cunumeric/Project.toml environments/cunumeric/Project.toml
 COPY environments/dagger/Project.toml environments/dagger/Project.toml
 COPY environments/jacc/Project.toml environments/jacc/Project.toml
-COPY composability/krylov/Project.toml composability/krylov/Project.toml
-COPY composability/ordinarydiffeq/setup.jl composability/ordinarydiffeq/setup.jl
-COPY composability/integrals_optimization/setup.jl composability/integrals_optimization/setup.jl
+COPY environments/composability/Project.toml environments/composability/Project.toml
 COPY instantiate_projects.sh install_cupynumeric.sh ./
 
 ARG DEPENDENCY_REFRESH=0
 RUN echo "Benchmark dependency refresh: ${DEPENDENCY_REFRESH}" \
     && julia -e 'using Pkg; Pkg.Registry.add("General")' \
-    && JULIA_PKG_PRECOMPILE_AUTO=0 CUNUMERIC_BENCH_PRECOMPILE=0 ./instantiate_projects.sh \
+    && JULIA_PKG_PRECOMPILE_AUTO=0 ./instantiate_projects.sh \
     && rm -rf /depot/registries /depot/scratchspaces /depot/logs
 
 # Docker builds do not expose the host NVIDIA driver, so Conda cannot discover
@@ -53,9 +50,8 @@ RUN source /etc/profile.d/cunumeric.sh \
         -e 'using Pkg; Pkg.precompile(); import JACC; JACC.@init_backend' \
     && LEGATE_SKIP_RUNTIME=true julia --project=environments/cunumeric \
         -e 'using Pkg; Pkg.precompile()' \
-    && for project in "$COMPOSABILITY_ENV_ROOT"/krylov "$COMPOSABILITY_ENV_ROOT"/ordinarydiffeq "$COMPOSABILITY_ENV_ROOT"/integrals_optimization; do \
-        LEGATE_SKIP_RUNTIME=true julia --project="$project" -e 'using Pkg; Pkg.precompile()'; \
-    done \
+    && LEGATE_SKIP_RUNTIME=true julia --project=environments/composability \
+        -e 'using Pkg; Pkg.precompile()' \
     && rm -rf /depot/registries /depot/scratchspaces /depot/logs
 
 FROM benchmark-deps AS benchmark
@@ -80,16 +76,17 @@ RUN test -n "$BENCHMARK_COMMIT" \
     && rm -rf /tmp/benchmark-git
 
 # Pkg.develop records absolute [sources] paths in Project.toml, which the COPY
-# above replaced with the committed (source-free) file. Re-record the image's
-# cuNumeric.jl checkout and hide that local edit from git status. The profile
+# above replaced with the committed files. Re-record the image's cuNumeric.jl
+# checkout in both environments and hide those local edits from git status. The profile
 # supplies the CUDA driver stub, since builds have no GPU.
 RUN source /etc/profile.d/cunumeric.sh \
     && julia -e 'using Pkg; Pkg.Registry.add("General")' \
-    && julia --project=environments/cunumeric -e \
-        'using Pkg; Pkg.develop([PackageSpec(path=ARGS[1]), PackageSpec(path=ARGS[2])])' \
-        "$CUNUMERIC_SOURCE" "$CUNUMERIC_SOURCE/lib/CNPreferences" \
-    && git update-index --skip-worktree environments/cunumeric/Project.toml \
-    && LEGATE_SKIP_RUNTIME=true julia --project=environments/cunumeric -e 'import cuNumeric' \
+    && for project in environments/cunumeric environments/composability; do \
+        LEGATE_SKIP_RUNTIME=true julia --project="$project" -e \
+            'using Pkg; Pkg.develop([PackageSpec(path=ARGS[1]), PackageSpec(path=ARGS[2])]); import cuNumeric' \
+            "$CUNUMERIC_SOURCE" "$CUNUMERIC_SOURCE/lib/CNPreferences" || exit 1; \
+        git update-index --skip-worktree "$project/Project.toml" || exit 1; \
+    done \
     && rm -rf /depot/registries /depot/scratchspaces /depot/logs
 
 LABEL org.opencontainers.image.title="cuNumeric.jl benchmark suite" \

@@ -59,16 +59,16 @@ export CUNUMERIC_SOURCE=/path/to/cuNumeric.jl
 ./instantiate_projects.sh
 ```
 
-The ODE launcher defaults to `environments/ordinarydiffeq`; set
-`COMPOSABILITY_ENV_ROOT` before initialization to place the environment
-elsewhere. The setup develops the specified cuNumeric checkout and its
+The ODE launcher uses the shared `environments/composability` project in local
+runs and Docker. `ODE_PROJECT` selects an alternate instantiated project.
+The setup develops the specified cuNumeric checkout and its
 CNPreferences package. Keep the resulting `Manifest.toml` with any results.
 Apply machine-specific cuNumeric `LocalPreferences.toml` settings to the new
 environment if needed. Start with the default cuBLAS workspace on H100:
 
 ```sh
 unset CUBLAS_WORKSPACE_CONFIG
-julia --startup-file=no --project="${ODE_PROJECT:-${COMPOSABILITY_ENV_ROOT:-environments}/ordinarydiffeq}" composability/ordinarydiffeq/heat.jl
+julia --startup-file=no --project="${ODE_PROJECT:-environments/composability}" composability/ordinarydiffeq/heat.jl
 ```
 
 For the single-GPU comparison, pass grid dimensions (each problem has `N × N`
@@ -141,12 +141,11 @@ with CarpenterKennedy2N54, RK4, Tsit5, and Vern7 in fixed-step mode, and with
 RK4, Tsit5, and Vern7 in adaptive mode. It checks the returned NDArray and
 the final state against the discrete eigenmode solution. All passed at
 `N=128` and `N=4096` on one H100 (Float32, Julia 1.13). Install the
-additional solvers in a separate ODE environment:
+shared environment with `./instantiate_projects.sh`; it includes these
+additional solvers:
 
 ```sh
-export ODE_PROJECT=/path/to/ode-integrators-env
-ODE_INSTALL_INTEGRATORS=1 CUNUMERIC_SOURCE=/path/to/cuNumeric.jl \
-  julia --startup-file=no composability/ordinarydiffeq/setup.jl "$ODE_PROJECT"
+export ODE_PROJECT="environments/composability"
 julia --project="$ODE_PROJECT" composability/ordinarydiffeq/integrator_smoke.jl 128
 ODE_ADAPTIVE=1 julia --project="$ODE_PROJECT" \
   composability/ordinarydiffeq/integrator_smoke.jl 128

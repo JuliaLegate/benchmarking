@@ -1,0 +1,76 @@
+name: Environment setup tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: setup-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  instantiate:
+    name: Instantiate projects (Julia 1.13.1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CUNUMERIC_SOURCE: ${{ github.workspace }}/.ci/cuNumeric.jl
+      SETUP_TEST_OUTPUT: ${{ github.workspace }}/results/instantiate-tests
+      JULIA_PKG_PRECOMPILE_AUTO: '0'
+      LEGATE_SKIP_RUNTIME: 'true'
+      LEGATE_AUTO_CONFIG: '0'
+      JULIA_NUM_THREADS: '2'
+    steps:
+      - name: Check out benchmarking
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out cuNumeric.jl
+        uses: actions/checkout@v4
+        with:
+          repository: JuliaLegate/cuNumeric.jl
+          ref: main
+          path: .ci/cuNumeric.jl
+          persist-credentials: false
+
+      - name: Install Julia 1.13.1
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.13.1'
+
+      - uses: julia-actions/cache@v2
+
+      - name: Record tested versions
+        shell: bash
+        run: |
+          mkdir -p "$SETUP_TEST_OUTPUT"
+          julia --startup-file=no -e 'using InteractiveUtils; VERSION == v"1.13.1" || error("Expected Julia 1.13.1"); versioninfo()' \
+            | tee "$SETUP_TEST_OUTPUT/julia-version.txt"
+          git rev-parse HEAD > "$SETUP_TEST_OUTPUT/benchmark-commit.txt"
+          git -C "$CUNUMERIC_SOURCE" rev-parse HEAD > "$SETUP_TEST_OUTPUT/cunumeric-commit.txt"
+
+      - name: Test setup paths and composability CLI
+        shell: bash
+        run: |
+          python3 -m unittest discover -s test -p test_setup.py -v
+          julia --startup-file=no --project=. test/composability_cli.jl
+
+      - name: Instantiate and verify all environments
+        shell: bash
+        run: |
+          julia --startup-file=no --project=. test/instantiate_projects.jl 2>&1 \
+            | tee "$SETUP_TEST_OUTPUT/instantiate.log"
+
+      - name: Upload setup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-julia-1.13.1
+          path: results/instantiate-tests/
+          if-no-files-found: warn
