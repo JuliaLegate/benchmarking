@@ -149,8 +149,10 @@ end
 is_cuda_backend(mod) = nameof(mod) === :CUDA || nameof(mod) === :CUDACore
 
 function correctness_applies(gs::GlobalSettings, mod, benchmark)
+    # A CPU or published (e.g. NAS) reference does not depend on the GPU count.
+    correctness_uses_cpu(benchmark) && return true
     gs.n_gpu == 1 || return false
-    return !is_cuda_backend(mod) || correctness_uses_cpu(benchmark)
+    return !is_cuda_backend(mod)
 end
 
 function correctness_reference_label(mod, benchmark)
