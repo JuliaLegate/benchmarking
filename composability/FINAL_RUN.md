@@ -7,9 +7,9 @@ and cuNumeric's `codex/ode-scalar-broadcast` branch. Keep the checkouts at
 `CUNUMERIC_SOURCE` to the actual cuNumeric checkout. Record the chosen commit
 SHAs before running; every launcher also saves them with its results.
 
-The benchmark container initializes all three composability environments
+The benchmark container initializes the shared composability environment
 during its build through `instantiate_projects.sh`. On a bare host, run
-`COMPOSABILITY_ENV_ROOT=/opt/bench-envs ./instantiate_projects.sh` once from
+`./instantiate_projects.sh` once from
 the benchmarking checkout. Preserve its `Manifest.toml` and
 `LocalPreferences.toml` files with the results, and verify that preferences
 point to the installed cuNumeric/Legate libraries. Check
@@ -28,9 +28,7 @@ fresh output root for each final attempt.
 ```bash
 cd /opt/benchmarking-composability
 export CUNUMERIC_SOURCE=/opt/cuNumeric.jl
-export COMPOSABILITY_ENV_ROOT=/opt/bench-envs
-export BENCH_PROJECT=/opt/bench-envs/krylov
-export ODE_PROJECT=/opt/bench-envs/ordinarydiffeq
+export ODE_PROJECT="$PWD/environments/composability" # also used below for plotting
 run_id=$(date -u +%Y%m%dT%H%M%SZ)
 results=/opt/bench-results/final-$run_id
 mkdir -p "$results"
@@ -60,22 +58,18 @@ should be on the same machine, code, and Julia environments as the weak run.
 The largest passing dimensions remain the weak-scaling baselines.
 
 ```bash
-BENCH_OUTPUT="$results/cg-single" \
-  bash composability/krylov/run.sh single \
-  1024 2048 4096 8192 16384 32768 65536
-ODE_OUTPUT="$results/ode-single" \
-  bash composability/ordinarydiffeq/run_benchmark.sh single \
-  128 512 1024 2048 4096 8192 16384
+julia --project=. run_composability.jl --only=krylov,ordinarydiffeq \
+  --mode=single --output="$results"
 ```
 
 Finally run weak scaling at `1, 2, 4, 8` GPUs. The versioned
-`weak_scaling_plan.csv` fixes `N(G) = round(N(1) * sqrt(G))`: CG uses
+`sizes.toml` sets the one-GPU baselines for `N(G) = round(N(1) * sqrt(G))`: CG uses
 `65536, 92682, 131072, 185364`; heat uses `16384, 23170, 32768, 46341`.
-The combined wrapper runs only these two workloads by default.
+Select these two workloads explicitly for the final run.
 
 ```bash
-COMPOSABILITY_OUTPUT_ROOT="$results/weak" \
-  bash composability/run_weak_scaling.sh 1 2 4 8
+julia --project=. run_composability.jl --only=krylov,ordinarydiffeq \
+  --mode=multi --gpus=1,2,4,8 --output="$results"
 ```
 
 Each result directory retains the raw samples, correctness metric, case
@@ -88,15 +82,15 @@ multi-GPU timing. Keep the complete result root, including the smoke runs.
 For vector figures after the successful run:
 
 ```bash
-python3 composability/krylov/plot.py single "$results/cg-single/results.csv" \
-  --output "$results/cg-single/timings.svg"
+python3 composability/krylov/plot.py single "$results/single/krylov/results.csv" \
+  --output "$results/single/krylov/timings.svg"
 julia --project="$ODE_PROJECT" \
   composability/ordinarydiffeq/plot_results.jl single \
-  "$results/ode-single/results.csv" "$results/ode-single/timings.svg"
-python3 composability/krylov/plot.py weak "$results/weak/krylov/results.csv" \
-  --output "$results/weak/krylov/timings.svg"
+  "$results/single/ordinarydiffeq/results.csv" "$results/single/ordinarydiffeq/timings.svg"
+python3 composability/krylov/plot.py weak "$results/multi/krylov/results.csv" \
+  --output "$results/multi/krylov/timings.svg"
 julia --project="$ODE_PROJECT" \
   composability/ordinarydiffeq/plot_results.jl weak \
-  "$results/weak/ordinarydiffeq/results.csv" \
-  "$results/weak/ordinarydiffeq/timings.svg"
+  "$results/multi/ordinarydiffeq/results.csv" \
+  "$results/multi/ordinarydiffeq/timings.svg"
 ```

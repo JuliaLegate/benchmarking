@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-env_root=${COMPOSABILITY_ENV_ROOT:-"$script_dir/../../environments"}
-INTOPT_PROJECT=${INTOPT_PROJECT:-"$env_root/integrals_optimization"}
+INTOPT_PROJECT=${INTOPT_PROJECT:-"$script_dir/../../environments/composability"}
 
 usage() {
     echo "Usage: $0 single N [N ...] | weak BASE_N GPU_COUNT [GPU_COUNT ...]" >&2
@@ -25,7 +24,7 @@ for value in "$@"; do
     fi
 done
 
-julia_bin=${JULIA:-julia}
+julia_bin=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
 visible_pool=${CUDA_VISIBLE_DEVICES-}
 gpu_mask_for_count() {
     local count=$1 i mask
