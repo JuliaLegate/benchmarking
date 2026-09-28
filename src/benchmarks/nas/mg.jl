@@ -16,7 +16,7 @@ correctness_reference_label(mod, ::NASMultiGrid) = "NPB-GPU"
 
 function data(b::NASMultiGrid)
     p = nas_mg_parameters(b.class)
-    return "NAS MG class $(uppercase(b.class)): $(join(nas_mg_dims(p), "×")), NITER=$(p.niter)"
+    return "NAS MG class $(uppercase(b.class)): $(join(nas_mg_dims(p), "×")), $(p.niter) V-cycles per run"
 end
 
 function validate_nas_mg(b::NASMultiGrid{T}) where {T}

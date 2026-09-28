@@ -15,7 +15,7 @@ correctness_uses_cpu(::NASFourierTransform) = true
 
 function data(b::NASFourierTransform)
     p = nas_ft_parameters(b.class)
-    return "NAS FT class $(uppercase(b.class)): $(p.nx)×$(p.ny)×$(p.nz), NITER=$(p.niter)"
+    return "NAS FT class $(uppercase(b.class)): $(p.nx)×$(p.ny)×$(p.nz), $(p.niter) NAS time steps per run"
 end
 
 function validate_nas_ft(b::NASFourierTransform{T}) where {T}
