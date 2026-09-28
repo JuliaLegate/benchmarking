@@ -85,7 +85,9 @@ function main()
             )
             try
                 println("Running instantiate_projects.sh with Julia $VERSION in $workspace")
-                passed = success(cmd)
+                # success(cmd) discards child output; keep resolver/build errors
+                # visible in the CI log and its uploaded instantiate.log.
+                passed = success(pipeline(cmd; stdout, stderr))
                 @test passed
                 passed && verify_projects(workspace, source)
             finally

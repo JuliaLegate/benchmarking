@@ -117,7 +117,8 @@ julia --project=. run.jl --config=configs/multi_gpu/grayscott.toml --verbose
 
 [Environment setup tests](.github/workflows/setup-tests.yml) run on every pull
 request update and pushes to `main`, using **Julia 1.13.1** on a hosted Ubuntu
-runner. The job checks out `JuliaLegate/cuNumeric.jl` at `main`, runs the setup
+runner. The job checks out `JuliaLegate/cuNumeric.jl` at `develop` (cuNumeric 0.3
+and CNPreferences 0.1.4), runs the setup
 path and composability CLI tests, then runs the real `instantiate_projects.sh`
 in fresh copies of all project directories. It verifies the generated
 manifests, local cuNumeric/CNPreferences paths, and released Dagger version.

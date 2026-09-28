@@ -35,7 +35,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: JuliaLegate/cuNumeric.jl
-          ref: main
+          # The benchmark environments require cuNumeric 0.3 and CNPreferences 0.1.4.
+          ref: develop
           path: .ci/cuNumeric.jl
           persist-credentials: false
 
