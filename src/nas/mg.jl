@@ -89,8 +89,6 @@ function nas_mg_rhs(p)
     return rhs
 end
 
-nas_mg_level_sizes(p) = [2^level + 2 for level in 1:round(Int, log2(p.n))]
-
 # Ghosted (nx, ny, nz) per level, coarsest first. Every axis halves per level
 # until the smallest side is 2.
 function nas_mg_level_shapes(p)

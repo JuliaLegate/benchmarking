@@ -221,9 +221,9 @@ end
 function memory_estimate(b::NASMultiGrid{T}, c::MemoryContext) where {T}
     validate_memory_context(b, c)
     p = validate_nas_mg(b)
-    levels = nas_mg_level_sizes(p)
-    hierarchy = sum(big(n)^3 for n in levels)
-    finest = big(last(levels))^3
+    levels = nas_mg_level_shapes(p)
+    hierarchy = sum(prod(big.(shape)) for shape in levels)
+    finest = prod(big.(last(levels)))
     # The fixed NAS classes are never autosized. Use a replication-safe bound:
     # all hierarchy storage plus active unfused stencil/restriction operands.
     return MemoryEstimate(

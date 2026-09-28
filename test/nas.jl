@@ -118,14 +118,14 @@ end
         @test prod(nas_mg_dims(nas_mg_parameters(c))) ÷ g == 256^3
     end
     @test nas_mg_level_shapes(nas_mg_parameters("B.2"))[1] == (4, 4, 6)
-    @test first.(nas_mg_level_shapes(nas_mg_parameters("B"))) == nas_mg_level_sizes(nas_mg_parameters("B"))
+    @test first.(nas_mg_level_shapes(nas_mg_parameters("B"))) == [2^l + 2 for l in 1:8]
     @test nas_mg_status("B.2", 0.0) == "skipped"
     @test nas_mg_smoother("S.2") == nas_mg_smoother("S")
     b = NASMultiGrid{Float64}(; N=32, M=32, class="S")
     p = validate_nas_mg(b)
     @test p == nas_mg_parameters("s")
     @test p.niter == 4
-    @test nas_mg_level_sizes(p) == [4, 6, 10, 18, 34]
+    @test nas_mg_level_shapes(p) == [(n, n, n) for n in (4, 6, 10, 18, 34)]
     @test total_flops(b) == 7_602_176.0
     @test total_space(b) == 1_057_088
 
@@ -133,9 +133,9 @@ end
     interior = @view rhs[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     @test count(!iszero, interior) == 2NAS_MG_EXTREMA
     @test sum(interior) == 0.0
-    sizes = nas_mg_level_sizes(p)
-    u = [zeros(Float64, n, n, n) for n in sizes]
-    r = [zeros(Float64, n, n, n) for n in sizes]
+    shapes = nas_mg_level_shapes(p)
+    u = [zeros(Float64, shape) for shape in shapes]
+    r = [zeros(Float64, shape) for shape in shapes]
     residual = nas_mg_run!(u, r, rhs, p, nas_mg_smoother("S"))
     norm = nas_mg_norm(residual, p)
     @test norm ≈ p.norm rtol=1.0e-12
@@ -159,7 +159,25 @@ end
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
     @test all(runs) do r
         p = nas_mg_parameters(get(r.spec.kwargs, :class, "S"))
-        (r.N, r.M) == (p.n, p.n) && r.spec.n_iter == 1
+        (r.N, r.M) == nas_mg_dims(p)[1:2] && r.spec.n_iter == 1
+    end
+end
+
+@testset "NAS weak-scaling configs plan" begin
+    for (name, classes) in (
+        ("nas_ft_weak", ["A", "A.2", "B.4", "B.8"]),
+        ("nas_ep_weak", ["B", "B.2", "C", "C.8"]),
+        ("nas_mg_weak", ["B", "B.2", "B.4", "C"]),
+    )
+        config = joinpath(@__DIR__, "..", "configs", "multi_gpu", "$name.toml")
+        settings, specs = parse_config(config)
+        runs = plan_runs(
+            specs, settings, TOML.parsefile(config), parse_plot_groups(config), 10^12
+        )
+        @test Set(r.model for r in runs) ==
+            Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
+        @test Set((r.spec.gpus, r.spec.kwargs[:class]) for r in runs) ==
+            Set(zip([1, 2, 4, 8], classes))
     end
 end
 
