@@ -11,6 +11,11 @@ const NAS_MG_CLASSES = Dict(
     "C" => (; n=512, niter=20, norm=0.5706732285740e-6),
     "D" => (; n=1024, niter=50, norm=0.1583275060440e-9),
     "E" => (; n=2048, niter=50, norm=0.8157592357404e-10),
+    # Weak scaling at a class's grid points per GPU, named <class>.<gpus>; each
+    # doubling extends the slowest axis first. No NAS reference.
+    "S.2" => (; dims=(32, 32, 64), niter=4, norm=nothing),
+    "B.2" => (; dims=(256, 256, 512), niter=20, norm=nothing),
+    "B.4" => (; dims=(256, 512, 512), niter=20, norm=nothing),
 )
 
 const NAS_MG_A = (-8.0/3.0, 0.0, 1.0/6.0, 1.0/12.0)
@@ -23,8 +28,12 @@ function nas_mg_parameters(class::AbstractString)
     end
 end
 
+# Interior grid size (nx, ny, nz); NAS classes are cubes.
+nas_mg_dims(p) = hasproperty(p, :dims) ? p.dims : (p.n, p.n, p.n)
+
 function nas_mg_smoother(class::AbstractString)
-    return if uppercase(class) in ("S", "W", "A")
+    # Weak-scaling classes use their base class's smoother.
+    return if uppercase(first(split(class, "."))) in ("S", "W", "A")
         (-3.0/8.0, 1.0/32.0, -1.0/64.0, 0.0)
     else
         (-3.0/17.0, 1.0/33.0, -1.0/61.0, 0.0)
@@ -61,12 +70,13 @@ end
 
 """Construct the exact sparse NPB MG right-hand side, including periodic ghosts."""
 function nas_mg_rhs(p)
-    shape = (p.n + 2, p.n + 2, p.n + 2)
+    nx, ny, nz = nas_mg_dims(p)
+    shape = (nx + 2, ny + 2, nz + 2)
     low_values, high_values = ones(NAS_MG_EXTREMA), zeros(NAS_MG_EXTREMA)
     low_indices = fill(CartesianIndex(1, 1, 1), NAS_MG_EXTREMA)
     high_indices = copy(low_indices)
     seed = NAS_MG_SEED
-    @inbounds for k in 2:(p.n + 1), j in 2:(p.n + 1), i in 2:(p.n + 1)
+    @inbounds for k in 2:(nz + 1), j in 2:(ny + 1), i in 2:(nx + 1)
         seed, value = nas_mg_randlc(seed)
         index = CartesianIndex(i, j, k)
         nas_mg_insert_extreme!(low_values, low_indices, value, index, false)
@@ -80,6 +90,14 @@ function nas_mg_rhs(p)
 end
 
 nas_mg_level_sizes(p) = [2^level + 2 for level in 1:round(Int, log2(p.n))]
+
+# Ghosted (nx, ny, nz) per level, coarsest first. Every axis halves per level
+# until the smallest side is 2.
+function nas_mg_level_shapes(p)
+    d = nas_mg_dims(p)
+    lt = round(Int, log2(minimum(d)))
+    return [d .÷ 2^(lt - level) .+ 2 for level in 1:lt]
+end
 
 function nas_mg_comm3!(u)
     n1, n2, n3 = size(u)
@@ -135,57 +153,60 @@ function nas_mg_psinv!(u, r, c)
 end
 
 function nas_mg_restrict!(coarse, fine)
-    ci = 2:(size(coarse, 1) - 1)
-    f = 3:2:(size(fine, 1) - 1)
-    fm, fp = (first(f) - 1):2:(last(f) - 1), (first(f) + 1):2:(last(f) + 1)
-    @views coarse[ci, ci, ci] .=
-        0.5 .* fine[f, f, f] .+
+    c = ntuple(d -> 2:(size(coarse, d) - 1), 3)
+    f = ntuple(d -> 3:2:(size(fine, d) - 1), 3)
+    m, q = map(r -> r .- 1, f), map(r -> r .+ 1, f)
+    F(a, b, e) = @view fine[a, b, e]
+    @views coarse[c...] .=
+        0.5 .* F(f[1], f[2], f[3]) .+
         0.25 .* (
-            fine[fm, f, f] .+ fine[fp, f, f] .+ fine[f, fm, f] .+
-            fine[f, fp, f] .+ fine[f, f, fm] .+ fine[f, f, fp]
+            F(m[1], f[2], f[3]) .+ F(q[1], f[2], f[3]) .+ F(f[1], m[2], f[3]) .+
+            F(f[1], q[2], f[3]) .+ F(f[1], f[2], m[3]) .+ F(f[1], f[2], q[3])
         ) .+
         0.125 .* (
-            fine[f, fm, fm] .+ fine[f, fp, fm] .+ fine[f, fm, fp] .+ fine[f, fp, fp] .+
-            fine[fm, f, fm] .+ fine[fp, f, fm] .+ fine[fm, f, fp] .+ fine[fp, f, fp] .+
-            fine[fm, fm, f] .+ fine[fp, fm, f] .+ fine[fm, fp, f] .+ fine[fp, fp, f]
+            F(f[1], m[2], m[3]) .+ F(f[1], q[2], m[3]) .+ F(f[1], m[2], q[3]) .+ F(f[1], q[2], q[3]) .+
+            F(m[1], f[2], m[3]) .+ F(q[1], f[2], m[3]) .+ F(m[1], f[2], q[3]) .+ F(q[1], f[2], q[3]) .+
+            F(m[1], m[2], f[3]) .+ F(q[1], m[2], f[3]) .+ F(m[1], q[2], f[3]) .+ F(q[1], q[2], f[3])
         ) .+
         0.0625 .* (
-            fine[fm, fm, fm] .+ fine[fp, fm, fm] .+ fine[fm, fp, fm] .+ fine[fp, fp, fm] .+
-            fine[fm, fm, fp] .+ fine[fp, fm, fp] .+ fine[fm, fp, fp] .+ fine[fp, fp, fp]
+            F(m[1], m[2], m[3]) .+ F(q[1], m[2], m[3]) .+ F(m[1], q[2], m[3]) .+ F(q[1], q[2], m[3]) .+
+            F(m[1], m[2], q[3]) .+ F(q[1], m[2], q[3]) .+ F(m[1], q[2], q[3]) .+ F(q[1], q[2], q[3])
         )
     return nas_mg_comm3!(coarse)
 end
 
 function nas_mg_interp!(fine, coarse)
-    odd = 1:2:(size(fine, 1) - 1)
-    even = 2:2:size(fine, 1)
-    lo, hi = 1:(size(coarse, 1) - 1), 2:size(coarse, 1)
+    o = ntuple(d -> 1:2:(size(fine, d) - 1), 3)
+    e = ntuple(d -> 2:2:size(fine, d), 3)
+    lo = ntuple(d -> 1:(size(coarse, d) - 1), 3)
+    hi = ntuple(d -> 2:size(coarse, d), 3)
+    C(a, b, c) = @view coarse[a, b, c]
     @views begin
-        fine[odd, odd, odd] .+= coarse[lo, lo, lo]
-        fine[even, odd, odd] .+= 0.5 .* (coarse[lo, lo, lo] .+ coarse[hi, lo, lo])
-        fine[odd, even, odd] .+= 0.5 .* (coarse[lo, lo, lo] .+ coarse[lo, hi, lo])
-        fine[odd, odd, even] .+= 0.5 .* (coarse[lo, lo, lo] .+ coarse[lo, lo, hi])
-        fine[even, even, odd] .+=
+        fine[o[1], o[2], o[3]] .+= C(lo[1], lo[2], lo[3])
+        fine[e[1], o[2], o[3]] .+= 0.5 .* (C(lo[1], lo[2], lo[3]) .+ C(hi[1], lo[2], lo[3]))
+        fine[o[1], e[2], o[3]] .+= 0.5 .* (C(lo[1], lo[2], lo[3]) .+ C(lo[1], hi[2], lo[3]))
+        fine[o[1], o[2], e[3]] .+= 0.5 .* (C(lo[1], lo[2], lo[3]) .+ C(lo[1], lo[2], hi[3]))
+        fine[e[1], e[2], o[3]] .+=
             0.25 .* (
-                coarse[lo, lo, lo] .+ coarse[hi, lo, lo] .+
-                coarse[lo, hi, lo] .+ coarse[hi, hi, lo]
+                C(lo[1], lo[2], lo[3]) .+ C(hi[1], lo[2], lo[3]) .+
+                C(lo[1], hi[2], lo[3]) .+ C(hi[1], hi[2], lo[3])
             )
-        fine[even, odd, even] .+=
+        fine[e[1], o[2], e[3]] .+=
             0.25 .* (
-                coarse[lo, lo, lo] .+ coarse[hi, lo, lo] .+
-                coarse[lo, lo, hi] .+ coarse[hi, lo, hi]
+                C(lo[1], lo[2], lo[3]) .+ C(hi[1], lo[2], lo[3]) .+
+                C(lo[1], lo[2], hi[3]) .+ C(hi[1], lo[2], hi[3])
             )
-        fine[odd, even, even] .+=
+        fine[o[1], e[2], e[3]] .+=
             0.25 .* (
-                coarse[lo, lo, lo] .+ coarse[lo, hi, lo] .+
-                coarse[lo, lo, hi] .+ coarse[lo, hi, hi]
+                C(lo[1], lo[2], lo[3]) .+ C(lo[1], hi[2], lo[3]) .+
+                C(lo[1], lo[2], hi[3]) .+ C(lo[1], hi[2], hi[3])
             )
-        fine[even, even, even] .+=
+        fine[e[1], e[2], e[3]] .+=
             0.125 .* (
-                coarse[lo, lo, lo] .+ coarse[hi, lo, lo] .+
-                coarse[lo, hi, lo] .+ coarse[hi, hi, lo] .+
-                coarse[lo, lo, hi] .+ coarse[hi, lo, hi] .+
-                coarse[lo, hi, hi] .+ coarse[hi, hi, hi]
+                C(lo[1], lo[2], lo[3]) .+ C(hi[1], lo[2], lo[3]) .+
+                C(lo[1], hi[2], lo[3]) .+ C(hi[1], hi[2], lo[3]) .+
+                C(lo[1], lo[2], hi[3]) .+ C(hi[1], lo[2], hi[3]) .+
+                C(lo[1], hi[2], hi[3]) .+ C(hi[1], hi[2], hi[3])
             )
     end
     return fine
@@ -222,7 +243,13 @@ end
 
 function nas_mg_norm(residual, p)
     interior = @view residual[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    return sqrt(sum(abs2, interior) / Float64(p.n)^3)
+    return sqrt(sum(abs2, interior) / Float64(prod(nas_mg_dims(p))))
+end
+
+# "skipped" for weak-scaling sizes that have no NAS reference.
+function nas_mg_status(class::AbstractString, norm)
+    nas_mg_parameters(class).norm === nothing && return "skipped"
+    return nas_mg_verified(class, norm) ? "pass" : "fail"
 end
 
 function nas_mg_verified(class::AbstractString, norm; tolerance=1.0e-8)

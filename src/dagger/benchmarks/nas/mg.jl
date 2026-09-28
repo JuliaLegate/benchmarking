@@ -31,9 +31,9 @@ end
 function model_build_nas_mg(config::ModelWorkerConfig)
     config.T === Float64 || error("NAS MG requires Float64")
     class = uppercase(string(get(config.kwargs, :class, "S")))
-    p = nas_mg_parameters(class)
-    (config.N, config.M) == (p.n, p.n) || error(
-        "NAS MG class $class requires N=M=$(p.n)"
+    nx, ny, _ = nas_mg_dims(nas_mg_parameters(class))
+    (config.N, config.M) == (nx, ny) || error(
+        "NAS MG class $class requires N=$nx, M=$ny"
     )
     available = length(collect(CUDA.devices()))
     available == config.gpus || error(
@@ -45,22 +45,23 @@ function model_build_nas_mg(config::ModelWorkerConfig)
     return DaggerNASMG(class, config.N, config.M, config.gpus, scope, processors)
 end
 
-dagger_mg_level_sizes(p) = [2^level for level in 1:round(Int, log2(p.n))]
+# Unghosted (nx, ny, nz) per level; Dagger stencils wrap periodically instead.
+dagger_mg_level_dims(p) = [shape .- 2 for shape in nas_mg_level_shapes(p)]
 
 function dagger_nas_mg_array(host, b::DaggerNASMG)
-    n = size(host, 1)
-    block = cld(n, b.gpus)
-    nchunks = cld(n, block)
+    nx, ny, nz = size(host)
+    block = cld(nz, b.gpus)
+    nchunks = cld(nz, block)
     assignment = reshape(copy(b.processors[1:nchunks]), 1, 1, nchunks)
-    return Dagger.DArray(host, Dagger.Blocks(n, n, block), assignment)
+    return Dagger.DArray(host, Dagger.Blocks(nx, ny, block), assignment)
 end
 
 function model_initialize(b::DaggerNASMG)
     p = nas_mg_parameters(b.class)
     return Dagger.with_options(; scope=b.scope) do
-        sizes = dagger_mg_level_sizes(p)
-        u = [dagger_nas_mg_array(zeros(Float64, n, n, n), b) for n in sizes]
-        r = [dagger_nas_mg_array(zeros(Float64, n, n, n), b) for n in sizes]
+        dims = dagger_mg_level_dims(p)
+        u = [dagger_nas_mg_array(zeros(Float64, d), b) for d in dims]
+        r = [dagger_nas_mg_array(zeros(Float64, d), b) for d in dims]
         ghosted_rhs = nas_mg_rhs(p)
         rhs_host = copy(@view ghosted_rhs[2:(end - 1), 2:(end - 1), 2:(end - 1)])
         rhs = dagger_nas_mg_array(rhs_host, b)
@@ -288,10 +289,9 @@ function model_check_correctness(b::DaggerNASMG, config)
     tasks = model_run!(b, model_initialize(b))
     model_synchronize(b)
     squared = sum(only(fetch(task)) for task in tasks)
-    norm = sqrt(squared/Float64(p.n)^3)
-    return nas_mg_verified(b.class, norm) ? "pass" : "fail"
+    return nas_mg_status(b.class, sqrt(squared/Float64(prod(nas_mg_dims(p)))))
 end
 
 function model_correctness_context(b::DaggerNASMG, config)
-    return (; reference="NPB-GPU", dims=(b.N, b.N, b.N))
+    return (; reference="NPB-GPU", dims=nas_mg_dims(nas_mg_parameters(b.class)))
 end

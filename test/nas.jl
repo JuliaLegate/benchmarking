@@ -1,8 +1,8 @@
 @testset "NAS EP contract" begin
     @test NAS_EP_NPB_GPU_COMMIT == "3f12d84920ee315ab00ef283717c1e74b68f4d00"
-    @test Set(keys(NAS_EP_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "B.2", "B.8"])
+    @test Set(keys(NAS_EP_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "B.2", "C.8"])
     # Weak-scaling classes keep class B's samples per GPU and have no NAS reference.
-    @test [nas_ep_parameters(c).m for c in ("B", "B.2", "C", "B.8")] == [30, 31, 32, 33]
+    @test [nas_ep_parameters(c).m for c in ("B", "B.2", "C", "C.8")] == [30, 31, 32, 33]
     @test nas_ep_status("B.2", 0.0, 0.0) == "skipped"
     @test nas_ep_status("S", nas_ep_parameters("S").sx, nas_ep_parameters("S").sy) == "pass"
     b = NASEmbarrassinglyParallel{Float64}(; N=33_554_432, M=1, class="S")
@@ -59,13 +59,13 @@ end
 
 @testset "NAS FT contract" begin
     @test NAS_FT_NPB_GPU_COMMIT == "3f12d84920ee315ab00ef283717c1e74b68f4d00"
-    @test Set(keys(NAS_FT_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "A.2", "A.4", "A.8"])
+    @test Set(keys(NAS_FT_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "A.2", "B.4", "B.8"])
     # Weak-scaling classes keep class A's grid points and iterations per GPU.
-    for (g, c) in ((1, "A"), (2, "A.2"), (4, "A.4"), (8, "A.8"))
+    for (g, c) in ((1, "A"), (2, "A.2"), (4, "B.4"), (8, "B.8"))
         q = nas_ft_parameters(c)
         @test (q.nx*q.ny*q.nz ÷ g, q.niter) == (256*256*128, 6)
     end
-    @test NAS_FT_CHECKSUMS["A.4"] == NAS_FT_CHECKSUMS["B"][1:6]
+    @test NAS_FT_CHECKSUMS["B.4"] == NAS_FT_CHECKSUMS["B"][1:6]
     @test nas_ft_status("A.2", ComplexF64[]) == "skipped"
     b = NASFourierTransform{Float64}(; N=64, M=64, class="S")
     p = validate_nas_ft(b)
@@ -111,7 +111,16 @@ end
 
 @testset "NAS MG contract" begin
     @test NAS_MG_NPB_GPU_COMMIT == "3f12d84920ee315ab00ef283717c1e74b68f4d00"
-    @test Set(keys(NAS_MG_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E"])
+    @test Set(keys(NAS_MG_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "S.2", "B.2", "B.4"])
+    # Weak-scaling classes keep their base class's points per GPU and coarsen
+    # every axis; cube classes keep their original levels.
+    for (g, c) in ((1, "B"), (2, "B.2"), (4, "B.4"), (8, "C"))
+        @test prod(nas_mg_dims(nas_mg_parameters(c))) ÷ g == 256^3
+    end
+    @test nas_mg_level_shapes(nas_mg_parameters("B.2"))[1] == (4, 4, 6)
+    @test first.(nas_mg_level_shapes(nas_mg_parameters("B"))) == nas_mg_level_sizes(nas_mg_parameters("B"))
+    @test nas_mg_status("B.2", 0.0) == "skipped"
+    @test nas_mg_smoother("S.2") == nas_mg_smoother("S")
     b = NASMultiGrid{Float64}(; N=32, M=32, class="S")
     p = validate_nas_mg(b)
     @test p == nas_mg_parameters("s")

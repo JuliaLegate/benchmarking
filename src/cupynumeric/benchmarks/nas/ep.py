@@ -27,9 +27,10 @@ CLASSES = {
     "C": (32, 4.764367927995374e4, -8.084072988043731e4),
     "D": (36, 1.982481200946593e5, -1.020596636361769e5),
     "E": (40, -5.319717441530e5, -3.688834557731e5),
-    # Weak scaling: class B's per-GPU samples on 2 and 8 GPUs (4 GPUs is class C).
+    # Weak scaling at class B's samples per GPU, named <class below>.<gpus>:
+    # B.2 on 2 GPUs, class C on 4, C.8 on 8. No NAS reference.
     "B.2": (31, None, None),
-    "B.8": (33, None, None),
+    "C.8": (33, None, None),
 }
 
 

@@ -35,9 +35,9 @@ function model_build_nas_mg(config::ModelWorkerConfig)
         )
     end
     class = uppercase(string(get(config.kwargs, :class, "S")))
-    p = nas_mg_parameters(class)
-    (config.N, config.M) == (p.n, p.n) || error(
-        "NAS MG class $class requires N=M=$(p.n)"
+    nx, ny, _ = nas_mg_dims(nas_mg_parameters(class))
+    (config.N, config.M) == (nx, ny) || error(
+        "NAS MG class $class requires N=$nx, M=$ny"
     )
     return JACCNASMG(class, config.N, config.M, impl)
 end
@@ -45,12 +45,12 @@ end
 function model_initialize(b::JACCNASMG)
     b.impl == "multi" && return jacc_multi_mg(JACCMultiOps(), b.class)
     p = nas_mg_parameters(b.class)
-    sizes = nas_mg_level_sizes(p)
-    u = [JACC.zeros(Float64, n, n, n) for n in sizes]
-    r = [JACC.zeros(Float64, n, n, n) for n in sizes]
+    shapes = nas_mg_level_shapes(p)
+    u = [JACC.zeros(Float64, shape...) for shape in shapes]
+    r = [JACC.zeros(Float64, shape...) for shape in shapes]
     return JACCNASMGState(
         u, r, JACC.array(nas_mg_rhs(p)), nas_mg_smoother(b.class),
-        JACC.reducer(; range=p.n^3, type=Float64, sync=false),
+        JACC.reducer(; range=prod(nas_mg_dims(p)), type=Float64, sync=false),
     )
 end
 
@@ -61,11 +61,11 @@ function jacc_mg_launch(n, kernel, args...)
     return JACC.parallel_for(JACC.launch_spec(; sync=false, shmem_size=0), n, kernel, args...)
 end
 
-@inline function jacc_mg_decode(index, n, offset)
+@inline function jacc_mg_decode(index, (n1, n2, _), offset)
     q = index - 1
-    i = q % n + offset
-    j = (q ÷ n) % n + offset
-    k = q ÷ (n*n) + offset
+    i = q % n1 + offset
+    j = (q ÷ n1) % n2 + offset
+    k = q ÷ (n1*n2) + offset
     return i, j, k
 end
 
@@ -73,45 +73,45 @@ function jacc_mg_zero(index, out)
     @inbounds out[index] = 0.0
 end
 
-function jacc_mg_comm_x(index, out, n)
+function jacc_mg_comm_x(index, out, (n1, n2, _))
     q = index - 1
-    j = q % (n - 2) + 2
-    k = q ÷ (n - 2) + 2
+    j = q % (n2 - 2) + 2
+    k = q ÷ (n2 - 2) + 2
     @inbounds begin
-        out[1, j, k] = out[n - 1, j, k]
-        out[n, j, k] = out[2, j, k]
+        out[1, j, k] = out[n1 - 1, j, k]
+        out[n1, j, k] = out[2, j, k]
     end
 end
 
-function jacc_mg_comm_y(index, out, n)
+function jacc_mg_comm_y(index, out, (n1, n2, _))
     q = index - 1
-    i = q % n + 1
-    k = q ÷ n + 2
+    i = q % n1 + 1
+    k = q ÷ n1 + 2
     @inbounds begin
-        out[i, 1, k] = out[i, n - 1, k]
-        out[i, n, k] = out[i, 2, k]
+        out[i, 1, k] = out[i, n2 - 1, k]
+        out[i, n2, k] = out[i, 2, k]
     end
 end
 
-function jacc_mg_comm_z(index, out, n)
+function jacc_mg_comm_z(index, out, (n1, _, n3))
     q = index - 1
-    i, j = q % n + 1, q ÷ n + 1
+    i, j = q % n1 + 1, q ÷ n1 + 1
     @inbounds begin
-        out[i, j, 1] = out[i, j, n - 1]
-        out[i, j, n] = out[i, j, 2]
+        out[i, j, 1] = out[i, j, n3 - 1]
+        out[i, j, n3] = out[i, j, 2]
     end
 end
 
 function jacc_mg_comm3!(s::JACCNASMGState, out)
-    n = size(out, 1)
-    jacc_mg_launch((n - 2)^2, jacc_mg_comm_x, out, n)
-    jacc_mg_launch(n*(n - 2), jacc_mg_comm_y, out, n)
-    jacc_mg_launch(n*n, jacc_mg_comm_z, out, n)
+    n1, n2, n3 = d = size(out)
+    jacc_mg_launch((n2 - 2)*(n3 - 2), jacc_mg_comm_x, out, d)
+    jacc_mg_launch(n1*(n3 - 2), jacc_mg_comm_y, out, d)
+    jacc_mg_launch(n1*n2, jacc_mg_comm_z, out, d)
     return out
 end
 
-function jacc_mg_resid(index, r, u, v, n)
-    i, j, k = jacc_mg_decode(index, n - 2, 2)
+function jacc_mg_resid(index, r, u, v, interior)
+    i, j, k = jacc_mg_decode(index, interior, 2)
     @inbounds r[i, j, k] =
         v[i, j, k] - NAS_MG_A[1]*u[i, j, k] -
         NAS_MG_A[3] * (
@@ -128,13 +128,13 @@ function jacc_mg_resid(index, r, u, v, n)
 end
 
 function jacc_mg_resid!(s, r, u, v)
-    n = size(r, 1)
-    jacc_mg_launch((n - 2)^3, jacc_mg_resid, r, u, v, n)
+    interior = size(r) .- 2
+    jacc_mg_launch(prod(interior), jacc_mg_resid, r, u, v, interior)
     return jacc_mg_comm3!(s, r)
 end
 
-function jacc_mg_psinv(index, u, r, n, c)
-    i, j, k = jacc_mg_decode(index, n - 2, 2)
+function jacc_mg_psinv(index, u, r, interior, c)
+    i, j, k = jacc_mg_decode(index, interior, 2)
     @inbounds u[i, j, k] +=
         c[1]*r[i, j, k] +
         c[2] * (
@@ -149,13 +149,13 @@ function jacc_mg_psinv(index, u, r, n, c)
 end
 
 function jacc_mg_psinv!(s, u, r)
-    n = size(u, 1)
-    jacc_mg_launch((n - 2)^3, jacc_mg_psinv, u, r, n, s.c)
+    interior = size(u) .- 2
+    jacc_mg_launch(prod(interior), jacc_mg_psinv, u, r, interior, s.c)
     return jacc_mg_comm3!(s, u)
 end
 
-function jacc_mg_restrict(index, coarse, fine, nc)
-    i, j, k = jacc_mg_decode(index, nc - 2, 2)
+function jacc_mg_restrict(index, coarse, fine, interior)
+    i, j, k = jacc_mg_decode(index, interior, 2)
     fi, fj, fk = 2i - 1, 2j - 1, 2k - 1
     @inbounds coarse[i, j, k] =
         0.5*fine[fi, fj, fk] +
@@ -180,15 +180,15 @@ function jacc_mg_restrict(index, coarse, fine, nc)
 end
 
 function jacc_mg_restrict!(s, coarse, fine)
-    nc = size(coarse, 1)
-    jacc_mg_launch((nc - 2)^3, jacc_mg_restrict, coarse, fine, nc)
+    interior = size(coarse) .- 2
+    jacc_mg_launch(prod(interior), jacc_mg_restrict, coarse, fine, interior)
     return jacc_mg_comm3!(s, coarse)
 end
 
 @inline jacc_mg_lerp(a, b, weight) = muladd(weight, b - a, a)
 
-function jacc_mg_interp(index, fine, coarse, nf)
-    i, j, k = jacc_mg_decode(index, nf, 1)
+function jacc_mg_interp(index, fine, coarse, shape)
+    i, j, k = jacc_mg_decode(index, shape, 1)
     qi, qj, qk = i - 1, j - 1, k - 1
     i0, j0, k0 = qi ÷ 2 + 1, qj ÷ 2 + 1, qk ÷ 2 + 1
     i1, j1, k1 = i0 + (qi % 2), j0 + (qj % 2), k0 + (qk % 2)
@@ -205,7 +205,7 @@ function jacc_mg_interp(index, fine, coarse, nf)
 end
 
 function jacc_mg_interp!(s, fine, coarse)
-    jacc_mg_launch(length(fine), jacc_mg_interp, fine, coarse, size(fine, 1))
+    jacc_mg_launch(length(fine), jacc_mg_interp, fine, coarse, size(fine))
     return fine
 end
 
@@ -233,8 +233,8 @@ function jacc_mg_cycle!(s)
     return nothing
 end
 
-function jacc_mg_norm_term(index, residual, n)
-    i, j, k = jacc_mg_decode(index, n, 2)
+function jacc_mg_norm_term(index, residual, interior)
+    i, j, k = jacc_mg_decode(index, interior, 2)
     return @inbounds abs2(residual[i, j, k])
 end
 
@@ -242,12 +242,12 @@ function model_run!(b::JACCNASMG, s::JACCNASMGState)
     p = nas_mg_parameters(b.class)
     foreach(out -> jacc_mg_fill!(s, out), s.u)
     jacc_mg_resid!(s, s.r[end], s.u[end], s.rhs)
-    s.norm_reducer(jacc_mg_norm_term, s.r[end], p.n)
+    s.norm_reducer(jacc_mg_norm_term, s.r[end], nas_mg_dims(p))
     for _ in 1:p.niter
         jacc_mg_cycle!(s)
         jacc_mg_resid!(s, s.r[end], s.u[end], s.rhs)
     end
-    s.norm_reducer(jacc_mg_norm_term, s.r[end], p.n)
+    s.norm_reducer(jacc_mg_norm_term, s.r[end], nas_mg_dims(p))
     return s.norm_reducer.workspace.ret
 end
 
@@ -263,10 +263,9 @@ function model_check_correctness(b::JACCNASMG, config)
     result = model_run!(b, model_initialize(b))
     model_synchronize(b)
     sumsq = result isa Real ? result : only(JACC.to_host(result))
-    norm = sqrt(sumsq/Float64(p.n)^3)
-    return nas_mg_verified(b.class, norm) ? "pass" : "fail"
+    return nas_mg_status(b.class, sqrt(sumsq/Float64(prod(nas_mg_dims(p)))))
 end
 
 function model_correctness_context(b::JACCNASMG, config)
-    return (; reference="NPB-GPU", dims=(b.N, b.N, b.N))
+    return (; reference="NPB-GPU", dims=nas_mg_dims(nas_mg_parameters(b.class)))
 end

@@ -63,9 +63,9 @@ end
 
 function initialize(b::NASMultiGrid{Float64}; mod=cuNumeric)
     p = validate_nas_mg(b)
-    sizes = nas_mg_level_sizes(p)
-    u = [mod.zeros(Float64, n, n, n) for n in sizes]
-    r = [mod.zeros(Float64, n, n, n) for n in sizes]
+    shapes = nas_mg_level_shapes(p)
+    u = [mod.zeros(Float64, shape) for shape in shapes]
+    r = [mod.zeros(Float64, shape) for shape in shapes]
     rhs = mod.NDArray(nas_mg_rhs(p))
     weights = mod.reshape(mod.NDArray([0.0, 0.5]), 1, 1, 1, 2)
     return (CuNumericNASMGState(u, r, rhs, weights),)
@@ -216,8 +216,7 @@ function cunumeric_mg_cycle!(s, c)
 end
 
 function cunumeric_mg_norm2(residual)
-    n = size(residual, 1)
-    interior = residual[2:(n - 1), 2:(n - 1), 2:(n - 1)]
+    interior = residual[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     squared = sum(abs2, interior)
     cuNumeric.destroy!(interior)
     return squared
@@ -239,6 +238,6 @@ end
 function check_benchmark_correctness(b::NASMultiGrid, gs::GlobalSettings; mod=cuNumeric)
     state = only(initialize(b; mod))
     squared = run!(b, state)
-    norm = sqrt(cuNumeric.@allowscalar squared[] / Float64(b.N)^3)
-    return nas_mg_verified(b.class, norm) ? "pass" : "fail"
+    points = prod(nas_mg_dims(nas_mg_parameters(b.class)))
+    return nas_mg_status(b.class, sqrt(cuNumeric.@allowscalar squared[] / points))
 end

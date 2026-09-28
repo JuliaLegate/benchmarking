@@ -24,8 +24,9 @@ CLASSES = {
     "A": (256, 256, 128, 6), "B": (512, 256, 256, 20),
     "C": (512, 512, 512, 20), "D": (2048, 1024, 1024, 25),
     "E": (4096, 2048, 2048, 25),
-    # Weak scaling: class A's per-GPU grid and iterations on 2, 4 and 8 GPUs.
-    "A.2": (256, 256, 256, 6), "A.4": (512, 256, 256, 6), "A.8": (512, 512, 256, 6),
+    # Weak scaling at class A's grid points per GPU and 6 iterations, named
+    # <class grid below>.<gpus>: A.2 on 2 GPUs, B.4 (B's grid) on 4, B.8 on 8.
+    "A.2": (256, 256, 256, 6), "B.4": (512, 256, 256, 6), "B.8": (512, 512, 256, 6),
 }
 CHECKSUMS = {
     "S": [
@@ -98,8 +99,8 @@ CHECKSUMS = {
         511.9876028049+512.0550079284j,
     ],
 }
-# A.4 is class B's grid for 6 iterations; checksums are per iteration.
-CHECKSUMS["A.4"] = CHECKSUMS["B"][:6]
+# B.4 is class B's grid for 6 iterations; checksums are per iteration.
+CHECKSUMS["B.4"] = CHECKSUMS["B"][:6]
 
 def initial_conditions(out, scratch):
     flat = out.reshape(-1)

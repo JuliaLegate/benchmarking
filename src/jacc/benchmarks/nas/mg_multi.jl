@@ -1,19 +1,24 @@
-# Multi-GPU NAS MG on JACC.Multi. Each level is an (n^2, columns) array of z-planes.
+# Multi-GPU NAS MG on JACC.Multi. Each level is an (nx*ny, columns) array of z-planes.
 # Large levels are z-slabs with one ghost plane per side (sync_ghost_elems!);
 # P halves per coarser level so restriction/interpolation stay local. Small
 # levels are replicated on every GPU and computed redundantly. Custom code: the
 # periodic z wrap between slab owners and the per-cycle gather at the slab/
 # replicated boundary. `ops` is the JACC.Multi backend (a CPU mock in tests).
 
-# `rep`: every device holds all n planes. Otherwise device d owns planes
-# (d-1)P+1 : dP (padding past n is inert).
+# Ghosted extents (nx, ny, nz). `rep`: every device holds all nz planes.
+# Otherwise device d owns planes (d-1)P+1 : dP (padding past nz is inert).
 struct MGLayout
-    n::Int
+    nx::Int
+    ny::Int
+    nz::Int
     P::Int
     rep::Bool
 end
 
-mg_cols(L::MGLayout, ndev) = L.rep ? ndev*L.n : ndev*L.P
+MGLayout(shape::NTuple{3,Int}, P, rep) = MGLayout(shape..., P, rep)
+mg_plane(L::MGLayout) = L.nx*L.ny
+
+mg_cols(L::MGLayout, ndev) = L.rep ? ndev*L.nz : ndev*L.P
 
 @inline mg_k(a, L::MGLayout, jl) = L.rep ? jl : (a.dev_id - 1)*L.P + jl
 
@@ -23,26 +28,28 @@ mg_cols(L::MGLayout, ndev) = L.rep ? ndev*L.n : ndev*L.P
     return k - (a.dev_id - 1)*L.P + shift
 end
 
-@inline mg_at(a, L::MGLayout, i, j, k) = i + L.n*(j - 1) + L.n*L.n*(mg_col(a, L, k) - 1)
+@inline mg_at(a, L::MGLayout, i, j, k) = i + L.nx*(j - 1) + mg_plane(L)*(mg_col(a, L, k) - 1)
 
-# Smallest slab level whose finest-level padding stays within 10%.
-function mg_multi_plan(sizes, ndev)
-    nlev = length(sizes)
+# Smallest slab level whose finest-level padding stays within 10%. `shapes`
+# are the ghosted (nx, ny, nz) per level, coarsest first.
+function mg_multi_plan(shapes, ndev)
+    nlev = length(shapes)
+    nz = [shape[3] for shape in shapes]
     for lt in 1:nlev
-        P = max(2, cld(sizes[lt], ndev))
-        ndev*P*2^(nlev - lt) <= 1.10*sizes[end] || continue
-        return [l < lt ? MGLayout(sizes[l], 0, true) :
-                MGLayout(sizes[l], P*2^(l - lt), false) for l in 1:nlev]
+        P = max(2, cld(nz[lt], ndev))
+        ndev*P*2^(nlev - lt) <= 1.10*nz[end] || continue
+        return [l < lt ? MGLayout(shapes[l], 0, true) :
+                MGLayout(shapes[l], P*2^(l - lt), false) for l in 1:nlev]
     end
-    return [l < nlev ? MGLayout(sizes[l], 0, true) :
-            MGLayout(sizes[l], cld(sizes[l], ndev), false) for l in 1:nlev]
+    return [l < nlev ? MGLayout(shapes[l], 0, true) :
+            MGLayout(shapes[l], cld(nz[l], ndev), false) for l in 1:nlev]
 end
 
 function mg_multi_alloc(ops, L::MGLayout, ndev, host=nothing)
     cols = mg_cols(L, ndev)
-    x = zeros(Float64, L.n*L.n, cols)
+    x = zeros(Float64, mg_plane(L), cols)
     if host !== nothing
-        x[:, 1:L.n] .= reshape(host, L.n*L.n, L.n)
+        x[:, 1:L.nz] .= reshape(host, mg_plane(L), L.nz)
     end
     return jm_array(ops, x; ghost_dims=L.rep ? 0 : 1)
 end
@@ -57,26 +64,25 @@ end
 mg_launch(ops, m, cols, f, args...) = jm_for(ops, m*cols, mgm_flat, f, m, args...)
 mg_for(ops, L::MGLayout, m, f, args...) = mg_launch(ops, m, mg_cols(L, jm_ndev(ops)), f, args...)
 
-@inline function mgm_zero(q, jl, out, n)
-    col = q + n*n*(jl - 1)
+@inline function mgm_zero(q, jl, out, plane)
+    col = q + plane*(jl - 1)
     col <= length(out) && (@inbounds out[col] = 0.0)
     return nothing
 end
 
 function mgm_fill!(ops, out, L)
     # Zero owned and ghost planes so no ghost exchange is needed.
-    cols = L.rep ? L.n : L.P + 2
-    return mg_launch(ops, L.n*L.n, jm_ndev(ops)*cols, mgm_zero, out, L.n)
+    cols = L.rep ? L.nz : L.P + 2
+    return mg_launch(ops, mg_plane(L), jm_ndev(ops)*cols, mgm_zero, out, mg_plane(L))
 end
 
 @inline function mgm_comm_x(q, jl, out, L)
     k = mg_k(out, L, jl)
-    n = L.n
-    if 2 <= k <= n - 1
-        j = q + 1
+    if 2 <= k <= L.nz - 1
+        j, nx = q + 1, L.nx
         @inbounds begin
-            out[mg_at(out, L, 1, j, k)] = out[mg_at(out, L, n - 1, j, k)]
-            out[mg_at(out, L, n, j, k)] = out[mg_at(out, L, 2, j, k)]
+            out[mg_at(out, L, 1, j, k)] = out[mg_at(out, L, nx - 1, j, k)]
+            out[mg_at(out, L, nx, j, k)] = out[mg_at(out, L, 2, j, k)]
         end
     end
     return nothing
@@ -84,22 +90,22 @@ end
 
 @inline function mgm_comm_y(q, jl, out, L)
     k = mg_k(out, L, jl)
-    n = L.n
-    if 2 <= k <= n - 1
+    if 2 <= k <= L.nz - 1
+        ny = L.ny
         @inbounds begin
-            out[mg_at(out, L, q, 1, k)] = out[mg_at(out, L, q, n - 1, k)]
-            out[mg_at(out, L, q, n, k)] = out[mg_at(out, L, q, 2, k)]
+            out[mg_at(out, L, q, 1, k)] = out[mg_at(out, L, q, ny - 1, k)]
+            out[mg_at(out, L, q, ny, k)] = out[mg_at(out, L, q, 2, k)]
         end
     end
     return nothing
 end
 
 @inline function mgm_comm_z_local(q, _, out, L)
-    n = L.n
-    i, j = (q - 1) % n + 1, (q - 1) ÷ n + 1
+    nz = L.nz
+    i, j = (q - 1) % L.nx + 1, (q - 1) ÷ L.nx + 1
     @inbounds begin
-        out[mg_at(out, L, i, j, 1)] = out[mg_at(out, L, i, j, n - 1)]
-        out[mg_at(out, L, i, j, n)] = out[mg_at(out, L, i, j, 2)]
+        out[mg_at(out, L, i, j, 1)] = out[mg_at(out, L, i, j, nz - 1)]
+        out[mg_at(out, L, i, j, nz)] = out[mg_at(out, L, i, j, 2)]
     end
     return nothing
 end
@@ -108,44 +114,46 @@ mg_owner(L::MGLayout, k) = cld(k, L.P)
 
 function mg_plane_offset(L::MGLayout, d, k)
     shift = d > 1 && L.P > 0 ? 1 : 0
-    return (k - (d - 1)*L.P + shift - 1)*L.n*L.n + 1
+    return (k - (d - 1)*L.P + shift - 1)*mg_plane(L) + 1
 end
 
 # Periodic z wrap across slab owners, then refresh inter-device ghost planes.
 function mgm_comm_z_slab!(ops, out, L)
-    n, nd = L.n, jm_ndev(ops)
+    nz, nd, plane = L.nz, jm_ndev(ops), mg_plane(L)
     ps = jm_parts(ops, out)
-    for (dst, src) in ((1, n - 1), (n, 2))
+    for (dst, src) in ((1, nz - 1), (nz, 2))
         dd, ds = mg_owner(L, dst), mg_owner(L, src)
         nd == 1 && (dd = ds = 1)
-        doff = nd == 1 ? (dst - 1)*n*n + 1 : mg_plane_offset(L, dd, dst)
-        soff = nd == 1 ? (src - 1)*n*n + 1 : mg_plane_offset(L, ds, src)
-        jm_copy!(ops, ps[dd], dd, doff, ps[ds], ds, soff, n*n)
+        doff = nd == 1 ? (dst - 1)*plane + 1 : mg_plane_offset(L, dd, dst)
+        soff = nd == 1 ? (src - 1)*plane + 1 : mg_plane_offset(L, ds, src)
+        jm_copy!(ops, ps[dd], dd, doff, ps[ds], ds, soff, plane)
     end
     return jm_sync!(ops, out)
 end
 
 function mgm_comm3!(ops, out, L)
-    mg_for(ops, L, L.n - 2, mgm_comm_x, out, L)
-    mg_for(ops, L, L.n, mgm_comm_y, out, L)
+    mg_for(ops, L, L.ny - 2, mgm_comm_x, out, L)
+    mg_for(ops, L, L.nx, mgm_comm_y, out, L)
     if L.rep
-        mg_launch(ops, L.n*L.n, jm_ndev(ops), mgm_comm_z_local, out, L)
+        mg_launch(ops, mg_plane(L), jm_ndev(ops), mgm_comm_z_local, out, L)
     else
         mgm_comm_z_slab!(ops, out, L)
     end
     return out
 end
 
-@inline function mgm_interior(q, n)
-    return (q - 1) % (n - 2) + 2, (q - 1) ÷ (n - 2) + 2
+@inline function mgm_interior(q, nx)
+    return (q - 1) % (nx - 2) + 2, (q - 1) ÷ (nx - 2) + 2
 end
+
+mg_interior_items(L::MGLayout) = (L.nx - 2)*(L.ny - 2)
 
 @inline function mgm_resid(q, jl, r, u, v, L)
     k = mg_k(r, L, jl)
-    (2 <= k <= L.n - 1) || return nothing
-    i, j = mgm_interior(q, L.n)
+    (2 <= k <= L.nz - 1) || return nothing
+    i, j = mgm_interior(q, L.nx)
     # r, u, and v share a layout, so one center index serves all three.
-    c, n, n2 = mg_at(r, L, i, j, k), L.n, L.n*L.n
+    c, n, n2 = mg_at(r, L, i, j, k), L.nx, mg_plane(L)
     U(di, dj, dk) = @inbounds u[c + di + n*dj + n2*dk]
     @inbounds r[c] =
         v[c] - NAS_MG_A[1]*U(0, 0, 0) -
@@ -162,15 +170,15 @@ end
 end
 
 function mgm_resid!(ops, r, u, v, L)
-    mg_for(ops, L, (L.n - 2)^2, mgm_resid, r, u, v, L)
+    mg_for(ops, L, mg_interior_items(L), mgm_resid, r, u, v, L)
     return mgm_comm3!(ops, r, L)
 end
 
 @inline function mgm_psinv(q, jl, u, r, L, c)
     k = mg_k(u, L, jl)
-    (2 <= k <= L.n - 1) || return nothing
-    i, j = mgm_interior(q, L.n)
-    ci, n, n2 = mg_at(u, L, i, j, k), L.n, L.n*L.n
+    (2 <= k <= L.nz - 1) || return nothing
+    i, j = mgm_interior(q, L.nx)
+    ci, n, n2 = mg_at(u, L, i, j, k), L.nx, mg_plane(L)
     R(di, dj, dk) = @inbounds r[ci + di + n*dj + n2*dk]
     @inbounds u[ci] +=
         c[1]*R(0, 0, 0) +
@@ -184,16 +192,16 @@ end
 end
 
 function mgm_psinv!(ops, u, r, L, c)
-    mg_for(ops, L, (L.n - 2)^2, mgm_psinv, u, r, L, c)
+    mg_for(ops, L, mg_interior_items(L), mgm_psinv, u, r, L, c)
     return mgm_comm3!(ops, u, L)
 end
 
 @inline function mgm_restrict(q, jl, coarse, fine, Lc, Lf)
     k = mg_k(coarse, Lc, jl)
-    (2 <= k <= Lc.n - 1) || return nothing
-    i, j = mgm_interior(q, Lc.n)
+    (2 <= k <= Lc.nz - 1) || return nothing
+    i, j = mgm_interior(q, Lc.nx)
     fi, fj, fk = 2i - 1, 2j - 1, 2k - 1
-    fc, n, n2 = mg_at(fine, Lf, fi, fj, fk), Lf.n, Lf.n*Lf.n
+    fc, n, n2 = mg_at(fine, Lf, fi, fj, fk), Lf.nx, mg_plane(Lf)
     F(di, dj, dk) = @inbounds fine[fc + di + n*dj + n2*dk]
     @inbounds coarse[mg_at(coarse, Lc, i, j, k)] =
         0.5*F(0, 0, 0) +
@@ -211,7 +219,7 @@ end
 end
 
 function mgm_restrict!(ops, coarse, fine, Lc, Lf)
-    mg_for(ops, Lc, (Lc.n - 2)^2, mgm_restrict, coarse, fine, Lc, Lf)
+    mg_for(ops, Lc, mg_interior_items(Lc), mgm_restrict, coarse, fine, Lc, Lf)
     return mgm_comm3!(ops, coarse, Lc)
 end
 
@@ -219,15 +227,14 @@ end
 
 @inline function mgm_interp(q, jl, fine, coarse, Lf, Lc)
     k = mg_k(fine, Lf, jl)
-    k <= Lf.n || return nothing
-    n = Lf.n
-    i, j = (q - 1) % n + 1, (q - 1) ÷ n + 1
+    k <= Lf.nz || return nothing
+    i, j = (q - 1) % Lf.nx + 1, (q - 1) ÷ Lf.nx + 1
     qi, qj, qk = i - 1, j - 1, k - 1
     i0, j0, k0 = qi ÷ 2 + 1, qj ÷ 2 + 1, qk ÷ 2 + 1
     i1, j1, k1 = i0 + (qi % 2), j0 + (qj % 2), k0 + (qk % 2)
     wi, wj, wk = 0.5*(qi % 2), 0.5*(qj % 2), 0.5*(qk % 2)
-    base, nc = mg_at(coarse, Lc, i0, j0, k0), Lc.n
-    di, dj, dk = i1 - i0, nc*(j1 - j0), nc*nc*(k1 - k0)
+    base = mg_at(coarse, Lc, i0, j0, k0)
+    di, dj, dk = i1 - i0, Lc.nx*(j1 - j0), mg_plane(Lc)*(k1 - k0)
     C(a, b, c) = @inbounds coarse[base + a + b + c]
     z00 = mgm_lerp(C(0, 0, 0), C(di, 0, 0), wi)
     z10 = mgm_lerp(C(0, dj, 0), C(di, dj, 0), wi)
@@ -239,27 +246,29 @@ end
 end
 
 function mgm_interp!(ops, fine, coarse, Lf, Lc)
-    mg_for(ops, Lf, Lf.n*Lf.n, mgm_interp, fine, coarse, Lf, Lc)
+    mg_for(ops, Lf, mg_plane(Lf), mgm_interp, fine, coarse, Lf, Lc)
     Lf.rep || jm_sync!(ops, fine)
     return fine
 end
 
 @inline function mgm_norm_term(q, jl, r, L)
     k = mg_k(r, L, jl)
-    (2 <= k <= L.n - 1) || return 0.0
-    i, j = mgm_interior(q, L.n)
+    (2 <= k <= L.nz - 1) || return 0.0
+    i, j = mgm_interior(q, L.nx)
     return @inbounds abs2(r[mg_at(r, L, i, j, k)])
 end
 
 # Replicated copy of a slab level, for restriction into the first replicated level.
 function mgm_gather!(ops, dest, src, L)
     host = jm_to_host(ops, src)
-    n3 = L.n^3
+    points = mg_plane(L)*L.nz
     for (d, part) in enumerate(jm_parts(ops, dest))
-        jm_upload!(ops, part, d, host, n3)
+        jm_upload!(ops, part, d, host, points)
     end
     return dest
 end
+
+mg_replicated(L::MGLayout) = MGLayout(L.nx, L.ny, L.nz, 0, true)
 
 # Slab (ghosted) and replicated levels have different JACC.Multi array types.
 struct JACCMultiMG{O}
@@ -274,12 +283,12 @@ end
 
 function jacc_multi_mg(ops, class)
     p = nas_mg_parameters(class)
-    layouts = mg_multi_plan(nas_mg_level_sizes(p), jm_ndev(ops))
+    layouts = mg_multi_plan(nas_mg_level_shapes(p), jm_ndev(ops))
     u = Any[mg_multi_alloc(ops, L, jm_ndev(ops)) for L in layouts]
     r = Any[mg_multi_alloc(ops, L, jm_ndev(ops)) for L in layouts]
     rhs = mg_multi_alloc(ops, layouts[end], jm_ndev(ops), nas_mg_rhs(p))
     lt = findfirst(L -> !L.rep, layouts)
-    gathered = lt > 1 ? mg_multi_alloc(ops, MGLayout(layouts[lt].n, 0, true), jm_ndev(ops)) : nothing
+    gathered = lt > 1 ? mg_multi_alloc(ops, mg_replicated(layouts[lt]), jm_ndev(ops)) : nothing
     return JACCMultiMG(ops, layouts, u, r, rhs, gathered, nas_mg_smoother(class))
 end
 
@@ -289,7 +298,7 @@ function mgm_cycle!(s::JACCMultiMG)
     for level in finest:-1:2
         Lf, Lc = Ls[level], Ls[level - 1]
         if Lc.rep && !Lf.rep
-            G = MGLayout(Lf.n, 0, true)
+            G = mg_replicated(Lf)
             mgm_gather!(ops, s.gathered, s.r[level], Lf)
             mgm_restrict!(ops, s.r[level - 1], s.gathered, Lc, G)
         else
@@ -318,12 +327,12 @@ function mgm_run!(s::JACCMultiMG, class)
     ops, L = s.ops, s.layouts[end]
     foreach(((u, Lu),) -> mgm_fill!(ops, u, Lu), zip(s.u, s.layouts))
     mgm_resid!(ops, s.r[end], s.u[end], s.rhs, L)
-    mg_reduce(ops, L, (L.n - 2)^2, mgm_norm_term, s.r[end], L)
+    mg_reduce(ops, L, mg_interior_items(L), mgm_norm_term, s.r[end], L)
     for _ in 1:p.niter
         mgm_cycle!(s)
         mgm_resid!(ops, s.r[end], s.u[end], s.rhs, L)
     end
-    return mg_reduce(ops, L, (L.n - 2)^2, mgm_norm_term, s.r[end], L)
+    return mg_reduce(ops, L, mg_interior_items(L), mgm_norm_term, s.r[end], L)
 end
 
 # The 2-D Multi.parallel_reduce is also wrong in JACC 1.4: it drops partial

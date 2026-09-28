@@ -26,11 +26,23 @@ end
         @test nas_mg_verified("S", sqrt(mgm_run!(s, "S")/Float64(p.n)^3))
     end
     # Several slab levels: restriction/interpolation between slabs.
-    layouts = mg_multi_plan(nas_mg_level_sizes(nas_mg_parameters("B")), 8)
+    layouts = mg_multi_plan(nas_mg_level_shapes(nas_mg_parameters("B")), 8)
     slabs = filter(L -> !L.rep, layouts)
     @test length(slabs) >= 2
     @test all(slabs[i + 1].P == 2slabs[i].P for i in 1:(length(slabs) - 1))
-    @test all(8L.P >= L.n for L in slabs)
+    @test all(8L.P >= L.nz for L in slabs)
+    # Non-cubic weak-scaling grid (32x32x64) against the CPU reference.
+    q = nas_mg_parameters("S.2")
+    shapes = nas_mg_level_shapes(q)
+    cpu = nas_mg_norm(
+        nas_mg_run!([zeros(x) for x in shapes], [zeros(x) for x in shapes],
+            nas_mg_rhs(q), q, nas_mg_smoother("S.2")),
+        q,
+    )
+    for nd in (1, 2, 4, 8)
+        s = jacc_multi_mg(MockOps(nd), "S.2")
+        @test sqrt(mgm_run!(s, "S.2")/prod(nas_mg_dims(q))) ≈ cpu rtol=1e-12
+    end
 end
 
 @testset "JACC.Multi FT on simulated devices" begin

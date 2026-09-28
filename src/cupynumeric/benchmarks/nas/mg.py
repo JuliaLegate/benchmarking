@@ -29,7 +29,24 @@ CLASSES = {
     "C": (512, 20, 0.5706732285740e-6),
     "D": (1024, 50, 0.1583275060440e-9),
     "E": (2048, 50, 0.8157592357404e-10),
+    # Weak scaling at a class's grid points per GPU, named <class>.<gpus>; each
+    # doubling extends the slowest axis first. No NAS reference.
+    "S.2": ((32, 32, 64), 4, None),
+    "B.2": ((256, 256, 512), 20, None),
+    "B.4": ((256, 512, 512), 20, None),
 }
+
+
+def grid_dims(class_name):
+    """Interior (nx, ny, nz); NAS classes are cubes."""
+    size = CLASSES[class_name][0]
+    return size if isinstance(size, tuple) else (size, size, size)
+
+
+def level_shapes(dims):
+    """Ghosted shapes per level, coarsest first; every axis halves per level."""
+    lt = int(math.log2(min(dims)))
+    return [tuple(d // 2 ** (lt - level) + 2 for d in dims) for level in range(1, lt + 1)]
 
 
 def randlc(x, a=MULTIPLIER):
@@ -57,18 +74,19 @@ def insert_extreme(values, indices, value, index, largest):
         indices[i], indices[i + 1] = indices[i + 1], indices[i]
 
 
-def rhs_host(n):
+def rhs_host(dims):
+    nx, ny, nz = dims
     lows, highs = [1.0] * EXTREMA, [0.0] * EXTREMA
     low_indices, high_indices = [(0, 0, 0)] * EXTREMA, [(0, 0, 0)] * EXTREMA
     seed = SEED
-    for k in range(1, n + 1):
-        for j in range(1, n + 1):
-            for i in range(1, n + 1):
+    for k in range(1, nz + 1):
+        for j in range(1, ny + 1):
+            for i in range(1, nx + 1):
                 seed, value = randlc(seed)
                 index = (i, j, k)
                 insert_extreme(lows, low_indices, value, index, False)
                 insert_extreme(highs, high_indices, value, index, True)
-    rhs = host_np.zeros((n + 2, n + 2, n + 2), dtype=host_np.float64)
+    rhs = host_np.zeros((nx + 2, ny + 2, nz + 2), dtype=host_np.float64)
     for index in low_indices:
         rhs[index] = -1.0
     for index in high_indices:
@@ -222,22 +240,22 @@ class NASMultiGrid:
             raise ValueError(f"Unknown NAS MG options: {', '.join(kwargs)}")
         if self.class_name not in CLASSES:
             raise ValueError(f"Unknown NAS MG class {self.class_name}")
-        n = CLASSES[self.class_name][0]
-        if T is not np.float64 or (N, M) != (n, n):
+        nx, ny, _ = grid_dims(self.class_name)
+        if T is not np.float64 or (N, M) != (nx, ny):
             raise ValueError(
-                f"NAS MG class {self.class_name} requires Float64, N=M={n}"
+                f"NAS MG class {self.class_name} requires Float64, N={nx}, M={ny}"
             )
 
     def dims(self):
         return self.N, self.M
 
     def initialize(self):
-        n = CLASSES[self.class_name][0]
-        sizes = [2**level + 2 for level in range(1, int(math.log2(n)) + 1)]
+        dims = grid_dims(self.class_name)
+        shapes = level_shapes(dims)
         return {
-            "u": [np.zeros((s, s, s), dtype=np.float64) for s in sizes],
-            "r": [np.zeros((s, s, s), dtype=np.float64) for s in sizes],
-            "rhs": np.asarray(rhs_host(n)),
+            "u": [np.zeros(s, dtype=np.float64) for s in shapes],
+            "r": [np.zeros(s, dtype=np.float64) for s in shapes],
+            "rhs": np.asarray(rhs_host(dims)),
             "weights": np.asarray([0.0, 0.5]).reshape(1, 1, 1, 2),
         }
 
@@ -245,7 +263,7 @@ class NASMultiGrid:
         niter = CLASSES[self.class_name][1]
         coeff = (
             (-3.0 / 8.0, 1.0 / 32.0, -1.0 / 64.0, 0.0)
-            if self.class_name in ("S", "W", "A")
+            if self.class_name.split(".")[0] in ("S", "W", "A")
             else (-3.0 / 17.0, 1.0 / 33.0, -1.0 / 61.0, 0.0)
         )
         u, r, rhs, weights = state["u"], state["r"], state["rhs"], state["weights"]
@@ -273,9 +291,12 @@ class NASMultiGrid:
         return self.N, self.M
 
     def check_correctness(self):
-        n, _, reference = CLASSES[self.class_name]
+        reference = CLASSES[self.class_name][2]
+        if reference is None:  # weak-scaling size without a NAS reference
+            return "skipped"
+        nx, ny, nz = grid_dims(self.class_name)
         squared = self.run(self.initialize())
-        norm = math.sqrt(float(host_np.asarray(squared)) / n**3)
+        norm = math.sqrt(float(host_np.asarray(squared)) / (nx * ny * nz))
         return "pass" if abs((norm - reference) / reference) <= 1.0e-8 else "fail"
 
 

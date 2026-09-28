@@ -1,5 +1,6 @@
-# NAS MG weak scaling; class[i] runs on gpus[i]. MG grids are power-of-two
-# cubes (8x apart), so constant per-GPU work only fits 1 and 8 GPUs.
+# NAS MG weak scaling; class[i] runs on gpus[i]. Every point is class B's per-GPU
+# grid points and 20 iterations; B and C verify, B.2 (256x256x512) and B.4
+# (256x512x512) have no NAS reference and skip.
 #   julia --project=. run.jl --config=configs/multi_gpu/nas_mg_weak.toml
 [Global]
 n_warmup = 1
@@ -11,6 +12,6 @@ models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 
 [[nas_mg]]
 T = "Float64"
-gpus = [1, 8]
+gpus = [1, 2, 4, 8]
 cpus = 8
-kwargs = { class = ["B", "C"] }
+kwargs = { class = ["B", "B.2", "B.4", "C"] }
