@@ -2,6 +2,14 @@
 # linear indexing and `dev_id`/`ghost_dims`, so tests can swap in a CPU mock.
 struct JACCMultiOps end
 
+# JACC 1.4.0's 2-D left-to-right ghost swap kernel calls size(part, 1), which
+# ArrayPart (not an AbstractArray) lacks, so every 2-D MultiArray with ghosts
+# fails to compile on 2+ GPUs. Supply it until JACC defines it.
+let ArrayPart = Base.get_extension(JACC, :CUDAExt).Multi.ArrayPart
+    hasmethod(size, Tuple{ArrayPart,Int}) ||
+        @eval @inline Base.size(p::$ArrayPart, d::Integer) = size(p.a, d)
+end
+
 jm_ndev(::JACCMultiOps) = JACC.Multi.ndev()
 jm_array(::JACCMultiOps, x; ghost_dims) = JACC.Multi.array(x; ghost_dims)
 jm_for(::JACCMultiOps, n::Integer, f, args...) = JACC.Multi.parallel_for(n, f, args...)
