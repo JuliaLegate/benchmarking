@@ -1,10 +1,10 @@
 # NAS MG weak scaling; class[i] runs on gpus[i]. Every point is class B's per-GPU
-# grid points and 20 iterations; B and C verify, B.2 (256x256x512) and B.4
+# grid points and 20 V-cycles; B and C verify, B.2 (256x256x512) and B.4
 # (256x512x512) have no NAS reference and skip.
 #   julia --project=. run.jl --config=configs/multi_gpu/nas_mg_weak.toml
 [Global]
 n_warmup = 1
-n_iter = 1
+n_iter = 10
 n_trial = 3
 check_correctness = true
 auto_size = false

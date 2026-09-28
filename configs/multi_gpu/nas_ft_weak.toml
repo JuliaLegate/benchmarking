@@ -1,9 +1,9 @@
 # NAS FT weak scaling; class[i] runs on gpus[i]. Every point is class A's per-GPU
-# grid points and 6 iterations; A and B.4 (class B's grid) verify, A.2 and B.8 skip.
+# grid points and 6 NAS time steps; A and B.4 (class B's grid) verify, A.2 and B.8 skip.
 #   julia --project=. run.jl --config=configs/multi_gpu/nas_ft_weak.toml
 [Global]
 n_warmup = 1
-n_iter = 1
+n_iter = 10
 n_trial = 3
 check_correctness = true
 auto_size = false

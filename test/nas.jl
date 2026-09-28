@@ -43,7 +43,7 @@
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
     @test all(runs) do r
         p = nas_ep_parameters(get(r.spec.kwargs, :class, "S"))
-        (r.N, r.M) == (nas_ep_random_numbers(p), 1) && r.spec.n_iter == 1
+        (r.N, r.M) == (nas_ep_random_numbers(p), 1) && r.spec.n_iter == 10
     end
     compare_config = joinpath(@__DIR__, "..", "configs", "single_gpu", "nas_ep_compare.toml")
     compare_settings, compare_specs = parse_config(compare_config)
@@ -105,7 +105,7 @@ end
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
     @test all(runs) do r
         p = nas_ft_parameters(get(r.spec.kwargs, :class, "S"))
-        (r.N, r.M) == (p.nx, p.ny) && r.spec.n_iter == 1
+        (r.N, r.M) == (p.nx, p.ny) && r.spec.n_iter == 10
     end
 end
 
@@ -159,7 +159,7 @@ end
         Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
     @test all(runs) do r
         p = nas_mg_parameters(get(r.spec.kwargs, :class, "S"))
-        (r.N, r.M) == nas_mg_dims(p)[1:2] && r.spec.n_iter == 1
+        (r.N, r.M) == nas_mg_dims(p)[1:2] && r.spec.n_iter == 10
     end
 end
 

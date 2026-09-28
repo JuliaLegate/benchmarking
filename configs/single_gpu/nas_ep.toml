@@ -1,6 +1,6 @@
 [Global]
 n_warmup = 1
-n_iter = 1
+n_iter = 10
 n_trial = 3
 check_correctness = true
 auto_size = false

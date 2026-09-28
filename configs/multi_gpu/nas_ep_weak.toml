@@ -3,7 +3,7 @@
 #   julia --project=. run.jl --config=configs/multi_gpu/nas_ep_weak.toml
 [Global]
 n_warmup = 1
-n_iter = 1
+n_iter = 10
 n_trial = 3
 check_correctness = true
 auto_size = false
