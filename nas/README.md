@@ -78,7 +78,7 @@ tolerance `1e-12`) is not.
 - **JACC**: `JACC.Multi` on every GPU count (`ft_multi.jl`): z-slabs for the
   x/y FFTs, y-slabs for the z FFT, cuFFT per GPU (JACC has no FFT API), and a
   JACC pack/unpack plus GPU-to-GPU all-to-all between them. Checksums are
-  fetched each iteration. `JACC_NAS_FT_IMPL=single` runs the original version.
+  fetched each iteration.
 - **cuNumeric**: host RNG, attached upload, unnormalized inverse with a
   pre-scaled full-volume checksum mask.
 - **cuPyNumeric**: host RNG, `fftn`/`ifftn`, checksum via `take`.
@@ -105,6 +105,6 @@ tolerance `1e-8`) are untimed. NPB's Linf norm is omitted.
 - **JACC**: `JACC.Multi` z-slabs on every GPU count (`mg_multi.jl`): ghost
   planes via `sync_ghost_elems!` (host-staged), small levels replicated per GPU,
   custom GPU-to-GPU copies for the periodic wrap and the slab-to-replicated
-  gather. `JACC_NAS_MG_IMPL=single` runs the original single-GPU kernels.
+  gather.
 - **cuNumeric, cuPyNumeric, Dagger**: distributed arrays. Dagger's restriction
   evaluates the full fine grid, and it combines per-slab norms after timing.
