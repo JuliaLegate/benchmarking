@@ -4,12 +4,10 @@ The default path computes pair seeds with timed skip-ahead powers, so each
 stream's 256 pairs can be evaluated as an array. It still materializes large
 intermediates and evaluates masked rejected-pair math, unlike cuNumeric's
 single fused per-batch kernel. It does not use custom
-tasks or host-generated random samples. The earlier stepwise recurrence is
-available with CUPYNUMERIC_NAS_EP_IMPL=recurrence for comparison.
+tasks or host-generated random samples.
 """
 
 import math
-import os
 import cupynumeric as np
 import numpy as host_np
 from legate.core import TaskTarget, get_legate_runtime
@@ -128,11 +126,6 @@ class NASEmbarrassinglyParallel:
                 f"NAS EP class {self.class_name} requires Float64, N={expected}, M=1"
             )
         self.batches = 1 << (self.m-MK)
-        self.impl = os.environ.get("CUPYNUMERIC_NAS_EP_IMPL", "vectorized")
-        if self.impl not in ("vectorized", "recurrence"):
-            raise ValueError("CUPYNUMERIC_NAS_EP_IMPL must be vectorized or recurrence")
-        self.save_as = ("cupynumeric_recurrence" if self.impl == "recurrence"
-                        else "cupynumeric")
 
     def dims(self):
         return self.N, self.M
@@ -152,40 +145,7 @@ class NASEmbarrassinglyParallel:
         for value in state["values"][1:]:
             value.fill(0.0)
 
-    @staticmethod
-    def pair(values):
-        seed, *rest = values
-        q, sx, sy = rest[:NQ], rest[NQ], rest[NQ+1]
-        seed1 = mul_mod46(seed, MULTIPLIER); u1 = (2.0**-46)*seed1
-        seed2 = mul_mod46(seed1, MULTIPLIER); u2 = (2.0**-46)*seed2
-        x1, x2 = 2.0*u1-1.0, 2.0*u2-1.0
-        radius = x1*x1+x2*x2
-        accepted = np.minimum(np.floor(1.0/radius), 1.0)
-        safe = np.minimum(radius, 1.0)
-        scale = np.sqrt(-2.0*np.log(safe)/safe)
-        g1, g2 = x1*scale, x2*scale
-        magnitude = np.maximum(np.abs(g1), np.abs(g2))
-        bins = np.floor(magnitude)
-        next_q = [
-            q[bin] + accepted*np.maximum(0.0, 1.0-np.abs(bins-float(bin)))
-            for bin in range(NQ)
-        ]
-        return [seed2, *next_q, sx+accepted*g1, sy+accepted*g2]
-
-    def run_recurrence(self, state):
-        values = state["values"]
-        seed, power = values[0], ipow46(MULTIPLIER, 2*(1 << MK))
-        for mask in state["masks"]:
-            candidate = mul_mod46(seed, power)
-            seed = seed + mask*(candidate-seed)
-            power, _ = randlc_scalar(power, power)
-        values = [seed, *values[1:]]
-        for _ in range(1 << MK):
-            values = self.pair(values)
-        state["values"] = values
-        return values
-
-    def run_vectorized(self, state):
+    def run(self, state):
         values = state["values"]
         seed, power = values[0], ipow46(MULTIPLIER, 2*(1 << MK))
         for mask in state["masks"]:
@@ -221,10 +181,6 @@ class NASEmbarrassinglyParallel:
             sy += np.sum(accepted*g2, axis=0)
         return values
 
-    def run(self, state):
-        return (self.run_vectorized(state) if self.impl == "vectorized"
-                else self.run_recurrence(state))
-
     def check_correctness(self):
         state = self.initialize()
         self.reset(state)
@@ -236,7 +192,7 @@ class NASEmbarrassinglyParallel:
             return "skipped"
         ok = (abs((sx-expected_x)/expected_x) <= EPSILON and
               abs((sy-expected_y)/expected_y) <= EPSILON)
-        if ok and self.impl == "vectorized":
+        if ok:
             q = [host_np.asarray(value) for value in values[1:11]]
             for batch in (0, 1, self.batches//2, self.batches-1):
                 expected = batch_histogram_scalar(batch)

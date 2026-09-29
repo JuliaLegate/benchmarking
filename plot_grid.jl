@@ -42,19 +42,6 @@ function csv_dir(path)
     return only(subdirs)
 end
 
-# "CUDA.jl (kernel)" -> "CUDA.jl" when it is the panel's only CUDA.jl series
-# (NAS EP names API paths). "(unfused)" labels are kept.
-function unify_labels(series)
-    family(s) = occursin("(unfused)", s.label) ? s.label : first(split(s.label, " ("))
-    counts = Dict{String,Int}()
-    for s in series
-        counts[family(s)] = get(counts, family(s), 0) + 1
-    end
-    return [counts[family(s)] == 1 && family(s) != s.label ?
-            merge(s, (label=family(s), ls=:solid)) : s
-            for s in series]
-end
-
 function panel_series(panel)
     group = panel["benchmark"]
     members = String[string(m) for m in get(panel, "members", [group])]
@@ -73,7 +60,7 @@ function panel_series(panel)
     end
     isempty(series) && error("panel $group: no series found in $(panel["results"])")
     validate_series_sizes(series)
-    return unify_labels(series)
+    return series
 end
 
 function efficiency(s)

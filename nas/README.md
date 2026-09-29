@@ -57,14 +57,12 @@ identical), giving 256 pairs per independent stream. Final aggregation is
 untimed.
 
 - **cuNumeric**: broadcasts the stream function into one `NDArray{NASEPPartial}`.
-- **cuPyNumeric**: array skip-ahead in slabs of up to `2^24` pairs.
-  `CUPYNUMERIC_NAS_EP_IMPL=recurrence` selects the older stepwise version.
-- **CUDA.jl, JACC**: per-stream kernels by default; `*_NAS_EP_IMPL=broadcast`
-  (or `nas_ep_compare.toml`) runs the array-broadcast variant.
+- **cuPyNumeric**: array skip-ahead in slabs of up to `2^25` pairs per GPU.
+- **CUDA.jl**: broadcasts the stream function over a `CuArray`.
+- **JACC**: no broadcast API, so `JACC.Multi.parallel_for` maps the stream
+  function over the streams, split across GPUs.
 - **Dagger**: broadcasts the stream function over a GPU `DArray`.
 
-EP produces two plots: `nas_ep_high_level_*_scaling.png` (array/broadcast
-APIs) and `nas_ep_explicit_kernels_*_scaling.png` (CUDA.jl and JACC kernels).
 cuNumeric saves to `nas_ep_cunumeric_struct.csv`.
 
 ## FT

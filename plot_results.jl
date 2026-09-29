@@ -172,21 +172,14 @@ function group_series(results_dir, group, members)
     return filter(!isnothing, series)
 end
 
-# EP's high-level API paths and explicitly written stream kernels share one
-# figure; kernels are dashed. All perform the same workload and timing contract.
+# cuNumeric saves EP as `cunumeric_struct`; otherwise the usual model series.
 function ep_series(results_dir)
     entries = (
-        ("cunumeric_struct", "cuNumeric.jl (struct broadcast)",
-         COLOR_CUNUMERIC, MARKER_CUNUMERIC, :solid),
-        ("dagger", "Dagger.jl (broadcast)", COLOR_DAGGER, MARKER_DAGGER, :solid),
-        ("cupynumeric", "cuPyNumeric (array skip-ahead)",
-         COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC, :solid),
-        ("CUDA.jl_broadcast", "CUDA.jl (broadcast)", COLOR_CUDA, MARKER_CUDA, :solid),
-        ("jacc_broadcast", "JACC.jl (array broadcast)", COLOR_JACC, MARKER_JACC, :solid),
-        ("cupynumeric_recurrence", "cuPyNumeric (array recurrence)",
-         COLOR_CUPYNUMERIC, :diamond, :solid),
-        ("CUDA.jl", "CUDA.jl (kernel)", COLOR_CUDA, MARKER_CUDA, :dash),
-        ("jacc", "JACC.jl (kernel)", COLOR_JACC, MARKER_JACC, :dash),
+        ("cunumeric_struct", "cuNumeric.jl", COLOR_CUNUMERIC, MARKER_CUNUMERIC, :solid),
+        ("dagger", "Dagger.jl", COLOR_DAGGER, MARKER_DAGGER, :solid),
+        ("cupynumeric", "cuPyNumeric", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC, :solid),
+        ("CUDA.jl", "CUDA.jl", COLOR_CUDA, MARKER_CUDA, :solid),
+        ("jacc", "JACC.jl", COLOR_JACC, MARKER_JACC, :solid),
     )
     series = []
     for (key, label, color, marker, ls) in entries
