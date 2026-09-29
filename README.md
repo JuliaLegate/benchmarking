@@ -212,7 +212,7 @@ are comparison variants rather than separate workloads.
 `montecarlo` uses cuNumeric's fused mapped reduction. The cuNumeric-only
 `montecarlo_naive` variant materializes the broadcasted integrand before its
 ordinary reduction for an explicit implementation comparison. Run both with
-`julia --project=. run.jl --config=configs/multi_gpu/montecarlo.toml`.
+`julia --project=. run.jl --config=configs/multi_gpu/montecarlo_forms.toml`.
 
 NAS EP reproduces the official 46-bit RNG sequence and verification sums; every
 model except CUDA.jl partitions the independent streams across GPUs.
