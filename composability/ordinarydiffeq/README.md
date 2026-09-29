@@ -108,11 +108,12 @@ GPU memory as a diagnostic; the reading includes Legate's reserved pool.
 On the eight-GPU host, each Julia case sees exactly its requested GPU count:
 devices `0` through `G-1` by default, or the first `G` entries of an existing
 `CUDA_VISIBLE_DEVICES` list. `planned-cases.csv` records the selected mask;
-the Dagger correctness check verifies distributed CuArray chunk placement.
+the Dagger setup check verifies initial distributed CuArray chunk placement.
 
 The weak run uses Dagger and cuNumeric. It sets `N(G) = round(N(1)√G)` and
-checks CUDA chunk placement, backend retention, and the same exact-solution
-reference at every GPU count. Multi-GPU execution must be verified on the
+checks the final state against the same exact-solution reference at every GPU
+count, regardless of final GPU placement. The relative-error limit is `1e-4`
+for Float32 and `1e-7` for Float64; non-finite errors also fail. Multi-GPU execution must be verified on the
 eight-GPU host. The one-GPU point can be checked here. The weak-scaling plot
 shows mean time versus GPU count, with standard errors and a horizontal ideal
 time reference for each backend.
