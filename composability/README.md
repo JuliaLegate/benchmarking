@@ -15,9 +15,9 @@ CG on cuNumeric.
 
 ## Setup
 
-Use Julia 1.13 on Linux with the installed cuNumeric/Legate libraries. Krylov
-plotting also needs Python with Matplotlib. From the benchmarking repository
-root, initialize the shared environment:
+Use Julia 1.13 on Linux with the installed cuNumeric/Legate libraries. All three
+workloads use Plots.jl from the shared environment. From the benchmarking
+repository root, initialize it:
 
 ```bash
 # For a standalone benchmarking checkout, point to your cuNumeric checkout.
@@ -31,7 +31,8 @@ parent checkout. The benchmark container performs setup during its build.
 dependencies, and the optional ODE integrator smoke checks.
 
 Local runs and Docker both use `environments/composability` directly.
-The composability project pins Dagger to the registered `0.22.5` release.
+The composability project selects Dagger's `aot-schedulers-rebased` branch through
+`[sources]`, with compatibility restricted to version `0.22.5`.
 JACC is not used by these workloads. Individual launchers still accept
 `BENCH_PROJECT`, `ODE_PROJECT`, and `INTOPT_PROJECT` for alternate environments.
 Rerun setup when upgrading from the old separate environments and apply
@@ -81,13 +82,18 @@ The default result root is `results/composability-<run-id>`; `--output` selects
 another root, relative to the calling directory. Results are grouped under
 `single/<workload>` and `multi/<workload>`. Existing result CSVs are protected
 before either mode starts. A failed run returns a nonzero exit code and retains
-its logs; the remaining workloads and modes are still attempted.
+its logs; the remaining workloads and modes are still attempted. Launcher progress
+and errors stream to the terminal. If startup fails before any cases run, the
+runner also prints the end of `environment.txt` (Krylov) or `metadata.txt` (other
+workloads). Header-only CSVs indicate that no measurements were collected.
 
 `--dry-run` prints the selected workloads, GPU counts, output paths, and launcher
 commands without starting any process or writing files. It does not need Bash,
 GPU access, or instantiated packages. Normal runs need the setup described above.
 The workers use the current Julia executable unless `JULIA` or
-`CUNUMERIC_BENCH_JULIA` selects another one. Workload settings such as
+`CUNUMERIC_BENCH_JULIA` selects another one. The runner passes its Julia package
+depots to workers explicitly, so `--startup-file=no` does not hide packages
+installed in a depot added by the container's startup file. Workload settings such as
 `BENCH_SAMPLES`, `ODE_SAMPLES`, `INTOPT_SAMPLES`, and project overrides remain
 available. CLI selections control the workloads, output root, and dry-run mode.
 

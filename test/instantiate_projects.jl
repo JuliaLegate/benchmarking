@@ -36,7 +36,13 @@ function verify_projects(workspace, source)
             if haskey(declared, "Dagger")
                 dagger = only(dependencies["Dagger"])
                 @test dagger["version"] == "0.22.5"
-                @test !any(key -> haskey(dagger, key), ("path", "repo-url", "repo-rev"))
+                if project == "environments/composability"
+                    @test get(dagger, "repo-url", nothing) == "https://github.com/JuliaParallel/Dagger.jl.git"
+                    @test get(dagger, "repo-rev", nothing) == "aot-schedulers-rebased"
+                    @test !haskey(dagger, "path")
+                else
+                    @test !any(key -> haskey(dagger, key), ("path", "repo-url", "repo-rev"))
+                end
             end
             if haskey(declared, "cuNumeric")
                 for (name, expected) in ("cuNumeric" => source,
@@ -89,7 +95,13 @@ function main()
                 # visible in the CI log and its uploaded instantiate.log.
                 passed = success(pipeline(cmd; stdout, stderr))
                 @test passed
-                passed && verify_projects(workspace, source)
+                if passed
+                    verify_projects(workspace, source)
+                    # Exercise actual headless plotting using the shared packages,
+                    # without loading GPU backends or running a benchmark.
+                    plot_test = `$julia --startup-file=no --project=$(joinpath(workspace, "environments/composability")) $(joinpath(ROOT, "test/krylov_plot.jl"))`
+                    @test success(pipeline(plot_test; stdout, stderr))
+                end
             finally
                 save_diagnostics(workspace, output)
                 println("Setup diagnostics: $output")

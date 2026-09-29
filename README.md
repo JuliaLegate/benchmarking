@@ -31,9 +31,10 @@ Set `CUNUMERIC_BENCH_JULIA` to select a different Julia executable.
 Use Julia 1.13 for the composability workloads. All three share the versioned
 [`environments/composability/Project.toml`](environments/composability/Project.toml).
 Setup and launchers use this directory directly, including inside the container.
-Dagger is pinned to the registered `0.22.5` release in both the composability
-and Dagger environments. Setup also releases old Dagger branch pins in existing
-Dagger manifests; rerun `./instantiate_projects.sh` after updating.
+Composability uses Dagger's `aot-schedulers-rebased` branch with version `0.22.5`.
+The separate Dagger benchmark environment uses the registered `0.22.5` release.
+Setup releases old branch pins only in that separate Dagger environment;
+rerun `./instantiate_projects.sh` after updating.
 These workloads do not use JACC.
 `BENCH_PROJECT`, `ODE_PROJECT`, and `INTOPT_PROJECT` remain available as
 per-workload launcher overrides. Launchers also accept `JULIA`, which takes
@@ -121,7 +122,7 @@ runner. The job checks out `JuliaLegate/cuNumeric.jl` at `develop` (cuNumeric 0.
 and CNPreferences 0.1.4), runs the setup
 path and composability CLI tests, then runs the real `instantiate_projects.sh`
 in fresh copies of all project directories. It verifies the generated
-manifests, local cuNumeric/CNPreferences paths, and released Dagger version.
+manifests, local cuNumeric/CNPreferences paths, and each environment's Dagger version and source.
 
 The job disables automatic precompilation and GPU runtime startup. It tests
 installation rather than GPU execution; it does not need a GPU or build the

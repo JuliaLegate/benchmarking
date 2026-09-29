@@ -72,7 +72,16 @@ Legate auto-sizes its memory pool. The sampled `nvidia-smi` memory peak is
 diagnostic; pool reservation can make it much larger than live array storage.
 The runner sets `LEGATE_CONFIG` separately for every GPU count. Set
 `CUBLAS_WORKSPACE_CONFIG` externally, if desired, so every backend sees the same
-setting. `plot.py` needs Python with Matplotlib.
+setting. `plot_results.jl` uses Plots.jl from `environments/composability`. Plotting runs after measurements:
+a plotting failure returns a nonzero exit code but preserves the collected CSV.
+Regenerate a weak-scaling plot without rerunning the benchmarks:
+
+```bash
+GKSwstype=100 julia --project=environments/composability \
+  composability/krylov/plot_results.jl weak /path/to/results.csv --output /path/to/timings.png
+```
+
+Use `single` instead of `weak` for a single-GPU size sweep.
 On an eight-GPU host, each case launches Julia with exactly its requested
 number of visible GPUs: by default devices `0` through `G-1`, or the first
 `G` entries of an existing `CUDA_VISIBLE_DEVICES` list. The selected mask is

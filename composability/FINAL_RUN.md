@@ -82,12 +82,14 @@ multi-GPU timing. Keep the complete result root, including the smoke runs.
 For vector figures after the successful run:
 
 ```bash
-python3 composability/krylov/plot.py single "$results/single/krylov/results.csv" \
+GKSwstype=100 julia --project=environments/composability \
+  composability/krylov/plot_results.jl single "$results/single/krylov/results.csv" \
   --output "$results/single/krylov/timings.svg"
 julia --project="$ODE_PROJECT" \
   composability/ordinarydiffeq/plot_results.jl single \
   "$results/single/ordinarydiffeq/results.csv" "$results/single/ordinarydiffeq/timings.svg"
-python3 composability/krylov/plot.py weak "$results/multi/krylov/results.csv" \
+GKSwstype=100 julia --project=environments/composability \
+  composability/krylov/plot_results.jl weak "$results/multi/krylov/results.csv" \
   --output "$results/multi/krylov/timings.svg"
 julia --project="$ODE_PROJECT" \
   composability/ordinarydiffeq/plot_results.jl weak \

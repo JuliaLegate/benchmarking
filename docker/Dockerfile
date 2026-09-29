@@ -6,6 +6,8 @@ ENV CONDA_DIR=/opt/conda
 ENV PATH="${CONDA_DIR}/bin:${PATH}"
 ENV CUNUMERIC_BENCH_CONDA="${CONDA_DIR}/bin/conda"
 ENV CUNUMERIC_SOURCE=/opt/cuNumeric.jl
+# Workers use --startup-file=no; /depot must not depend on the base startup.jl.
+ENV JULIA_DEPOT_PATH=/depot:/usr/local/share/julia
 
 COPY docker/profile.sh /etc/profile.d/cunumeric.sh
 COPY docker/entrypoint.sh /usr/local/bin/cunumeric-entrypoint

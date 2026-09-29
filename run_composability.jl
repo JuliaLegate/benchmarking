@@ -129,6 +129,9 @@ function launch_plan(opts; env=ENV)
             # a workload's old dry-run setting from the calling shell.
             "$(spec.prefix)_DRY_RUN" => "0",
             "JULIA" => julia,
+            # Workers disable startup.jl. Preserve depots added by the parent
+            # startup (the container adds /depot there) so packages stay visible.
+            "JULIA_DEPOT_PATH" => join(DEPOT_PATH, Sys.iswindows() ? ';' : ':'),
         ]
         cmd = addenv(cmd, overrides...)
         push!(plan, (; mode, workload, output, cmd, overrides, config_text, base_n))
@@ -136,7 +139,27 @@ function launch_plan(opts; env=ENV)
     return plan
 end
 
-function main(args=ARGS; executor=success, io=stdout)
+# Unlike success(cmd), this preserves the launcher's progress and errors.
+run_launcher(cmd) = success(pipeline(cmd; stdout, stderr))
+
+function report_failure(launch, io)
+    println(io, "FAILED: $(launch.workload) $(launch.mode); logs: $(launch.output)")
+    # Startup checks redirect their output before any per-case logs exist.
+    planned = joinpath(launch.output, "planned-cases.csv")
+    if !isfile(planned) || length(readlines(planned)) <= 1
+        filename = launch.workload == "krylov" ? "environment.txt" : "metadata.txt"
+        path = joinpath(launch.output, filename)
+        if isfile(path)
+            println(io, "Startup diagnostics ($path, last 20 lines):")
+            lines = readlines(path)
+            for line in Iterators.drop(lines, max(0, length(lines) - 20))
+                println(io, line)
+            end
+        end
+    end
+end
+
+function main(args=ARGS; executor=run_launcher, io=stdout)
     if any(arg -> arg in ("-h", "--help"), args)
         usage(io)
         return 0
@@ -175,7 +198,10 @@ function main(args=ARGS; executor=success, io=stdout)
                 push!(saved_modes, launch.mode)
             end
             # Continue with the other workloads/modes while retaining failure logs.
-            failed |= !executor(launch.cmd)
+            if !executor(launch.cmd)
+                failed = true
+                report_failure(launch, io)
+            end
         end
     end
     return failed ? 1 : 0
