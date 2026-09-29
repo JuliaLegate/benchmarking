@@ -1,4 +1,4 @@
-"""Exercise standalone/submodule setup without downloading Julia packages."""
+"""Exercise setup and launcher failures without downloading Julia packages or using GPUs."""
 import os
 from pathlib import Path
 import subprocess
@@ -17,6 +17,50 @@ def shell_path(path):
 
 
 class SetupTests(unittest.TestCase):
+    def test_krylov_collects_results_before_plotting(self):
+        script = Path(__file__).resolve().parents[1] / "composability/krylov/run.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            project.mkdir()
+            (project / "Manifest.toml").write_text("# test manifest\n")
+            shims = root / "bin"
+            shims.mkdir()
+            commands = {
+                "git": 'echo test-commit\n',
+                "nvidia-smi": 'echo 123\n',
+                "python3": 'echo "ModuleNotFoundError: matplotlib" >&2\nexit 1\n',
+                "timeout": 'shift 3\nexec "$@"\n',
+                "julia": '''case "$1" in
+--version) echo 'julia version test' ;;
+--startup-file=no) exit 0 ;;
+*) echo 'RESULT,Dagger,cg,stock,Float32,1,16,2,1,0.1,1,1,1,0.001,1;1' ;;
+esac
+''',
+            }
+            for name, body in commands.items():
+                shim = shims / name
+                shim.write_text("#!/bin/bash\n" + body, newline="\n")
+                shim.chmod(0o755)
+            env = os.environ.copy()
+            env.update(BENCH_PROJECT=shell_path(project), JULIA=shell_path(shims / "julia"),
+                       BENCH_DRY_RUN="0", BENCH_ELTYPE="Float32")
+            env.pop("CUDA_VISIBLE_DEVICES", None)
+            for mode, args in (("single", ["16"]), ("weak", ["16", "1"])):
+                with self.subTest(mode=mode):
+                    output = root / mode
+                    env["BENCH_OUTPUT"] = shell_path(output)
+                    # Set PATH inside Bash so this also works with Git Bash on Windows.
+                    result = subprocess.run(
+                        ["bash", "-c", 'export PATH="$1:$PATH"; shift; exec bash "$@"',
+                         "bash", shell_path(shims), shell_path(script), mode, *args],
+                        env=env, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn("Plot generation failed", result.stderr)
+                    self.assertIn("Running Dagger", result.stdout)
+                    self.assertGreater(len((output / "results.csv").read_text().splitlines()), 1)
+                    self.assertGreater(len((output / "planned-cases.csv").read_text().splitlines()), 1)
+
     def test_source_selection(self):
         script = Path(__file__).resolve().parents[1] / "instantiate_projects.sh"
         for standalone in (False, True):

@@ -81,7 +81,10 @@ The default result root is `results/composability-<run-id>`; `--output` selects
 another root, relative to the calling directory. Results are grouped under
 `single/<workload>` and `multi/<workload>`. Existing result CSVs are protected
 before either mode starts. A failed run returns a nonzero exit code and retains
-its logs; the remaining workloads and modes are still attempted.
+its logs; the remaining workloads and modes are still attempted. Launcher progress
+and errors stream to the terminal. If startup fails before any cases run, the
+runner also prints the end of `environment.txt` (Krylov) or `metadata.txt` (other
+workloads). Header-only CSVs indicate that no measurements were collected.
 
 `--dry-run` prints the selected workloads, GPU counts, output paths, and launcher
 commands without starting any process or writing files. It does not need Bash,

@@ -55,7 +55,6 @@ echo 'backend,mode,gpus,n,legate_config,cuda_visible_devices' > "$output/planned
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=cg\nBENCH_SAMPLES=%s\nBENCH_CPUS=%s\nBENCH_TIMEOUT=%s\nLEGATE_AUTO_CONFIG=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "$BENCH_SAMPLES" "${BENCH_CPUS:-2}" \
         "${BENCH_TIMEOUT:-15m}" "$LEGATE_AUTO_CONFIG"
-    python3 -c 'import matplotlib; print("matplotlib=" + matplotlib.__version__)'
     "$julia_bin" --startup-file=no --project="$project" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/environment.txt" 2>&1
 cp "$project/Manifest.toml" "$output/Manifest.toml"
@@ -126,6 +125,9 @@ for value in "$@"; do
 done
 echo "Results: $csv"
 if [[ $(wc -l < "$csv") -gt 1 ]]; then
-    python3 "$script_dir/plot.py" "$experiment" "$csv" --output "$output/timings.png" || failed=1
+    if ! python3 "$script_dir/plot.py" "$experiment" "$csv" --output "$output/timings.png"; then
+        echo "Plot generation failed; benchmark data is saved in $csv. Check that python3 has Matplotlib installed." >&2
+        failed=1
+    fi
 fi
 exit "$failed"

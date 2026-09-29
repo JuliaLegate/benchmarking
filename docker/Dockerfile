@@ -16,6 +16,8 @@ RUN wget --no-verbose \
     -O /tmp/miniforge.sh \
     && bash /tmp/miniforge.sh -b -p "${CONDA_DIR}" \
     && rm /tmp/miniforge.sh \
+    && conda install -y -n base -c conda-forge matplotlib-base \
+    && "${CONDA_DIR}/bin/python3" -c 'import matplotlib.pyplot' \
     && conda clean --all --yes
 
 WORKDIR /opt/cuNumeric.jl/benchmark

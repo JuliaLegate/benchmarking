@@ -1,7 +1,28 @@
 # CPU-only: julia --startup-file=no test/composability_cli.jl
 using Test
 include("../run_composability.jl")
-using .ComposabilityCLI: cli_options, launch_plan, main, WORKLOADS, DEFAULT_CONFIG
+using .ComposabilityCLI: cli_options, launch_plan, main, run_launcher, WORKLOADS, DEFAULT_CONFIG
+
+@testset "Launcher output and exit status" begin
+    # Real child processes catch the output suppression hidden by executor mocks.
+    for code in (0, 7)
+        mktemp() do _, out
+            mktemp() do _, err
+                passed = redirect_stdout(out) do
+                    redirect_stderr(err) do
+                        script = "println(\"launcher progress\"); println(stderr, \"launcher error\"); exit($code)"
+                        run_launcher(`$(Base.julia_cmd()) --startup-file=no -e $script`)
+                    end
+                end
+                @test passed == (code == 0)
+                seekstart(out)
+                seekstart(err)
+                @test occursin("launcher progress", read(out, String))
+                @test occursin("launcher error", read(err, String))
+            end
+        end
+    end
+end
 
 @testset "Composability CLI" begin
     @test cli_options(String[]).workloads == WORKLOADS
@@ -57,7 +78,17 @@ using .ComposabilityCLI: cli_options, launch_plan, main, WORKLOADS, DEFAULT_CONF
         @test "JULIA=preferred" in chosen[1].cmd.env
 
         calls = Cmd[]
-        executor(cmd) = (push!(calls, cmd); length(calls) != 1)
+        function executor(cmd)
+            push!(calls, cmd)
+            if length(calls) == 1
+                directory = split(only(filter(startswith("BENCH_OUTPUT="), cmd.env)), '='; limit=2)[2]
+                mkpath(directory)
+                write(joinpath(directory, "planned-cases.csv"), "backend,mode\n")
+                write(joinpath(directory, "environment.txt"), "startup failure details\n")
+                return false
+            end
+            return true
+        end
         preview = IOBuffer()
         @test main(vcat(args, ["--dry-run"]); executor, io=preview) == 0
         @test occursin("BENCH_OUTPUT=", String(take!(preview)))
@@ -65,7 +96,11 @@ using .ComposabilityCLI: cli_options, launch_plan, main, WORKLOADS, DEFAULT_CONF
         @test !ispath(output)
         @test main(["--help"]; executor, io=IOBuffer()) == 0
         @test isempty(calls)
-        @test main(args; executor, io=IOBuffer()) == 1
+        failure_output = IOBuffer()
+        @test main(args; executor, io=failure_output) == 1
+        message = String(take!(failure_output))
+        @test occursin("FAILED: krylov single", message)
+        @test occursin("startup failure details", message)
         @test length(calls) == 4 # A failure does not suppress other workloads or modes.
         @test readlines(joinpath(output, "multi", "weak_scaling_plan.csv")) == [
             "workload,base_n,n_1,n_2,n_4,n_8",
