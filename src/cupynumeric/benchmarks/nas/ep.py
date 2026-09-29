@@ -135,9 +135,9 @@ class NASEmbarrassinglyParallel:
 
     def initialize(self):
         values = [np.zeros(self.batches, dtype=np.float64) for _ in range(13)]
-        indices = host_np.arange(self.batches, dtype=host_np.uint64)
-        masks = [np.asarray(((indices >> bit) & 1).astype(host_np.float64))
-                 for bit in range(self.m-MK)]
+        # Built on the device: host-attached masks are re-copied on every use.
+        indices = np.arange(self.batches, dtype=np.uint64)
+        masks = [((indices >> bit) & 1).astype(np.float64) for bit in range(self.m-MK)]
         return {"values": values, "masks": masks}
 
     def reset(self, state):
@@ -171,12 +171,10 @@ class NASEmbarrassinglyParallel:
             safe = np.minimum(radius, 1.0)
             scale = np.sqrt(-2.0*np.log(safe)/safe)
             g1, g2 = x1*scale, x2*scale
-            bins = np.floor(np.maximum(np.abs(g1), np.abs(g2)))
+            # Rejected pairs get bin -1, so each bin is one compare-and-count.
+            bins = np.where(accepted > 0, np.floor(np.maximum(np.abs(g1), np.abs(g2))), -1.0)
             for bin in range(NQ):
-                q[bin] += np.sum(
-                    accepted*np.maximum(0.0, 1.0-np.abs(bins-float(bin))),
-                    axis=0,
-                )
+                q[bin] += np.sum(bins == float(bin), axis=0)
             sx += np.sum(accepted*g1, axis=0)
             sy += np.sum(accepted*g2, axis=0)
         return values
