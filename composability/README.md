@@ -31,7 +31,8 @@ parent checkout. The benchmark container performs setup during its build.
 dependencies, and the optional ODE integrator smoke checks.
 
 Local runs and Docker both use `environments/composability` directly.
-The composability project pins Dagger to the registered `0.22.5` release.
+The composability project selects Dagger's `aot-schedulers-rebased` branch through
+`[sources]`, with compatibility restricted to version `0.22.5`.
 JACC is not used by these workloads. Individual launchers still accept
 `BENCH_PROJECT`, `ODE_PROJECT`, and `INTOPT_PROJECT` for alternate environments.
 Rerun setup when upgrading from the old separate environments and apply

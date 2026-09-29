@@ -18,6 +18,9 @@ SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 cuNumeric = "0fd9ffd4-7e84-4cd0-b8f8-645bd8c73620"
 
+[sources]
+Dagger = {rev = "aot-schedulers-rebased", url = "https://github.com/JuliaParallel/Dagger.jl.git"}
+
 [compat]
 CNPreferences = "0.1.4"
 CUDA = "=6.4.0"
