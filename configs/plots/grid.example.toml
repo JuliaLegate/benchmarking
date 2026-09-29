@@ -1,0 +1,38 @@
+# One figure per metric, one panel per [[panel]]. Copy to grid.toml (gitignored).
+#   julia --project=. plot_grid.jl [--config=...] [--out=plots/grid]
+#
+# Panel keys:
+#   benchmark  group name; CSV prefix unless `members` is set
+#   members    benchmarks drawn together
+#   results    run dir or list; first holding a series wins
+#   title      default: group title from plot_results.jl
+#   log        log-scale y for throughput/time (default false)
+#   hide       labels to omit from this panel
+
+metrics = ["throughput", "time", "efficiency"]
+columns = 3
+panel_size = [400, 300]   # per panel; only the aspect is used with width_in
+# Print sizing (IEEE: 3.5in column, 7.16in figure*):
+# width_in = 3.5
+# font_size = 6           # default 11
+# format = "pdf"          # default "png"
+
+[[panel]]
+benchmark = "nas_ep"
+results = "results/<run-id>"
+log = true
+
+[[panel]]
+benchmark = "nas_ft"
+results = "results/<run-id>"
+
+[[panel]]
+benchmark = "nas_mg"
+results = ["results/<rerun-id>", "results/<run-id>"]   # rerun layered over full run
+# hide = ["Dagger.jl"]
+
+[[panel]]
+benchmark = "dmd"
+members = ["dmd_baseline", "dmd_accelerated"]
+results = "results/<run-id>"
+title = "DMD"
