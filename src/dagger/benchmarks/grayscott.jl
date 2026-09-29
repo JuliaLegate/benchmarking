@@ -2,6 +2,7 @@ struct DaggerGrayScott{T,S,P}
     N::Int
     M::Int
     gpus::Int
+    block::Int
     scope::S
     processors::P
     dt::T
@@ -19,11 +20,20 @@ struct DaggerGrayScottState{A}
     Vn::A
 end
 
-function dagger_grayscott(::Type{T}, N, M, gpus, scope, processors) where {T}
+const DAGGER_GS_BLOCK = 64
+
+function dagger_grayscott(::Type{T}, N, M, gpus, scope, processors; block=DAGGER_GS_BLOCK) where {T}
     p = grayscott_gs_params(T)
     return DaggerGrayScott{T,typeof(scope),typeof(processors)}(
-        N, M, gpus, scope, processors, p.dt, p.dx2, p.cu, p.cv, p.f, p.k
+        N, M, gpus, block, scope, processors, p.dt, p.dx2, p.cu, p.cv, p.f, p.k
     )
+end
+
+# Symbolic assignments only target CPU threads; pin GPUs by block column.
+function dagger_gs_layout(b::DaggerGrayScott, N)
+    nb = cld(N, b.block)
+    owner(j) = b.processors[cld(j * b.gpus, nb)]
+    return Dagger.Blocks(b.block, b.block), [owner(j) for _ in 1:nb, j in 1:nb]
 end
 
 function model_build_grayscott(config::ModelWorkerConfig)
@@ -42,8 +52,8 @@ end
 
 function dagger_grayscott_state(b::DaggerGrayScott{T}, u_host, v_host) where {T}
     N, M = size(u_host)
-    blocks = Dagger.Blocks(N, cld(M, b.gpus))
-    assignment = reshape(copy(b.processors), 1, b.gpus)
+    N == M || error("Dagger Gray-Scott assumes a square grid, got $N x $M")
+    blocks, assignment = dagger_gs_layout(b, N)
     return Dagger.with_options(; scope=b.scope) do
         st = DaggerGrayScottState(
             Dagger.DArray(u_host, blocks, assignment), Dagger.DArray(v_host, blocks, assignment),
@@ -56,8 +66,8 @@ function dagger_grayscott_state(b::DaggerGrayScott{T}, u_host, v_host) where {T}
 end
 
 function model_initialize(b::DaggerGrayScott{T}) where {T}
-    blocks = Dagger.Blocks(b.N, cld(b.M, b.gpus))
-    assignment = reshape(copy(b.processors), 1, b.gpus)
+    b.N == b.M || error("Dagger Gray-Scott assumes a square grid, got $(b.N) x $(b.M)")
+    blocks, assignment = dagger_gs_layout(b, b.N)
     seed = min(150, b.N, b.M)
     seed_blocks = Dagger.Blocks(seed, seed)
     seed_assignment = reshape(b.processors[1:1], 1, 1)
@@ -114,7 +124,7 @@ function model_check_correctness(b::DaggerGrayScott{T}, config) where {T}
     n = min(32, b.N, b.M)
     steps = config.n_correctness_iter
     u0, v0 = grayscott_host_init(T, n, n; deterministic=true)
-    check = dagger_grayscott(T, n, n, b.gpus, b.scope, b.processors)
+    check = dagger_grayscott(T, n, n, b.gpus, b.scope, b.processors; block=8)
     s = dagger_grayscott_state(check, copy(u0), copy(v0))
     for _ in 1:steps
         model_run!(check, s)
