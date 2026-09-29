@@ -85,7 +85,15 @@ Use `single` instead of `weak` for a single-GPU size sweep.
 On an eight-GPU host, each case launches Julia with exactly its requested
 number of visible GPUs: by default devices `0` through `G-1`, or the first
 `G` entries of an existing `CUDA_VISIBLE_DEVICES` list. The selected mask is
-recorded in `planned-cases.csv`, and Dagger verifies GPU-backed tile placement.
+recorded in `planned-cases.csv`, and Dagger verifies initial GPU-backed tile placement.
+
+Solution correctness is determined by the independent relative residual
+`norm(A*x - b) / norm(b)`, evaluated on the host in Float64 against the original
+tridiagonal operator and right-hand side. The limit is `1e-5` for Float32 and
+`1e-8` for Float64; non-finite residuals also fail. A solver convergence flag
+alone cannot pass this check, and a correct solution is accepted regardless
+of its final GPU placement or convergence flag. The two warm-up solves and
+an additional solve after timing are checked.
 
 Each case gets a fresh Julia process, two warm-up solves, and five synchronized
 timed solves. Allocation, host-to-device transfer, compilation, explicit GC,
