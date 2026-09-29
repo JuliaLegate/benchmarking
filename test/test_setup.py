@@ -29,9 +29,11 @@ class SetupTests(unittest.TestCase):
             commands = {
                 "git": 'echo test-commit\n',
                 "nvidia-smi": 'echo 123\n',
-                "python3": 'echo "ModuleNotFoundError: matplotlib" >&2\nexit 1\n',
                 "timeout": 'shift 3\nexec "$@"\n',
-                "julia": '''case "$1" in
+                "julia": '''for arg in "$@"; do
+    case "$arg" in *plot_results.jl) echo 'simulated plotting error' >&2; exit 1 ;; esac
+done
+case "$1" in
 --version) echo 'julia version test' ;;
 --startup-file=no) exit 0 ;;
 *) echo 'RESULT,Dagger,cg,stock,Float32,1,16,2,1,0.1,1,1,1,0.001,1;1' ;;

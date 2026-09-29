@@ -125,8 +125,9 @@ for value in "$@"; do
 done
 echo "Results: $csv"
 if [[ $(wc -l < "$csv") -gt 1 ]]; then
-    if ! python3 "$script_dir/plot.py" "$experiment" "$csv" --output "$output/timings.png"; then
-        echo "Plot generation failed; benchmark data is saved in $csv. Check that python3 has Matplotlib installed." >&2
+    if ! GKSwstype=100 "$julia_bin" --startup-file=no --project="$project" \
+        "$script_dir/plot_results.jl" "$experiment" "$csv" --output "$output/timings.png"; then
+        echo "Plot generation failed; benchmark data is saved in $csv. See the Julia error above." >&2
         failed=1
     fi
 fi

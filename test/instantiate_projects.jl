@@ -89,7 +89,13 @@ function main()
                 # visible in the CI log and its uploaded instantiate.log.
                 passed = success(pipeline(cmd; stdout, stderr))
                 @test passed
-                passed && verify_projects(workspace, source)
+                if passed
+                    verify_projects(workspace, source)
+                    # Exercise actual headless plotting using the shared packages,
+                    # without loading GPU backends or running a benchmark.
+                    plot_test = `$julia --startup-file=no --project=$(joinpath(workspace, "environments/composability")) $(joinpath(ROOT, "test/krylov_plot.jl"))`
+                    @test success(pipeline(plot_test; stdout, stderr))
+                end
             finally
                 save_diagnostics(workspace, output)
                 println("Setup diagnostics: $output")

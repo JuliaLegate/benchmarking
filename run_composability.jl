@@ -129,6 +129,9 @@ function launch_plan(opts; env=ENV)
             # a workload's old dry-run setting from the calling shell.
             "$(spec.prefix)_DRY_RUN" => "0",
             "JULIA" => julia,
+            # Workers disable startup.jl. Preserve depots added by the parent
+            # startup (the container adds /depot there) so packages stay visible.
+            "JULIA_DEPOT_PATH" => join(DEPOT_PATH, Sys.iswindows() ? ';' : ':'),
         ]
         cmd = addenv(cmd, overrides...)
         push!(plan, (; mode, workload, output, cmd, overrides, config_text, base_n))

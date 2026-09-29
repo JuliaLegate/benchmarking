@@ -15,9 +15,9 @@ CG on cuNumeric.
 
 ## Setup
 
-Use Julia 1.13 on Linux with the installed cuNumeric/Legate libraries. Krylov
-plotting also needs Python with Matplotlib. From the benchmarking repository
-root, initialize the shared environment:
+Use Julia 1.13 on Linux with the installed cuNumeric/Legate libraries. All three
+workloads use Plots.jl from the shared environment. From the benchmarking
+repository root, initialize it:
 
 ```bash
 # For a standalone benchmarking checkout, point to your cuNumeric checkout.
@@ -90,7 +90,9 @@ workloads). Header-only CSVs indicate that no measurements were collected.
 commands without starting any process or writing files. It does not need Bash,
 GPU access, or instantiated packages. Normal runs need the setup described above.
 The workers use the current Julia executable unless `JULIA` or
-`CUNUMERIC_BENCH_JULIA` selects another one. Workload settings such as
+`CUNUMERIC_BENCH_JULIA` selects another one. The runner passes its Julia package
+depots to workers explicitly, so `--startup-file=no` does not hide packages
+installed in a depot added by the container's startup file. Workload settings such as
 `BENCH_SAMPLES`, `ODE_SAMPLES`, `INTOPT_SAMPLES`, and project overrides remain
 available. CLI selections control the workloads, output root, and dry-run mode.
 

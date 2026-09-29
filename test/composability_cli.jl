@@ -25,6 +25,18 @@ using .ComposabilityCLI: cli_options, launch_plan, main, run_launcher, WORKLOADS
 end
 
 @testset "Composability CLI" begin
+    mktempdir() do depot
+        # Simulate a startup.jl adding a depot not present in the environment.
+        pushfirst!(DEPOT_PATH, depot)
+        try
+            launch = first(launch_plan(cli_options(["--only=krylov"])))
+            child = Cmd(`$(Base.julia_cmd()) --startup-file=no -e 'print(first(DEPOT_PATH))'`;
+                env=launch.cmd.env)
+            @test read(child, String) == depot
+        finally
+            popfirst!(DEPOT_PATH)
+        end
+    end
     @test cli_options(String[]).workloads == WORKLOADS
     @test cli_options(String[]).mode == "single"
     @test cli_options(["--mode=multi"]).gpus == ["1", "2", "4", "8"]
@@ -51,6 +63,7 @@ end
             @test "$(prefix)_OUTPUT=$(joinpath(output, launch.mode, launch.workload))" in launch.cmd.env
             @test "JULIA=/my julia/bin/julia" in launch.cmd.env
             @test "$(prefix)_DRY_RUN=0" in launch.cmd.env
+            @test "JULIA_DEPOT_PATH=$(join(DEPOT_PATH, Sys.iswindows() ? ';' : ':'))" in launch.cmd.env
         end
         all_plan = launch_plan(cli_options(["--mode=both"]))
         @test length(all_plan) == 6
