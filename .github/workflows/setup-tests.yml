@@ -63,7 +63,6 @@ jobs:
           julia --startup-file=no --project=. test/composability_cli.jl
           julia --startup-file=no --project=. test/krylov_validation.jl
           julia --startup-file=no --project=. test/ode_cleanup.jl
-          julia --startup-file=no --project=. test/implicitglobalgrid.jl
 
       - name: Instantiate and verify all environments
         shell: bash

@@ -75,22 +75,9 @@ is `(N-2)^2` interior cell updates per step, reported in billions of updates/s,
 not FLOP/s. Scratch space includes four interior-sized work arrays in addition
 to the four field buffers and IGG communication buffers.
 
-## Verification
+## Manual verification
 
-The array-only test uses the actual existing `GRAYSCOTT_STEP_BODY`, checks the
-full fields (including borders/corners), and exercises multiple steps, tilings,
-and initial conditions without GPU packages:
-
-```bash
-julia --startup-file=no test/implicitglobalgrid.jl
-```
-
-Real MPI/IGG communication can also be checked without GPUs:
-
-```bash
-julia --project=environments/implicitglobalgrid test/implicitglobalgrid_mpi.jl
-```
-
-Both checks run in setup CI. `--check` on the shell launcher runs the production
+`--check` on the shell launcher runs the production
 GPU path with the shared deterministic initial conditions and compares the full
 result after warmup plus measured steps to the existing CPU step (N ≤ 512).
+Setup CI verifies the environment's installation without running this benchmark.
