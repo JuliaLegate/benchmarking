@@ -32,7 +32,7 @@ dmd = ["dmd_baseline", "dmd_accelerated"]
 T = ["Float32"]
 gpus = [1, 2, 4, 8]
 cpus = 8
-n_iter = 50
+n_iter = 5
 
 #################################
 #         Gray-Scott            #
