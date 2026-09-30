@@ -1,9 +1,9 @@
 # Focused cuNumeric/cuPyNumeric/Dagger Gray-Scott correctness and weak-scaling run.
 [Global]
 models = ["cunumeric", "cupynumeric"]
-n_warmup = 1
-n_iter = 10
-n_trial = 3
+n_warmup = 2
+n_iter = 50
+n_trial = 5
 check_correctness = true
 n_correctness_iter = 5
 auto_size = false

@@ -3,7 +3,7 @@
 #   julia --project=. run.jl --config=configs/multi_gpu/grayscott_forms.toml
 [Global]
 n_warmup = 2
-n_iter = 250
+n_iter = 50
 n_trial = 5
 models = ["cunumeric"]
 check_correctness = true
