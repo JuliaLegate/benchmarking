@@ -3,10 +3,6 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 project="$script_dir/../../environments/implicitglobalgrid"
-julia_bin=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
-
-# Set to 1 only with CUDA-aware MPI; 0 stages halo transfers through host memory.
-export IGG_CUDAAWARE_MPI=${IGG_CUDAAWARE_MPI:-0}
 
 usage() {
     echo "Usage: $0 GPUS N [N_ITER=10] [N_WARMUP=5] [N_TRIALS=5]" >&2
@@ -22,8 +18,30 @@ for value in "$gpus" "$n" "$N_ITER" "$N_TRIALS"; do
 done
 [[ $N_WARMUP =~ ^(0|[1-9][0-9]*)$ ]] && (( n >= 4 )) || { usage; exit 2; }
 
+julia_bin=$(command -v "${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}")
+conda_bin=${CUNUMERIC_BENCH_CONDA:-${CONDA_EXE:-conda}}
+conda_base=$("$conda_bin" info --base)
+mpi_prefix=${IGG_MPI_PREFIX:-$conda_base/envs/igg-mpi}
+if [[ ! -d "$mpi_prefix/conda-meta" ]]; then
+    echo "Run $script_dir/setup_mpi.sh first to install and configure MPI." >&2
+    exit 1
+fi
+source "$conda_base/etc/profile.d/conda.sh"
+conda activate "$mpi_prefix"
+trap 'conda deactivate' EXIT
+
+export OMPI_MCA_opal_cuda_support=true
+export IGG_CUDAAWARE_MPI=${IGG_CUDAAWARE_MPI:-1}
+if (( EUID == 0 )); then
+    export OMPI_ALLOW_RUN_AS_ROOT=1 OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+fi
+
 # Use this environment's MPI; IGG selects one GPU per node-local rank.
-exec "$julia_bin" --startup-file=no --project="$project" -e '
+"$julia_bin" --startup-file=no --project="$project" -e '
+    using MPIPreferences
+    MPIPreferences.binary == "system" &&
+        MPIPreferences.System.libmpi == joinpath(ENV["CONDA_PREFIX"], "lib", "libmpi.so") ||
+        error("Run setup_mpi.sh to configure Julia for the active Conda MPI environment")
     using MPI
     project = dirname(Base.active_project())
     worker = ARGS[1]
