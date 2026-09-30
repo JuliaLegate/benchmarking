@@ -1,6 +1,6 @@
 # CG weak scaling from the 9,000,000-element single-GPU Class E problem.
 [Global]
-models = ["cunumeric", "cupynumeric", "jacc", "dagger"]
+models = ["cunumeric", "cupynumeric", "jacc"]
 n_warmup = 1
 n_iter = 1
 n_trial = 5
@@ -8,7 +8,7 @@ check_correctness = true
 auto_size = false
 
 [[cg]]
-models = ["cunumeric", "cupynumeric", "jacc", "dagger"]
+models = ["cunumeric", "cupynumeric", "jacc"]
 T = "Float64"
 gpus = [1, 2, 4, 8]
 cpus = 8

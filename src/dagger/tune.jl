@@ -32,16 +32,18 @@ const CSV = normpath(joinpath(
     @__DIR__, "..", "..", "tunes", join(filter(!isempty, [replace(NAME, "_" => "-"), TAG]), "-") * ".csv"
 ))
 
-# Elements per chunk. 1-D ranges and 3-D z-slabs make parts = gpus * split chunks;
-# 2-D tiles split both dimensions, making parts^2.
-tune_chunk(b, parts) = cld(b.N, parts)
-tune_chunk(b::DaggerMonteCarlo, parts) = cld(b.n_samples, parts)
-tune_chunk(b::DaggerGrayScott, parts) = cld(b.N, parts) * cld(b.M, parts)
-tune_chunk(b::DaggerGEMM, parts) = cld(b.N, parts)^2
+# (chunk count, elements per chunk). 1-D ranges and 3-D z-slabs split one
+# dimension into parts = gpus * split; 2-D tiles split both, giving parts^2.
+split_1d(n, parts, plane=1) = (b = cld(n, parts); (cld(n, b), plane * b))
+split_2d(n, m, parts) = (b = cld(n, parts); (cld(n, b)^2, b * min(b, m)))
+tune_chunk(b, parts) = split_1d(b.N, parts)
+tune_chunk(b::DaggerMonteCarlo, parts) = split_1d(b.n_samples, parts)
+tune_chunk(b::DaggerGrayScott, parts) = split_2d(b.N, b.M, parts)
+tune_chunk(b::DaggerGEMM, parts) = split_2d(b.N, b.N, parts)
 tune_chunk(b::DaggerNASFT, parts) =
-    (p = nas_ft_parameters(b.class); p.nx * p.ny * cld(p.nz, parts))
+    (p = nas_ft_parameters(b.class); split_1d(p.nz, parts, p.nx * p.ny))
 tune_chunk(b::DaggerNASMG, parts) =
-    ((nx, ny, nz) = nas_mg_dims(nas_mg_parameters(b.class)); nx * ny * cld(nz, parts))
+    ((nx, ny, nz) = nas_mg_dims(nas_mg_parameters(b.class)); split_1d(nz, parts, nx * ny))
 
 function tune_config(split)
     kwargs = merge(KWARGS, Dict{Symbol,Any}(:blocks_per_gpu => split))
@@ -49,15 +51,19 @@ function tune_config(split)
     return ModelWorkerConfig(GPUS, NAME, T, T_NAME, N, M, 10, 2, 1, true, 1, 0.0, kwargs)
 end
 
-function record(split, chunk, ms, correctness)
+const HEADER = "timestamp,name,T,N,M,gpus,kwargs,blocks_per_gpu,chunks,chunk_elements,ms_per_iter,correctness"
+isfile(CSV) && readline(CSV) != HEADER &&
+    error("$CSV has a different header; move it aside before tuning")
+
+function record(split, chunks, chunk, ms, correctness)
+    kwargs = isempty(KWARGS_TOML) ? "" : "\"" * replace(KWARGS_TOML, "\"" => "\"\"") * "\""
     mkpath(dirname(CSV))
     new = !isfile(CSV)
     open(CSV, "a") do io
-        new && println(io, "timestamp,name,T,N,M,gpus,kwargs,blocks_per_gpu,chunk_elements,ms_per_iter,correctness")
+        new && println(io, HEADER)
         @printf(
-            io, "%s,%s,%s,%d,%d,%d,\"%s\",%d,%d,%.6f,%s\n",
-            now(), NAME, T_NAME, N, M, GPUS, replace(KWARGS_TOML, "\"" => "\"\""),
-            split, chunk, ms, correctness,
+            io, "%s,%s,%s,%d,%d,%d,%s,%d,%d,%d,%.6f,%s\n",
+            now(), NAME, T_NAME, N, M, GPUS, kwargs, split, chunks, chunk, ms, correctness,
         )
     end
 end
@@ -66,15 +72,15 @@ results = Pair{Int,Float64}[]
 for split in SPLITS
     config = tune_config(split)
     benchmark = model_build_benchmark(config)
-    chunk = tune_chunk(benchmark, GPUS * split)
+    chunks, chunk = tune_chunk(benchmark, GPUS * split)
     split > 1 && chunk < MIN_CHUNK && break
     correctness = model_check_correctness(benchmark, config)
     ms, _ = model_trial(benchmark, config)
     @printf(
-        "blocks_per_gpu=%3d  chunk=%10d  %10.3f ms/iter  correctness=%s\n",
-        split, chunk, ms, correctness,
+        "blocks_per_gpu=%3d  chunks=%5d  chunk=%10d  %10.3f ms/iter  correctness=%s\n",
+        split, chunks, chunk, ms, correctness,
     )
-    record(split, chunk, ms, correctness)
+    record(split, chunks, chunk, ms, correctness)
     correctness == "fail" && error("blocks_per_gpu=$split failed correctness")
     push!(results, split => ms)
     benchmark = nothing
