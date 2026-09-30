@@ -3,12 +3,14 @@ using ImplicitGlobalGrid
 using MPI
 using Random
 using Printf
+using Statistics
 
 @views  inn(A) = A[2:end-1, 2:end-1]
 @views lap1(A) = A[3:end, 2:end-1] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[1:end-2, 2:end-1]
 @views lap2(A) = A[2:end-1, 3:end] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[2:end-1, 1:end-2]
 
-@views function grayscott(nx, ny, nt, warmup, comm)
+# One trial: N_WARMUP untimed steps followed by N_ITER measured steps.
+@views function grayscott(nx, ny, n_iter, n_warmup, comm)
     # Physics
     c_u = 1.0f0
     c_v = 0.3f0
@@ -31,9 +33,9 @@ using Printf
     Random.rand!(v[1:nx÷10, 1:ny÷10])
 
     start = 0.0
-    for it = 1:(warmup + nt)
+    for it = 1:(n_warmup + n_iter)
         # Exclude allocation and warmup from the measured timesteps.
-        if it == warmup + 1
+        if it == n_warmup + 1
             CUDA.synchronize()
             MPI.Barrier(comm)
             start = MPI.Wtime()
@@ -56,19 +58,29 @@ using Printf
     return MPI.Allreduce(MPI.Wtime() - start, max, comm)
 end
 
-length(ARGS) == 4 || error("Usage: grayscott.jl GPUS N STEPS WARMUP")
-gpus, N, nt, warmup = parse.(Int, ARGS)
-gpus > 0 && N >= 4 && nt > 0 && warmup >= 0 || error("Invalid benchmark dimensions or iteration counts")
+length(ARGS) in (4, 5) || error("Usage: grayscott.jl GPUS N N_ITER N_WARMUP [N_TRIALS=5]")
+gpus, N, n_iter, n_warmup = parse.(Int, ARGS[1:4])
+n_trials = length(ARGS) == 5 ? parse(Int, ARGS[5]) : 5
+gpus > 0 && N >= 4 && n_iter > 0 && n_warmup >= 0 && n_trials > 0 ||
+    error("Invalid benchmark dimensions or iteration counts")
 
 me, dims, nprocs, coords, comm = init_global_grid(N, N, 1; dimz=1)
 nprocs == gpus || error("Expected $gpus MPI ranks, got $nprocs")
-elapsed = grayscott(N, N, nt, warmup, comm)
+times_ms = zeros(n_trials)
+for trial in 1:n_trials
+    times_ms[trial] = grayscott(N, N, n_iter, n_warmup, comm) / n_iter * 1e3
+    me == 0 && @printf("Trial %d/%d: %.6f ms/step\n", trial, n_trials, times_ms[trial])
+end
 
 if me == 0
-    mean_ms = elapsed / nt * 1e3
-    gupdates = gpus * Float64(N - 2)^2 * nt / elapsed / 1e9
-    @printf("Gray-Scott: %d GPUs, local %dx%d, %d iterations\n", gpus, N, N, nt)
-    @printf("Mean time: %.6f ms/step; %.6f G cell updates/s\n", mean_ms, gupdates)
+    mean_ms = mean(times_ms)
+    std_ms = std(times_ms)
+    sem_ms = std_ms / sqrt(n_trials)
+    gupdates = gpus * Float64(N - 2)^2 / (mean_ms * 1e6)
+    @printf("Gray-Scott: %d GPUs, local %dx%d, %d trials, %d iterations/trial, %d warmup steps/trial\n",
+        gpus, N, N, n_trials, n_iter, n_warmup)
+    @printf("Mean time: %.6f ms/step; stddev: %.6f ms; SEM: %.6f ms\n", mean_ms, std_ms, sem_ms)
+    @printf("Throughput: %.6f G cell updates/s\n", gupdates)
 end
 
 finalize_global_grid()

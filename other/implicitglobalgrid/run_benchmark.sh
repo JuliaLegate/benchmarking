@@ -6,15 +6,18 @@ project="$script_dir/../../environments/implicitglobalgrid"
 julia_bin=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
 
 usage() {
-    echo "Usage: $0 GPUS N [STEPS=10] [WARMUP=5]" >&2
+    echo "Usage: $0 GPUS N [N_ITER=10] [N_WARMUP=5] [N_TRIALS=5]" >&2
 }
 if [[ ${1:-} == --help || ${1:-} == -h ]]; then usage; exit 0; fi
-if (( $# < 2 || $# > 4 )); then usage; exit 2; fi
-gpus=$1; n=$2; steps=${3:-10}; warmup=${4:-5}
-for value in "$gpus" "$n" "$steps"; do
+if (( $# < 2 || $# > 5 )); then usage; exit 2; fi
+gpus=$1; n=$2
+N_ITER=${3:-${N_ITER:-10}}
+N_WARMUP=${4:-${N_WARMUP:-5}}
+N_TRIALS=${5:-${N_TRIALS:-5}}
+for value in "$gpus" "$n" "$N_ITER" "$N_TRIALS"; do
     [[ $value =~ ^[1-9][0-9]*$ ]] || { usage; exit 2; }
 done
-[[ $warmup =~ ^(0|[1-9][0-9]*)$ ]] && (( n >= 4 )) || { usage; exit 2; }
+[[ $N_WARMUP =~ ^(0|[1-9][0-9]*)$ ]] && (( n >= 4 )) || { usage; exit 2; }
 
 # Use this environment's MPI; IGG selects one GPU per node-local rank.
 exec "$julia_bin" --startup-file=no --project="$project" -e '
@@ -25,4 +28,4 @@ exec "$julia_bin" --startup-file=no --project="$project" -e '
     command = `$(MPI.mpiexec()) -n $gpus $(Base.julia_cmd()) --startup-file=no --project=$project $worker $(ARGS[2:end])`
     process = run(ignorestatus(command))
     exit(success(process) ? 0 : 1)
-' "$script_dir/grayscott.jl" "$gpus" "$n" "$steps" "$warmup"
+' "$script_dir/grayscott.jl" "$gpus" "$n" "$N_ITER" "$N_WARMUP" "$N_TRIALS"
