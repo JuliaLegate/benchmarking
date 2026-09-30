@@ -21,6 +21,51 @@ def shell_path(path):
 
 
 class SetupTests(unittest.TestCase):
+    def test_implicitglobalgrid_launcher(self):
+        script = Path(__file__).resolve().parents[1] / "other/implicitglobalgrid/run_benchmark.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "args"
+            fake = root / "julia"
+            fake.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$IGG_TEST_LOG"\n'
+                            'printf "MASK=%s\\n" "$CUDA_VISIBLE_DEVICES" >> "$IGG_TEST_LOG"\n'
+                            'exit "${IGG_TEST_EXIT:-0}"\n', newline="\n")
+            fake.chmod(0o755)
+            env = os.environ.copy()
+            env.update(JULIA=shell_path(fake), IGG_TEST_LOG=shell_path(log))
+            command = [BASH, "-c", 'export PATH=/usr/bin:$PATH; exec bash "$@"',
+                       "bash", shell_path(script)]
+            for mask in (None, "GPU-third,GPU-first,GPU-second"):
+                if mask is None:
+                    env.pop("CUDA_VISIBLE_DEVICES", None)
+                else:
+                    env["CUDA_VISIBLE_DEVICES"] = mask
+                result = subprocess.run(command + ["2", "32", "3", "0", "--check"],
+                                        cwd=root, env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args = log.read_text().splitlines()
+                self.assertEqual(args[0], "--startup-file=no")
+                self.assertTrue(args[1].endswith("/environments/implicitglobalgrid"))
+                self.assertEqual(args[-6:-1], ["2", "32", "3", "0", "--check"])
+                self.assertEqual(args[-1], "MASK=0,1" if mask is None else "MASK=GPU-third,GPU-first")
+            result = subprocess.run(command + ["1", "32"], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(log.read_text().splitlines()[-5:-1], ["1", "32", "10", "5"])
+            log.unlink()
+            for args in ([], ["0", "32"], ["1", "3"], ["1", "32", "0"],
+                         ["1", "32", "3", "-1"], ["1", "32", "3", "2", "extra"]):
+                result = subprocess.run(command + args, env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertFalse(log.exists())
+            for mask in ("", "0"):
+                env["CUDA_VISIBLE_DEVICES"] = mask
+                result = subprocess.run(command + ["2", "32"], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertFalse(log.exists())
+            env.update(CUDA_VISIBLE_DEVICES="0,1", IGG_TEST_EXIT="7")
+            result = subprocess.run(command + ["2", "32"], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 7, result.stderr)
+
     def test_krylov_solver_selection_and_isolation(self):
         script = Path(__file__).resolve().parents[1] / "composability/krylov/run.sh"
         with tempfile.TemporaryDirectory() as tmp:
@@ -324,6 +369,7 @@ esac
                 self.assertEqual(args[-2:],
                                  [shell_path(source), shell_path(source / "lib/CNPreferences")])
                 self.assertEqual(args.count("--project=environments/composability"), 1)
+                self.assertEqual(args.count("--project=environments/implicitglobalgrid"), 1)
                 self.assertFalse(any("setup.jl" in arg for arg in args))
                 self.assertFalse((bench / "environments/krylov").exists())
                 log.unlink()

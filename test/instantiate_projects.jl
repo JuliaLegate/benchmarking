@@ -6,7 +6,8 @@ using Test, TOML
 
 const ROOT = dirname(@__DIR__)
 const PROJECTS = [".", "environments/cuda", "environments/jacc",
-    "environments/dagger", "environments/cunumeric", "environments/composability"]
+    "environments/dagger", "environments/implicitglobalgrid",
+    "environments/cunumeric", "environments/composability"]
 
 function stage_projects(destination)
     cp(joinpath(ROOT, "instantiate_projects.sh"), joinpath(destination, "instantiate_projects.sh"))
@@ -101,6 +102,8 @@ function main()
                     # without loading GPU backends or running a benchmark.
                     plot_test = `$julia --startup-file=no --project=$(joinpath(workspace, "environments/composability")) $(joinpath(ROOT, "test/krylov_plot.jl"))`
                     @test success(pipeline(plot_test; stdout, stderr))
+                    igg_test = `$julia --startup-file=no --project=$(joinpath(workspace, "environments/implicitglobalgrid")) $(joinpath(ROOT, "test/implicitglobalgrid_mpi.jl"))`
+                    @test success(pipeline(igg_test; stdout, stderr))
                 end
             finally
                 save_diagnostics(workspace, output)
