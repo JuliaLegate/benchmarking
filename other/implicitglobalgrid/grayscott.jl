@@ -64,11 +64,21 @@ n_trials = length(ARGS) == 5 ? parse(Int, ARGS[5]) : 5
 gpus > 0 && N >= 4 && n_iter > 0 && n_warmup >= 0 && n_trials > 0 ||
     error("Invalid benchmark dimensions or iteration counts")
 
-me, dims, nprocs, coords, comm = init_global_grid(N, N, 1; dimz=1)
+MPI.Init()
+nprocs = MPI.Comm_size(MPI.COMM_WORLD)
 nprocs == gpus || error("Expected $gpus MPI ranks, got $nprocs")
+# N counts global simulation cells; each local array also needs two halo cells.
+dims = MPI.Dims_create(nprocs, [0, 0, 1])
+all(d -> N % d == 0 && N ÷ d >= 2, dims[1:2]) ||
+    error("N=$N must divide evenly across the $(dims[1])x$(dims[2]) process grid, with at least two cells per rank in each dimension")
+nx, ny = N ÷ dims[1] + 2, N ÷ dims[2] + 2
+me, dims, nprocs, coords, comm = init_global_grid(nx, ny, 1;
+    dimx=dims[1], dimy=dims[2], dimz=1, init_MPI=false)
+me == 0 && @printf("Simulation domain: %dx%d (IGG's global grid above includes the outer halos); local arrays: %dx%d including halos\n",
+    N, N, nx, ny)
 times_ms = zeros(n_trials)
 for trial in 1:n_trials
-    times_ms[trial] = grayscott(N, N, n_iter, n_warmup, comm) / n_iter * 1e3
+    times_ms[trial] = grayscott(nx, ny, n_iter, n_warmup, comm) / n_iter * 1e3
     me == 0 && @printf("Trial %d/%d: %.6f ms/step\n", trial, n_trials, times_ms[trial])
 end
 
@@ -76,8 +86,8 @@ if me == 0
     mean_ms = mean(times_ms)
     std_ms = std(times_ms)
     sem_ms = std_ms / sqrt(n_trials)
-    gupdates = gpus * Float64(N - 2)^2 / (mean_ms * 1e6)
-    @printf("Gray-Scott: %d GPUs, local %dx%d, %d trials, %d iterations/trial, %d warmup steps/trial\n",
+    gupdates = Float64(N)^2 / (mean_ms * 1e6)
+    @printf("Gray-Scott: %d GPUs, global %dx%d simulation cells, %d trials, %d iterations/trial, %d warmup steps/trial\n",
         gpus, N, N, n_trials, n_iter, n_warmup)
     @printf("Mean time: %.6f ms/step; stddev: %.6f ms; SEM: %.6f ms\n", mean_ms, std_ms, sem_ms)
     @printf("Throughput: %.6f G cell updates/s\n", gupdates)
