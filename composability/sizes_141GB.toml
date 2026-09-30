@@ -1,0 +1,20 @@
+# Float32 sweeps for 141 GB H200 GPUs; estimated, not yet validated on H200.
+# Retain the 80 GB sweep points and append a larger endpoint for each workload.
+# The new endpoint and weak_base are 1.25x the H100 baseline dimension N:
+# approximately 1.5625x array storage for these O(N^2) workloads, below the
+# 141/80 = 1.7625x capacity ratio to leave additional memory headroom.
+# single: increasing matrix/grid dimensions N for one-GPU size sweeps.
+# weak_base: dimension N on one GPU; multi-GPU runs use round(N * sqrt(G)).
+# Validate the new endpoint on every backend before using it for weak scaling.
+
+[krylov]
+single = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 81920]
+weak_base = 81920
+
+[ordinarydiffeq]
+single = [128, 512, 1024, 2048, 4096, 8192, 16384, 20480]
+weak_base = 20480
+
+[integrals_optimization]
+single = [32, 128, 512, 1024, 2048, 4096, 6144, 8192, 10240]
+weak_base = 10240

@@ -63,7 +63,7 @@ julia --project=. run_composability.jl --only=krylov,ordinarydiffeq \
 ```
 
 Finally run weak scaling at `1, 2, 4, 8` GPUs. The versioned
-`sizes.toml` sets the one-GPU baselines for `N(G) = round(N(1) * sqrt(G))`: CG uses
+`sizes_80GB.toml` sets the one-GPU baselines for `N(G) = round(N(1) * sqrt(G))`: CG uses
 `65536, 92682, 131072, 185364`; heat uses `16384, 23170, 32768, 46341`.
 Select these two workloads explicitly for the final run.
 

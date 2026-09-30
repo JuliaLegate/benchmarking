@@ -5,7 +5,7 @@ using Dates, TOML
 
 const WORKLOADS = ["krylov", "ordinarydiffeq", "integrals_optimization"]
 const ROOT = @__DIR__
-const DEFAULT_CONFIG = joinpath(ROOT, "composability", "sizes.toml")
+const DEFAULT_CONFIG = joinpath(ROOT, "composability", "sizes_80GB.toml")
 const LAUNCHERS = Dict(
     "krylov" => (script="run.sh", prefix="BENCH"),
     "ordinarydiffeq" => (script="run_benchmark.sh", prefix="ODE"),
@@ -22,14 +22,15 @@ function usage(io=stdout)
       --mode=single               single (default), multi, or both
       --gpus=1,2,4,8              GPU counts for multi mode (default: 1,2,4,8);
                                   single mode always uses one GPU
-      --config=PATH               Size config (default: composability/sizes.toml)
+      --config=PATH               Size config (default: composability/sizes_80GB.toml)
       --output=PATH               Result root (default: results/composability-<run-id>)
       --dry-run                   Print launch commands without running or writing files
       -h, --help                  Show this help
 
-    Edit single and weak_base in composability/sizes.toml to set N. Defaults
-    are Float32 presets for 80 GB H100s. Multi mode uses N(G) = round(weak_base *
-    sqrt(G)). Results go to PATH/single/<workload> and PATH/multi/<workload>.
+    Edit single and weak_base in the size config to set N. Defaults are Float32
+    presets for 80 GB H100s; select composability/sizes_141GB.toml for 141 GB H200s.
+    Multi mode uses N(G) = round(weak_base * sqrt(G)). Results go to
+    PATH/single/<workload> and PATH/multi/<workload>.
     Existing result CSVs are never overwritten.
 
     Run ./instantiate_projects.sh first. Workers use environments/composability;
@@ -40,6 +41,7 @@ function usage(io=stdout)
       julia --project=. run_composability.jl --only=krylov
       julia --project=. run_composability.jl --only=krylov,ordinarydiffeq --mode=multi
       julia --project=. run_composability.jl --mode=both --gpus=1,2,4 --output=results/paper
+      julia --project=. run_composability.jl --config=composability/sizes_141GB.toml
       julia --project=. run_composability.jl --config=my-sizes.toml --dry-run
     """)
 end

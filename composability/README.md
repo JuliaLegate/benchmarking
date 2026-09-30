@@ -72,11 +72,10 @@ GPU. `--mode=multi` runs weak scaling at the specified GPU counts (default
 `1,2,4,8`, including the one-GPU baseline). `--mode=both` runs both sequentially.
 Supported counts are `1`, `2`, `4`, and `8`.
 
-Single-GPU runs use the CG and heat sizes in `sizes.toml` and plume sizes
-`32, 128, 512, 1024, 2048, 4096, 6144, 8192`. These are Float32 presets for an
-80 GB H100; edit `sizes.toml` or pass `--config` for custom sizes. Each mode
-saves its size config with the results. Multi-GPU runs also generate
-`weak_scaling_plan.csv` from that config.
+All three workloads use the Float32 preset in `sizes_80GB.toml` by default.
+Select `--config=composability/sizes_141GB.toml` for a 141 GB H200, or pass a
+custom config path. Each mode saves its size config with the results.
+Multi-GPU runs also generate `weak_scaling_plan.csv` from that config.
 
 The default result root is `results/composability-<run-id>`; `--output` selects
 another root, relative to the calling directory. Results are grouped under
@@ -99,9 +98,10 @@ available. CLI selections control the workloads, output root, and dry-run mode.
 
 ## Set N (problem sizes)
 
-Edit [`sizes.toml`](sizes.toml) to change N for any workload. This is the single
-source of sizes for the unified runner; no Julia code or CSV needs editing.
-Each workload has two settings:
+Choose [`sizes_80GB.toml`](sizes_80GB.toml) for an 80 GB H100 (default) or
+[`sizes_141GB.toml`](sizes_141GB.toml) for a 141 GB H200. The selected config
+sets N for all workloads; no Julia code or CSV needs editing. Each workload
+has two settings:
 
 ```toml
 [krylov]
@@ -114,16 +114,36 @@ weak_base = 65536
   `N(G) = round(weak_base * sqrt(G))` for G GPUs.
 
 For CG, N is the dense matrix dimension. For heat and plume fitting, it is the
-side length of the two-dimensional grid/image. The default `weak_base` values
-are 65,536 for CG, 16,384 for heat, and 8,192 for plume fitting. The defaults
-retain the original H100 sweeps; choose smaller values for smaller GPUs or
-quick checks. Single-GPU values must be unique and increasing; N must be at
-least 2 for CG and 4 for heat/plume.
+side length of the two-dimensional grid/image. The maximum single-GPU N and
+`weak_base` values are:
+
+| Workload | 80 GB H100 | 141 GB H200 |
+| --- | ---: | ---: |
+| Krylov CG | 65,536 | 81,920 |
+| OrdinaryDiffEq heat | 16,384 | 20,480 |
+| Integrals + Optimization plume | 8,192 | 10,240 |
+
+The 80 GB preset retains the original H100 sweeps. The 141 GB preset keeps
+those points and appends one larger endpoint per workload. Each new endpoint
+is 1.25 times the H100 maximum: approximately 1.5625 times the array storage
+for these quadratic workloads, below the 141/80 = 1.7625 capacity ratio.
+These H200 sizes are estimates, not measured passing limits. Validate the
+single-GPU endpoints on every backend before using them for weak scaling:
+
+```sh
+julia --project=. run_composability.jl --config=composability/sizes_141GB.toml --dry-run
+julia --project=. run_composability.jl --config=composability/sizes_141GB.toml --mode=single
+# After validating the one-GPU sizes:
+julia --project=. run_composability.jl --config=composability/sizes_141GB.toml --mode=multi --gpus=1,2,4,8
+```
+
+Choose smaller values for smaller GPUs or quick checks. Single-GPU values must
+be unique and increasing; N must be at least 2 for CG and 4 for heat/plume.
 
 To keep the defaults intact, copy the config and select your copy:
 
 ```sh
-cp composability/sizes.toml my-sizes.toml
+cp composability/sizes_80GB.toml my-sizes.toml
 # Edit single and weak_base in my-sizes.toml, then preview the commands.
 julia --project=. run_composability.jl --config=my-sizes.toml --mode=both --dry-run
 julia --project=. run_composability.jl --config=my-sizes.toml --mode=both

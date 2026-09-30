@@ -72,9 +72,18 @@ julia --project=. run_composability.jl --mode=both --output=results/composabilit
 julia --project=. run_composability.jl --only=integrals_optimization --dry-run
 ```
 
-Set N in [`composability/sizes.toml`](composability/sizes.toml): `single` lists
-the one-GPU dimensions and `weak_base` sets N for the one-GPU weak-scaling
-baseline. Use `--config=/path/to/sizes.toml` to select a separate config.
+Choose [`composability/sizes_80GB.toml`](composability/sizes_80GB.toml) for an
+80 GB H100 (default) or [`composability/sizes_141GB.toml`](composability/sizes_141GB.toml)
+for a 141 GB H200:
+
+```bash
+julia --project=. run_composability.jl --config=composability/sizes_141GB.toml
+```
+
+In either config, `single` lists the one-GPU dimensions and `weak_base` sets N
+for the one-GPU weak-scaling baseline. The H200 preset extends the H100 sweeps
+with estimated larger sizes; validate them on the target machine before weak
+scaling. Use `--config=/path/to/my-sizes.toml` to select a custom config.
 
 `--mode=single` runs size sweeps on one GPU; `--mode=multi` runs weak scaling.
 `--only=all` is the default. `--dry-run` previews commands without requiring a

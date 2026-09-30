@@ -1,4 +1,4 @@
-# Default Float32 sweeps for 80 GB H100 GPUs.
+# Float32 sweeps for 80 GB H100 GPUs (the default preset).
 # single: increasing matrix/grid dimensions N for one-GPU size sweeps.
 # weak_base: dimension N on one GPU; multi-GPU runs use round(N * sqrt(G)).
 
