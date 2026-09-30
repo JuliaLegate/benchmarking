@@ -39,6 +39,18 @@ cells per step. The launcher uses the environment's MPI with one rank per GPU.
 IGG selects GPUs by node-local rank, respecting `CUDA_VISIBLE_DEVICES`.
 Set `JULIA` or `CUNUMERIC_BENCH_JULIA` to choose the Julia executable.
 
+Multi-GPU runs work with `IGG_CUDAAWARE_MPI=0` (the launcher's default): IGG
+stages halo transfers through host memory. With a CUDA-aware MPI backend
+configured for this Julia environment, enable GPU-buffer communication with:
+
+```bash
+IGG_CUDAAWARE_MPI=1 bash other/implicitglobalgrid/run_benchmark.sh 4 14000 10 5 5
+```
+
+For a sweep, `export IGG_CUDAAWARE_MPI=1` before the loop. This flag does not
+configure MPI or add CUDA support to it; use it only when the selected MPI
+backend supports CUDA. See the [IGG documentation](https://github.com/eth-cscs/ImplicitGlobalGrid.jl#cuda-awarerocm-aware-mpi-support).
+
 Each trial starts with fresh arrays, runs `N_WARMUP` untimed steps, and measures
 `N_ITER` steps. Allocation and warmup are outside timing. GPU synchronization
 and MPI barriers bound the measured steps. Each trial's time is the maximum

@@ -5,6 +5,9 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 project="$script_dir/../../environments/implicitglobalgrid"
 julia_bin=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
 
+# Set to 1 only with CUDA-aware MPI; 0 stages halo transfers through host memory.
+export IGG_CUDAAWARE_MPI=${IGG_CUDAAWARE_MPI:-0}
+
 usage() {
     echo "Usage: $0 GPUS N [N_ITER=10] [N_WARMUP=5] [N_TRIALS=5]" >&2
 }
