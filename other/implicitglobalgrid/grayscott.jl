@@ -18,9 +18,9 @@ using Statistics
     k = 0.06f0
 
     # Numerics
-    dx = 1
+    dx = 1.0f0
     dy = dx
-    dt = Float32(dx / 5)
+    dt = dx / 5.0f0
 
     u     = CUDA.zeros(Float32, nx, ny)
     v     = CUDA.zeros(Float32, nx, ny)
