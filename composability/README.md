@@ -1,6 +1,6 @@
 # Composability benchmarks
 
-For the eight-H100 smoke checks, final seven-point one-GPU sweeps, and full
+For the eight-H100 smoke checks, one-GPU sweeps, and full
 weak-scaling run, follow the [final runbook](FINAL_RUN.md).
 
 The three workloads are [Krylov CG](krylov/README.md),
@@ -80,8 +80,9 @@ Multi-GPU runs also generate `weak_scaling_plan.csv` from that config.
 The default result root is `results/composability-<run-id>`; `--output` selects
 another root, relative to the calling directory. Results are grouped under
 `single/<workload>` and `multi/<workload>`. Existing result CSVs are protected
-before either mode starts. A failed run returns a nonzero exit code and retains
-its logs; the remaining workloads and modes are still attempted. Launcher progress
+before either mode starts. A failed case retains its logs and the successful
+results from other backends; the remaining backends, sizes, workloads, and modes
+are still attempted. The run returns a nonzero exit code if any case fails. Launcher progress
 and errors stream to the terminal. If startup fails before any cases run, the
 runner also prints the end of `environment.txt` (Krylov) or `metadata.txt` (other
 workloads). Header-only CSVs indicate that no measurements were collected.
@@ -117,18 +118,33 @@ For CG, N is the dense matrix dimension. For heat and plume fitting, it is the
 side length of the two-dimensional grid/image. The maximum single-GPU N and
 `weak_base` values are:
 
-| Workload | 80 GB H100 | 141 GB H200 |
-| --- | ---: | ---: |
-| Krylov CG | 65,536 | 81,920 |
-| OrdinaryDiffEq heat | 16,384 | 20,480 |
-| Integrals + Optimization plume | 8,192 | 10,240 |
+| Workload | 80 GB maximum | 80 GB weak_base | 141 GB maximum | 141 GB weak_base |
+| --- | ---: | ---: | ---: | ---: |
+| Krylov CG | 114,688 | 65,536 | 131,072 | 81,920 |
+| OrdinaryDiffEq heat | 32,768 | 16,384 | 65,536 | 20,480 |
+| Integrals + Optimization plume | 8,192 | 8,192 | 10,240 | 10,240 |
 
-The 80 GB preset retains the original H100 sweeps. The 141 GB preset keeps
-those points and appends one larger endpoint per workload. Each new endpoint
-is 1.25 times the H100 maximum: approximately 1.5625 times the array storage
-for these quadratic workloads, below the 141/80 = 1.7625 capacity ratio.
-These H200 sizes are estimates, not measured passing limits. Validate the
-single-GPU endpoints on every backend before using them for weak scaling:
+Both Krylov presets include 81,920, 98,304, and 114,688 to cover the prior
+H100 comparison. The 141 GB preset adds 131,072. Krylov keeps successful
+backend results and continues to larger sizes when another backend fails;
+failures retain logs and still produce a nonzero exit status. Sizes above
+81,920 still need H200 validation. The configured Krylov weak-scaling
+baselines remain 65,536 for H100 and the passing 81,920 point for H200.
+
+The H100 heat sweep extends through 32,768; the H200 sweep adds 65,536.
+All heat sweep dimensions are powers of two, with no 20,480 sweep point.
+Heat `weak_base` remains 16,384 for H100 and 20,480 for
+H200. These larger grids are exploratory: even if every
+backend fails at a size, the launcher keeps earlier results and continues.
+If no case succeeds, it retains the CSV header and failure logs and skips
+plotting. Any failed case still produces a nonzero final exit status.
+
+The H200 plume preset appends an estimated endpoint at 1.25 times the H100
+maximum: approximately 1.5625 times the array storage for this quadratic
+workload, below the 141/80 = 1.7625 capacity ratio.
+Validate the selected single-GPU sizes on every backend before using them
+for weak scaling; raising a sweep maximum does not automatically raise
+`weak_base`:
 
 ```sh
 julia --project=. run_composability.jl --config=composability/sizes_141GB.toml --dry-run

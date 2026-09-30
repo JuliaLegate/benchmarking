@@ -52,10 +52,12 @@ ODE_SAMPLES=2 ODE_OUTPUT="$results/ode-smoke" \
   bash composability/ordinarydiffeq/run_benchmark.sh weak 128 2 4 8
 ```
 
-Then produce the final seven-point one-GPU plots. Each case uses two warmups
+Then produce the one-GPU plots. Each case uses two warmups
 and five synchronized timed solves by default. These one-GPU measurements
 should be on the same machine, code, and Julia environments as the weak run.
-The largest passing dimensions remain the weak-scaling baselines.
+CG includes larger exploratory sizes through `N=114688`; a backend failure
+keeps the other backends' results and does not stop its size sweep. The
+weak-scaling baselines remain explicitly set in `sizes_80GB.toml`.
 
 ```bash
 julia --project=. run_composability.jl --only=krylov,ordinarydiffeq \

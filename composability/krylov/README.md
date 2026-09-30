@@ -34,14 +34,18 @@ If cuNumeric uses local backend-library preferences, copy its
 Set one or more explicit matrix dimensions for the single-GPU comparison:
 
 ```sh
-BENCH_ELTYPE=Float32 BENCH_OUTPUT=results/krylov-single-f32 bash composability/krylov/run.sh single 1024 2048 4096 8192 16384 32768 65536
+BENCH_ELTYPE=Float32 BENCH_OUTPUT=results/krylov-single-f32 bash composability/krylov/run.sh single 1024 2048 4096 8192 16384 32768 65536 81920 98304 114688
 ```
 
 For weak scaling, set the **one-GPU** dimension followed by GPU counts. The
 runner chooses `N(G) = round(N(1) × sqrt(G))`, keeping dense matrix elements per
 GPU approximately constant. Use the largest dimension that passed all four
-single-GPU variants as `N(1)`; the single-GPU sweep writes it to `base_n.txt`
-and stops after the first failed size. Every backend gets the same `N(G)` at each count:
+single-GPU variants as `N(1)`; the single-GPU sweep writes it to `base_n.txt`.
+A backend failure retains the other backends' successful results and the sweep
+continues to larger sizes. Failed cases retain logs, and the launcher returns
+a nonzero exit status after collecting and plotting the remaining results.
+The unified runner uses the config's `weak_base`, not `base_n.txt`.
+Every backend gets the same `N(G)` at each count:
 
 ```sh
 BASE_N=65536 # largest common passing N on the one-H100 sweep
@@ -53,9 +57,11 @@ The selected H100 weak-scaling dimensions are `N=65536, 92682, 131072,
 one-GPU size sweep; the weak run has Dagger, cuNumeric stock, and cuNumeric
 local cases at every count.
 
-The seven listed one-GPU dimensions all passed the residual and GPU-storage
-checks on the single H100. The `N=1024`, `2048`, and `4096` measurements fill
-in the low end while retaining `N=65536` as the maximum and weak baseline.
+The original seven one-GPU dimensions through `N=65536` all passed the
+residual and GPU-storage checks on the single H100. The H100 preset now
+extends through `N=114688`; the H200 preset adds `N=131072`. Individual
+backends may fail at the larger sizes. The configured weak baselines remain
+`N=65536` for H100 and `N=81920` for H200.
 
 On a one-GPU machine, use `BENCH_DRY_RUN=1` with the weak command to write
 `planned-cases.csv` for all four GPU counts without launching them. Run the

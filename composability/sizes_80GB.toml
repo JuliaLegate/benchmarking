@@ -3,11 +3,12 @@
 # weak_base: dimension N on one GPU; multi-GPU runs use round(N * sqrt(G)).
 
 [krylov]
-single = [1024, 2048, 4096, 8192, 16384, 32768, 65536]
+# Extend through the prior H100 comparison; backends may fail independently.
+single = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 81920, 98304, 114688]
 weak_base = 65536
 
 [ordinarydiffeq]
-single = [128, 512, 1024, 2048, 4096, 8192, 16384]
+single = [128, 512, 1024, 2048, 4096, 8192, 16384, 32768]
 weak_base = 16384
 
 [integrals_optimization]

@@ -53,8 +53,8 @@ end
         @test length(plan) == 4
         @test [p.workload for p in plan] == ["krylov", "ordinarydiffeq", "krylov", "ordinarydiffeq"]
         @test basename(plan[1].cmd.exec[2]) == "run.sh"
-        @test plan[1].cmd.exec[3:end] == ["single", "1024", "2048", "4096", "8192", "16384", "32768", "65536"]
-        @test plan[2].cmd.exec[3:end] == ["single", "128", "512", "1024", "2048", "4096", "8192", "16384"]
+        @test plan[1].cmd.exec[3:end] == ["single", "1024", "2048", "4096", "8192", "16384", "32768", "65536", "81920", "98304", "114688"]
+        @test plan[2].cmd.exec[3:end] == ["single", "128", "512", "1024", "2048", "4096", "8192", "16384", "32768"]
         @test plan[3].cmd.exec[3:end] == ["weak", "65536", "1", "4"]
         @test plan[4].cmd.exec[3:end] == ["weak", "16384", "1", "4"]
         for launch in plan

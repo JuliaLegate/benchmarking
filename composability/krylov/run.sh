@@ -84,10 +84,12 @@ run_case() {
         else
             echo "Missing or duplicate RESULT: $log" >&2
             failed=1
+            size_failed=1
         fi
     else
         echo "Failed: $backend $solver $mode, G=$gpus N=$n ($log)" >&2
         failed=1
+        size_failed=1
     fi
     kill "$monitor_pid" 2>/dev/null || true
     wait "$monitor_pid" 2>/dev/null || true
@@ -100,7 +102,7 @@ run_case() {
 }
 
 for value in "$@"; do
-    rows_before=$(wc -l < "$csv")
+    size_failed=0
     if [[ $experiment == single ]]; then
         gpus=1; n=$value
     else
@@ -115,12 +117,11 @@ for value in "$@"; do
     run_case cuNumeric cg stock "$n" "$gpus"
     run_case cuNumeric cg local "$n" "$gpus"
     if [[ $experiment == single ]]; then
-        if [[ $failed -ne 0 ]]; then
-            head -n "$rows_before" "$csv" > "$csv.tmp" && mv "$csv.tmp" "$csv"
-            echo "Stopping size sweep at failed N=$n; see retained logs" >&2
-            break
+        if [[ $size_failed -ne 0 ]]; then
+            echo "Some backends failed at N=$n; keeping successful results and continuing the sweep" >&2
+        elif [[ ${BENCH_DRY_RUN:-0} != 1 ]]; then
+            printf '%s\n' "$n" > "$output/base_n.txt"
         fi
-        [[ ${BENCH_DRY_RUN:-0} == 1 ]] || printf '%s\n' "$n" > "$output/base_n.txt"
     fi
 done
 echo "Results: $csv"

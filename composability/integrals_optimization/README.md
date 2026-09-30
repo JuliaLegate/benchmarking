@@ -69,8 +69,9 @@ variants as `N(1)`. The runner uses `N(G) = round(N(1)√G)` and runs Dagger and
 cuNumeric at each count. The one-GPU point can be validated here; 2, 4, and 8
 GPUs require the later machine. The weak-scaling plot shows mean time versus
 GPU count with standard-error bars and a horizontal ideal reference per backend.
-The complete single-GPU sweep writes `N(1)` to `base_n.txt` and stops after
-the first failed size.
+The single-GPU sweep writes the largest common passing `N(1)` to `base_n.txt`.
+Failed cases keep their logs; successful backend results are retained and
+the sweep continues to larger sizes.
 
 ```sh
 BASE_N=8192 # largest common passing one-GPU N in the H100 sweep below

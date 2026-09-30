@@ -78,7 +78,7 @@ cp "$ODE_PROJECT/Manifest.toml" "$output/Manifest.toml"
 
 status=0
 for value in "$@"; do
-    rows_before=$(wc -l < "$csv")
+    size_failed=0
     if [[ $experiment == single ]]; then
         gpus=1; n=$value
     else
@@ -107,10 +107,10 @@ for value in "$@"; do
             if [[ -n $line ]]; then
                 result_line="$experiment,${base_n:-},${line#RESULT,}"
             else
-                echo "No RESULT row in $log" >&2; status=1
+                echo "No RESULT row in $log" >&2; status=1; size_failed=1
             fi
         else
-            echo "$backend G=$gpus N=$n failed; see $log" >&2; status=1
+            echo "$backend G=$gpus N=$n failed; see $log" >&2; status=1; size_failed=1
         fi
         kill "$monitor_pid" 2>/dev/null || true
         wait "$monitor_pid" 2>/dev/null || true
@@ -121,12 +121,9 @@ for value in "$@"; do
         fi
     done
     if [[ $experiment == single ]]; then
-        if [[ $status -ne 0 ]]; then
-            head -n "$rows_before" "$csv" > "$csv.tmp" && mv "$csv.tmp" "$csv"
-            echo "Stopping size sweep at failed N=$n; see retained logs" >&2
-            break
-        fi
-        if [[ ${ODE_DRY_RUN:-0} != 1 && "${backends[*]}" == 'CuArray Dagger cuNumeric' ]]; then
+        if [[ $size_failed -ne 0 ]]; then
+            echo "Some backends failed at N=$n; keeping successful results and continuing the sweep" >&2
+        elif [[ ${ODE_DRY_RUN:-0} != 1 && "${backends[*]}" == 'CuArray Dagger cuNumeric' ]]; then
             printf '%s\n' "$n" > "$output/base_n.txt"
         fi
     fi
