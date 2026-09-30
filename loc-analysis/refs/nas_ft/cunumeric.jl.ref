@@ -1,0 +1,69 @@
+using cuNumeric
+using AbstractFFTs
+
+const NAS_FT_ALPHA = 1.0e-6
+const NAS_FT_CHECKSUM_SAMPLES = 1024
+
+# p = (; nx, ny, nz, niter). Initial conditions are generated on the host; the
+# 3-D FFT runs as two slab passes that each partition along untransformed axes.
+frequency_squares(n) = Float64[((i + n÷2) % n - n÷2)^2 for i in 0:(n - 1)]
+
+function checksum_mask(p)
+    mask = zeros(ComplexF64, p.nz, p.ny, p.nx)
+    scale = 1/prod(size(mask))
+    @inbounds for j in 1:NAS_FT_CHECKSUM_SAMPLES
+        mask[mod(5j, p.nz) + 1, mod(3j, p.ny) + 1, mod(j, p.nx) + 1] += scale
+    end
+    return mask
+end
+
+# Attach the host bytes row-major with the reversed shape (nz, ny, nx).
+function upload!(dest, host)
+    attached = cuNumeric.nda_attach_external(host; shape=size(dest))
+    try
+        GC.@preserve host attached begin
+            copyto!(dest, attached)
+            cuNumeric.issue_execution_fence(; block=true)
+        end
+    finally
+        cuNumeric.destroy!(attached)
+    end
+    return dest
+end
+
+function init(p)
+    shape = (p.nz, p.ny, p.nx)
+    host = Array{ComplexF64}(undef, p.nx, p.ny, p.nz)
+    return (;
+        u0=cuNumeric.zeros(ComplexF64, shape),
+        u1=cuNumeric.zeros(ComplexF64, shape),
+        twiddle=cuNumeric.zeros(ComplexF64, shape),
+        mask=cuNumeric.NDArray(checksum_mask(p)),
+        product=cuNumeric.zeros(ComplexF64, shape),
+        ix2=cuNumeric.NDArray(reshape(frequency_squares(p.nx), 1, 1, p.nx)),
+        iy2=cuNumeric.NDArray(reshape(frequency_squares(p.ny), 1, p.ny, 1)),
+        iz2=cuNumeric.NDArray(reshape(frequency_squares(p.nz), p.nz, 1, 1)),
+        host_initial=host,
+        rng_scratch=Vector{UInt64}(undef, min(2length(host), 1 << 20)),
+        checksums=Any[],
+    )
+end
+
+const SLAB = (2, 3)
+
+function run!(s, p)
+    nas_ft_initial_conditions_uint64!(s.host_initial, s.rng_scratch)
+    upload!(s.u0, s.host_initial)
+    ap = -4.0*NAS_FT_ALPHA*pi^2
+    cuNumeric.@allowpromotion s.twiddle .= exp.(ap .* (s.ix2 .+ s.iy2 .+ s.iz2))
+    fft!(s.u0, SLAB)
+    fft!(s.u0, 1)
+    for _ in 1:p.niter
+        map!(*, s.u0, s.u0, s.twiddle)
+        cuNumeric.fft_task!(s.u1, s.u0, SLAB, Int32(cuNumeric.FFT_INVERSE))
+        bfft!(s.u1, 1)
+        map!(*, s.product, s.u1, s.mask)
+        push!(s.checksums, sum(s.product))
+    end
+    return s.checksums
+end

@@ -1,0 +1,166 @@
+using CUDA
+
+const NAS_MG_A = (-8.0/3.0, 0.0, 1.0/6.0, 1.0/12.0)
+
+# p = (; dims=(nx, ny, nz), niter, c); c is the class smoother.
+
+function nas_mg_level_shapes(p)
+    d = p.dims
+    lt = round(Int, log2(minimum(d)))
+    return [d .÷ 2^(lt - level) .+ 2 for level in 1:lt]
+end
+
+function nas_mg_comm3!(u)
+    n1, n2, n3 = size(u)
+    @views begin
+        u[1:1, 2:(n2 - 1), 2:(n3 - 1)] .= u[(n1 - 1):(n1 - 1), 2:(n2 - 1), 2:(n3 - 1)]
+        u[n1:n1, 2:(n2 - 1), 2:(n3 - 1)] .= u[2:2, 2:(n2 - 1), 2:(n3 - 1)]
+        u[:, 1:1, 2:(n3 - 1)] .= u[:, (n2 - 1):(n2 - 1), 2:(n3 - 1)]
+        u[:, n2:n2, 2:(n3 - 1)] .= u[:, 2:2, 2:(n3 - 1)]
+        u[:, :, 1:1] .= u[:, :, (n3 - 1):(n3 - 1)]
+        u[:, :, n3:n3] .= u[:, :, 2:2]
+    end
+    return u
+end
+
+function nas_mg_resid!(r, u, v, a=NAS_MG_A)
+    x, y, z = axes(u)
+    xi, yi, zi = 2:(last(x) - 1), 2:(last(y) - 1), 2:(last(z) - 1)
+    xm, xp = 1:(last(x) - 2), 3:last(x)
+    ym, yp = 1:(last(y) - 2), 3:last(y)
+    zm, zp = 1:(last(z) - 2), 3:last(z)
+    @views r[xi, yi, zi] .=
+        v[xi, yi, zi] .- a[1] .* u[xi, yi, zi] .-
+        a[3] .* (
+            u[xi, ym, zm] .+ u[xi, yp, zm] .+ u[xi, ym, zp] .+ u[xi, yp, zp] .+
+            u[xm, yi, zm] .+ u[xp, yi, zm] .+ u[xm, yi, zp] .+ u[xp, yi, zp] .+
+            u[xm, ym, zi] .+ u[xp, ym, zi] .+ u[xm, yp, zi] .+ u[xp, yp, zi]
+        ) .-
+        a[4] .* (
+            u[xm, ym, zm] .+ u[xp, ym, zm] .+ u[xm, yp, zm] .+ u[xp, yp, zm] .+
+            u[xm, ym, zp] .+ u[xp, ym, zp] .+ u[xm, yp, zp] .+ u[xp, yp, zp]
+        )
+    return nas_mg_comm3!(r)
+end
+
+function nas_mg_psinv!(u, r, c)
+    x, y, z = axes(r)
+    xi, yi, zi = 2:(last(x) - 1), 2:(last(y) - 1), 2:(last(z) - 1)
+    xm, xp = 1:(last(x) - 2), 3:last(x)
+    ym, yp = 1:(last(y) - 2), 3:last(y)
+    zm, zp = 1:(last(z) - 2), 3:last(z)
+    @views u[xi, yi, zi] .+=
+        c[1] .* r[xi, yi, zi] .+
+        c[2] .* (
+            r[xm, yi, zi] .+ r[xp, yi, zi] .+ r[xi, ym, zi] .+
+            r[xi, yp, zi] .+ r[xi, yi, zm] .+ r[xi, yi, zp]
+        ) .+
+        c[3] .* (
+            r[xi, ym, zm] .+ r[xi, yp, zm] .+ r[xi, ym, zp] .+ r[xi, yp, zp] .+
+            r[xm, yi, zm] .+ r[xp, yi, zm] .+ r[xm, yi, zp] .+ r[xp, yi, zp] .+
+            r[xm, ym, zi] .+ r[xp, ym, zi] .+ r[xm, yp, zi] .+ r[xp, yp, zi]
+        )
+    return nas_mg_comm3!(u)
+end
+
+function nas_mg_restrict!(coarse, fine)
+    c = ntuple(d -> 2:(size(coarse, d) - 1), 3)
+    f = ntuple(d -> 3:2:(size(fine, d) - 1), 3)
+    m, q = map(r -> r .- 1, f), map(r -> r .+ 1, f)
+    F(a, b, e) = @view fine[a, b, e]
+    @views coarse[c...] .=
+        0.5 .* F(f[1], f[2], f[3]) .+
+        0.25 .* (
+            F(m[1], f[2], f[3]) .+ F(q[1], f[2], f[3]) .+ F(f[1], m[2], f[3]) .+
+            F(f[1], q[2], f[3]) .+ F(f[1], f[2], m[3]) .+ F(f[1], f[2], q[3])
+        ) .+
+        0.125 .* (
+            F(f[1], m[2], m[3]) .+ F(f[1], q[2], m[3]) .+ F(f[1], m[2], q[3]) .+ F(f[1], q[2], q[3]) .+
+            F(m[1], f[2], m[3]) .+ F(q[1], f[2], m[3]) .+ F(m[1], f[2], q[3]) .+ F(q[1], f[2], q[3]) .+
+            F(m[1], m[2], f[3]) .+ F(q[1], m[2], f[3]) .+ F(m[1], q[2], f[3]) .+ F(q[1], q[2], f[3])
+        ) .+
+        0.0625 .* (
+            F(m[1], m[2], m[3]) .+ F(q[1], m[2], m[3]) .+ F(m[1], q[2], m[3]) .+ F(q[1], q[2], m[3]) .+
+            F(m[1], m[2], q[3]) .+ F(q[1], m[2], q[3]) .+ F(m[1], q[2], q[3]) .+ F(q[1], q[2], q[3])
+        )
+    return nas_mg_comm3!(coarse)
+end
+
+function nas_mg_interp!(fine, coarse)
+    o = ntuple(d -> 1:2:(size(fine, d) - 1), 3)
+    e = ntuple(d -> 2:2:size(fine, d), 3)
+    lo = ntuple(d -> 1:(size(coarse, d) - 1), 3)
+    hi = ntuple(d -> 2:size(coarse, d), 3)
+    C(a, b, c) = @view coarse[a, b, c]
+    @views begin
+        fine[o[1], o[2], o[3]] .+= C(lo[1], lo[2], lo[3])
+        fine[e[1], o[2], o[3]] .+= 0.5 .* (C(lo[1], lo[2], lo[3]) .+ C(hi[1], lo[2], lo[3]))
+        fine[o[1], e[2], o[3]] .+= 0.5 .* (C(lo[1], lo[2], lo[3]) .+ C(lo[1], hi[2], lo[3]))
+        fine[o[1], o[2], e[3]] .+= 0.5 .* (C(lo[1], lo[2], lo[3]) .+ C(lo[1], lo[2], hi[3]))
+        fine[e[1], e[2], o[3]] .+=
+            0.25 .* (
+                C(lo[1], lo[2], lo[3]) .+ C(hi[1], lo[2], lo[3]) .+
+                C(lo[1], hi[2], lo[3]) .+ C(hi[1], hi[2], lo[3])
+            )
+        fine[e[1], o[2], e[3]] .+=
+            0.25 .* (
+                C(lo[1], lo[2], lo[3]) .+ C(hi[1], lo[2], lo[3]) .+
+                C(lo[1], lo[2], hi[3]) .+ C(hi[1], lo[2], hi[3])
+            )
+        fine[o[1], e[2], e[3]] .+=
+            0.25 .* (
+                C(lo[1], lo[2], lo[3]) .+ C(lo[1], hi[2], lo[3]) .+
+                C(lo[1], lo[2], hi[3]) .+ C(lo[1], hi[2], hi[3])
+            )
+        fine[e[1], e[2], e[3]] .+=
+            0.125 .* (
+                C(lo[1], lo[2], lo[3]) .+ C(hi[1], lo[2], lo[3]) .+
+                C(lo[1], hi[2], lo[3]) .+ C(hi[1], hi[2], lo[3]) .+
+                C(lo[1], lo[2], hi[3]) .+ C(hi[1], lo[2], hi[3]) .+
+                C(lo[1], hi[2], hi[3]) .+ C(hi[1], hi[2], hi[3])
+            )
+    end
+    return fine
+end
+
+function nas_mg_cycle!(u, r, rhs, c)
+    finest = length(u)
+    for level in finest:-1:2
+        nas_mg_restrict!(r[level - 1], r[level])
+    end
+    fill!(u[1], 0.0)
+    nas_mg_psinv!(u[1], r[1], c)
+    for level in 2:(finest - 1)
+        fill!(u[level], 0.0)
+        nas_mg_interp!(u[level], u[level - 1])
+        nas_mg_resid!(r[level], u[level], r[level])
+        nas_mg_psinv!(u[level], r[level], c)
+    end
+    nas_mg_interp!(u[finest], u[finest - 1])
+    nas_mg_resid!(r[finest], u[finest], rhs)
+    nas_mg_psinv!(u[finest], r[finest], c)
+    return nothing
+end
+
+function init(p)
+    shapes = nas_mg_level_shapes(p)
+    u = [CUDA.zeros(Float64, shape) for shape in shapes]
+    r = [CUDA.zeros(Float64, shape) for shape in shapes]
+    return (; u, r, rhs=CUDA.CuArray(nas_mg_rhs(p)))
+end
+
+function norm2(residual)
+    interior = @view residual[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    return sum(abs2, interior; dims=(1, 2, 3))
+end
+
+function run!(s, p)
+    foreach(x -> fill!(x, 0.0), s.u)
+    nas_mg_resid!(s.r[end], s.u[end], s.rhs)
+    norm2(s.r[end])
+    for _ in 1:p.niter
+        nas_mg_cycle!(s.u, s.r, s.rhs, p.c)
+        nas_mg_resid!(s.r[end], s.u[end], s.rhs)
+    end
+    return norm2(s.r[end])
+end

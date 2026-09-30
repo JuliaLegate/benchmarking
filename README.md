@@ -95,6 +95,10 @@ Krylov defaults to CG; `--solvers=bicgstab` selects BiCGStab, and
 Krylov uses stock implementations by default. Add `--local` to also run
 cuNumeric local implementations alongside cuNumeric stock.
 
+## LOC analysis
+
+See [loc-analysis/README.md](loc-analysis/README.md).
+
 ## Run the benchmark suite
 
 Use the smoke test for a quick end-to-end check:

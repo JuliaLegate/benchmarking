@@ -18,3 +18,5 @@ plots*/
 # Re-include configs/plots/ (matched by plots*/); grid.toml is local.
 !/configs/plots/
 /configs/plots/grid.toml
+# Vendored tools (install_scc.sh).
+/opt/

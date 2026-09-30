@@ -1,0 +1,10 @@
+using CUDA
+
+integrand(x) = exp(-(x * x))
+
+init(T, n) = T(10) .* CUDA.rand(T, n)
+
+function run(x::CuArray{T}) where {T}
+    total = mapreduce(integrand, +, x; init=zero(T))
+    return (T(10) / length(x)) * total
+end

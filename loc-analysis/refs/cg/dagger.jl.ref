@@ -1,0 +1,55 @@
+using CUDA: CUDA
+using Dagger: Dagger
+import Dagger: @stencil, Pad
+
+# Solve tridiag(1,4,1)*x = 1/2 from zero.
+function init(T, N, gpus)
+    scope = Dagger.scope(; cuda_gpus=collect(1:gpus))
+    procs = sort!(collect(Dagger.compatible_processors(scope)); by=string)
+    block = cld(N, gpus)
+    nchunks = cld(N, block)
+    blocks = Dagger.Blocks(block)
+    assignment = [procs[cld(i * gpus, nchunks)] for i in 1:nchunks]
+    return Dagger.with_options(; scope) do
+        x, r, p, Ap = (zeros(blocks, T, N; assignment) for _ in 1:4)
+        foreach(a -> foreach(wait, a.chunks), (x, r, p, Ap))
+        return (; scope, procs, x, r, p, Ap)
+    end
+end
+
+chunk_dot(x, y, ::Type{T}) where {T} = mapreduce(*, +, x, y; init=zero(T))
+
+function cg_dot(s, x, y, ::Type{T}) where {T}
+    nchunks = length(x.chunks)
+    partials = map(1:nchunks) do i
+        owner = s.procs[cld(i * length(s.procs), nchunks)]
+        Dagger.@spawn scope=Dagger.ExactScope(owner) chunk_dot(x.chunks[i], y.chunks[i], T)
+    end
+    return mapreduce(fetch, +, partials; init=zero(T))
+end
+
+function run!(s, ::Type{T}, N; check_every=10, max_iter=1000) where {T}
+    x, r, p, Ap = s.x, s.r, s.p, s.Ap
+    iterations = Dagger.with_options(; scope=s.scope) do
+        x .= zero(T)
+        r .= T(0.5)
+        p .= r
+        rho = cg_dot(s, r, r, T)
+        target = (T == Float32 ? 1e-5 : 1e-8)^2 * N / 4
+        for k in 1:max_iter
+            @stencil Ap[idx] = begin
+                np = @neighbors(p[idx], 1, Pad(zero(T)))
+                np[1] + T(4)*np[2] + np[3]
+            end
+            alpha = rho / max(cg_dot(s, p, Ap, T), floatmin(T))
+            x .+= alpha .* p
+            r .-= alpha .* Ap
+            next = cg_dot(s, r, r, T)
+            p .= r .+ (next / max(rho, floatmin(T))) .* p
+            rho = next
+            (k % check_every == 0 || k == max_iter) && rho <= target && return k
+        end
+        return max_iter
+    end
+    return iterations
+end
