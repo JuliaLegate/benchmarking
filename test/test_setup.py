@@ -324,6 +324,7 @@ esac
                 self.assertEqual(args[-2:],
                                  [shell_path(source), shell_path(source / "lib/CNPreferences")])
                 self.assertEqual(args.count("--project=environments/composability"), 1)
+                self.assertEqual(args.count("--project=environments/implicitglobalgrid"), 1)
                 self.assertFalse(any("setup.jl" in arg for arg in args))
                 self.assertFalse((bench / "environments/krylov").exists())
                 log.unlink()

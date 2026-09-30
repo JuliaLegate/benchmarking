@@ -97,6 +97,11 @@ cuNumeric local implementations alongside cuNumeric stock.
 
 ## Run the benchmark suite
 
+The standalone [ImplicitGlobalGrid Gray–Scott benchmark](other/implicitglobalgrid/README.md)
+lives under `other/` and uses `environments/implicitglobalgrid`, installed by the
+same setup script. Run a square local grid on each of four GPUs with
+`bash other/implicitglobalgrid/run_benchmark.sh 4 14000 10 5`.
+
 Use the smoke test for a quick end-to-end check:
 
 ```bash
