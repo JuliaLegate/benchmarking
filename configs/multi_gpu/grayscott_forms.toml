@@ -1,5 +1,6 @@
 # Gray-Scott @accelerate scope-contract comparison (cuNumeric only).
-# The four accelerated forms plus the baseline share one weak-scaling figure.
+# The four accelerated forms plus the baseline share one weak-scaling figure,
+# each run with fusion on and off.
 #   julia --project=. run.jl --config=configs/multi_gpu/grayscott_forms.toml
 [Global]
 n_warmup = 2
@@ -23,7 +24,7 @@ grayscott = [
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
-fusion = true
+fusion = ["on", "off"]
 N = [28000, 39600, 56000, 79200]
 M = [28000, 39600, 56000, 79200]
 
@@ -31,7 +32,7 @@ M = [28000, 39600, 56000, 79200]
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
-fusion = true
+fusion = ["on", "off"]
 N = [28000, 39600, 56000, 79200]
 M = [28000, 39600, 56000, 79200]
 
@@ -39,7 +40,7 @@ M = [28000, 39600, 56000, 79200]
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
-fusion = true
+fusion = ["on", "off"]
 N = [28000, 39600, 56000, 79200]
 M = [28000, 39600, 56000, 79200]
 
@@ -47,7 +48,7 @@ M = [28000, 39600, 56000, 79200]
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
-fusion = true
+fusion = ["on", "off"]
 N = [28000, 39600, 56000, 79200]
 M = [28000, 39600, 56000, 79200]
 
@@ -55,6 +56,6 @@ M = [28000, 39600, 56000, 79200]
 T = "Float32"
 gpus = [1, 2, 4, 8]
 cpus = 8
-fusion = true
+fusion = ["on", "off"]
 N = [28000, 39600, 56000, 79200]
 M = [28000, 39600, 56000, 79200]
