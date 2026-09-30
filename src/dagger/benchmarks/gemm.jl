@@ -2,6 +2,7 @@ struct DaggerGEMM{T,S,P}
     N::Int
     M::Int
     gpus::Int
+    blocks_per_gpu::Int
     scope::S
     processors::P
 end
@@ -27,7 +28,7 @@ function model_build_gemm(config::ModelWorkerConfig)
         "expected $(config.gpus)",
     )
     return DaggerGEMM{config.T,typeof(scope),typeof(processors)}(
-        config.N, config.M, config.gpus, scope, processors
+        config.N, config.M, config.gpus, dagger_blocks_per_gpu(config), scope, processors
     )
 end
 
@@ -39,13 +40,13 @@ function dagger_correctness_n(benchmark::DaggerGEMM)
 end
 
 function dagger_gemm_layout(benchmark::DaggerGEMM)
-    p = benchmark.gpus
-    row_block = cld(benchmark.N, p)
-    col_block = cld(benchmark.N, p)
-    A_assignment = reshape(copy(benchmark.processors), p, 1)
-    B_assignment = reshape(copy(benchmark.processors), 1, p)
-    C_assignment = [benchmark.processors[j] for _ in 1:p, j in 1:p]
-    return row_block, col_block, A_assignment, B_assignment, C_assignment
+    block = cld(benchmark.N, benchmark.gpus * benchmark.blocks_per_gpu)
+    nb = cld(benchmark.N, block)
+    owner(i) = dagger_owner(benchmark.processors, i, nb)
+    A_assignment = reshape([owner(i) for i in 1:nb], nb, 1)
+    B_assignment = reshape([owner(j) for j in 1:nb], 1, nb)
+    C_assignment = [owner(j) for _ in 1:nb, j in 1:nb]
+    return block, block, A_assignment, B_assignment, C_assignment
 end
 
 function dagger_gemm_random_state(benchmark::DaggerGEMM{T}) where {T}
@@ -105,7 +106,7 @@ function model_check_correctness(benchmark::DaggerGEMM{T}, config) where {T}
     check_benchmark = DaggerGEMM{
         T,typeof(benchmark.scope),typeof(benchmark.processors)
     }(
-        n, m, benchmark.gpus, benchmark.scope, benchmark.processors
+        n, m, benchmark.gpus, benchmark.blocks_per_gpu, benchmark.scope, benchmark.processors
     )
     A = reshape(T.(1:(n * m)), n, m) ./ T(n*m)
     B = reshape(T.(1:(m * n)), m, n) ./ T(m*n)

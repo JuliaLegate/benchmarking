@@ -2,7 +2,7 @@ struct DaggerGrayScott{T,S,P}
     N::Int
     M::Int
     gpus::Int
-    block::Int
+    blocks_per_gpu::Int
     scope::S
     processors::P
     dt::T
@@ -20,20 +20,21 @@ struct DaggerGrayScottState{A}
     Vn::A
 end
 
-const DAGGER_GS_BLOCK = 64
-
-function dagger_grayscott(::Type{T}, N, M, gpus, scope, processors; block=DAGGER_GS_BLOCK) where {T}
+function dagger_grayscott(
+    ::Type{T}, N, M, gpus, scope, processors; blocks_per_gpu=1
+) where {T}
     p = grayscott_gs_params(T)
     return DaggerGrayScott{T,typeof(scope),typeof(processors)}(
-        N, M, gpus, block, scope, processors, p.dt, p.dx2, p.cu, p.cv, p.f, p.k
+        N, M, gpus, blocks_per_gpu, scope, processors, p.dt, p.dx2, p.cu, p.cv, p.f, p.k
     )
 end
 
 # Symbolic assignments only target CPU threads; pin GPUs by block column.
 function dagger_gs_layout(b::DaggerGrayScott, N)
-    nb = cld(N, b.block)
-    owner(j) = b.processors[cld(j * b.gpus, nb)]
-    return Dagger.Blocks(b.block, b.block), [owner(j) for _ in 1:nb, j in 1:nb]
+    block = cld(N, b.gpus * b.blocks_per_gpu)
+    nb = cld(N, block)
+    owner(j) = dagger_owner(b.processors, j, nb)
+    return Dagger.Blocks(block, block), [owner(j) for _ in 1:nb, j in 1:nb]
 end
 
 function model_build_grayscott(config::ModelWorkerConfig)
@@ -47,7 +48,10 @@ function model_build_grayscott(config::ModelWorkerConfig)
     length(processors) == config.gpus || error(
         "Dagger CUDA scope contains $(length(processors)) processor(s), expected $(config.gpus)"
     )
-    return dagger_grayscott(config.T, config.N, config.M, config.gpus, scope, processors)
+    return dagger_grayscott(
+        config.T, config.N, config.M, config.gpus, scope, processors;
+        blocks_per_gpu=dagger_blocks_per_gpu(config),
+    )
 end
 
 function dagger_grayscott_state(b::DaggerGrayScott{T}, u_host, v_host) where {T}
@@ -124,7 +128,10 @@ function model_check_correctness(b::DaggerGrayScott{T}, config) where {T}
     n = min(32, b.N, b.M)
     steps = config.n_correctness_iter
     u0, v0 = grayscott_host_init(T, n, n; deterministic=true)
-    check = dagger_grayscott(T, n, n, b.gpus, b.scope, b.processors; block=8)
+    # Several blocks per GPU so the check always crosses block halos.
+    check = dagger_grayscott(
+        T, n, n, b.gpus, b.scope, b.processors; blocks_per_gpu=max(2, b.blocks_per_gpu)
+    )
     s = dagger_grayscott_state(check, copy(u0), copy(v0))
     for _ in 1:steps
         model_run!(check, s)

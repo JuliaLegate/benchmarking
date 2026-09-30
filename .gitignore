@@ -10,6 +10,7 @@ __pycache__/
 *.err*
 *.prof
 results*/
+tunes/
 plots*/
 .vscode/
 .agents/

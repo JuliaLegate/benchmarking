@@ -3,6 +3,7 @@ using LinearAlgebra: Tridiagonal, norm
 struct DaggerCG{T,S,P}
     N::Int
     gpus::Int
+    blocks_per_gpu::Int
     check_every::Int
     max_iter::Int
     scope::S
@@ -17,9 +18,11 @@ struct DaggerCGState{A}
     Ap::A
 end
 
-function dagger_cg(::Type{T}, N, gpus, check_every, max_iter, scope, processors) where {T}
+function dagger_cg(
+    ::Type{T}, N, gpus, blocks_per_gpu, check_every, max_iter, scope, processors
+) where {T}
     return DaggerCG{T,typeof(scope),typeof(processors)}(
-        N, gpus, check_every, max_iter, scope, processors
+        N, gpus, blocks_per_gpu, check_every, max_iter, scope, processors
     )
 end
 
@@ -38,12 +41,17 @@ function model_build_cg(config::ModelWorkerConfig)
     )
     check_every = Int(get(config.kwargs, :check_every, 10))
     max_iter = Int(get(config.kwargs, :max_iter, 1000))
-    return dagger_cg(config.T, config.N, config.gpus, check_every, max_iter, scope, processors)
+    return dagger_cg(
+        config.T, config.N, config.gpus, dagger_blocks_per_gpu(config),
+        check_every, max_iter, scope, processors,
+    )
 end
 
 function dagger_cg_state(b::DaggerCG{T}) where {T}
-    blocks = Dagger.Blocks(b.N ÷ b.gpus)
-    assignment = copy(b.processors)
+    block = cld(b.N, b.gpus * b.blocks_per_gpu)
+    nchunks = cld(b.N, block)
+    blocks = Dagger.Blocks(block)
+    assignment = [dagger_owner(b.processors, i, nchunks) for i in 1:nchunks]
     return Dagger.with_options(; scope=b.scope) do
         st = DaggerCGState(
             zeros(blocks, T, b.N; assignment), zeros(blocks, T, b.N; assignment),
@@ -61,8 +69,10 @@ function dagger_cg_chunk_dot(x, y, ::Type{T}) where {T}
 end
 
 function dagger_cg_dot(b::DaggerCG{T}, x, y) where {T}
-    partials = map(eachindex(b.processors)) do i
-        Dagger.@spawn scope=Dagger.ExactScope(b.processors[i]) dagger_cg_chunk_dot(
+    nchunks = length(x.chunks)
+    partials = map(1:nchunks) do i
+        owner = dagger_owner(b.processors, i, nchunks)
+        Dagger.@spawn scope=Dagger.ExactScope(owner) dagger_cg_chunk_dot(
             x.chunks[i], y.chunks[i], T
         )
     end
@@ -111,7 +121,9 @@ end
 
 function model_check_correctness(b::DaggerCG{T}, config) where {T}
     n = min(b.N, max(b.gpus, fld(32, b.gpus) * b.gpus))
-    small = dagger_cg(T, n, b.gpus, b.check_every, b.max_iter, b.scope, b.processors)
+    small = dagger_cg(
+        T, n, b.gpus, b.blocks_per_gpu, b.check_every, b.max_iter, b.scope, b.processors
+    )
     s = dagger_cg_state(small)
     model_run!(small, s)
     model_synchronize(small)

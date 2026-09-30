@@ -18,6 +18,7 @@ struct DaggerNASMG{S,P}
     N::Int
     M::Int
     gpus::Int
+    blocks_per_gpu::Int
     scope::S
     processors::P
 end
@@ -42,7 +43,10 @@ function model_build_nas_mg(config::ModelWorkerConfig)
     scope = Dagger.scope(; cuda_gpus=collect(1:config.gpus))
     processors = sort!(collect(Dagger.compatible_processors(scope)); by=string)
     length(processors) == config.gpus || error("Dagger CUDA processor count mismatch")
-    return DaggerNASMG(class, config.N, config.M, config.gpus, scope, processors)
+    return DaggerNASMG(
+        class, config.N, config.M, config.gpus, dagger_blocks_per_gpu(config),
+        scope, processors,
+    )
 end
 
 # Unghosted (nx, ny, nz) per level; Dagger stencils wrap periodically instead.
@@ -50,9 +54,11 @@ dagger_mg_level_dims(p) = [shape .- 2 for shape in nas_mg_level_shapes(p)]
 
 function dagger_nas_mg_array(host, b::DaggerNASMG)
     nx, ny, nz = size(host)
-    block = cld(nz, b.gpus)
+    block = cld(nz, b.gpus * b.blocks_per_gpu)
     nchunks = cld(nz, block)
-    assignment = reshape(copy(b.processors[1:nchunks]), 1, 1, nchunks)
+    assignment = reshape(
+        [dagger_owner(b.processors, i, nchunks) for i in 1:nchunks], 1, 1, nchunks
+    )
     return Dagger.DArray(host, Dagger.Blocks(nx, ny, block), assignment)
 end
 
@@ -252,13 +258,12 @@ function dagger_mg_norm_chunk(values)
 end
 
 function dagger_mg_norm_tasks(b::DaggerNASMG, residual)
-    length(residual.chunks) == length(b.processors) || error(
-        "Dagger MG expected one finest-level slab per GPU"
-    )
-    tasks = Vector{Dagger.DTask}(undef, length(b.processors))
+    nchunks = length(residual.chunks)
+    tasks = Vector{Dagger.DTask}(undef, nchunks)
     Dagger.spawn_datadeps() do
         for i in eachindex(tasks)
-            tasks[i] = Dagger.@spawn scope=Dagger.ExactScope(b.processors[i]) dagger_mg_norm_chunk(
+            owner = dagger_owner(b.processors, i, nchunks)
+            tasks[i] = Dagger.@spawn scope=Dagger.ExactScope(owner) dagger_mg_norm_chunk(
                 Dagger.In(residual.chunks[i])
             )
         end
