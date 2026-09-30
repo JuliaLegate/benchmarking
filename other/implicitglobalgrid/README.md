@@ -70,12 +70,7 @@ The launcher enables Conda Open MPI's CUDA support with
 `OMPI_MCA_opal_cuda_support=true` and defaults `IGG_CUDAAWARE_MPI=1` for
 GPU-buffer communication. It checks that Julia is configured for the active
 Conda MPI installation before starting workers. Set `IGG_CUDAAWARE_MPI=0`
-to use IGG's host-staged halo transfers instead. Before launching the benchmark,
-a separate Julia process calls `MPI.Init()`, prints `MPI.has_cuda()`, and
-finalizes MPI. If CUDA-aware transfers are enabled and the check returns
-`false`, the launcher stops before starting workers. This reports MPI's CUDA
-support; it does not test GPU-buffer transfers between ranks.
-Open MPI's root-run flags
+to use IGG's host-staged halo transfers instead. Open MPI's root-run flags
 are set when running as root inside a container. See the
 [IGG documentation](https://github.com/eth-cscs/ImplicitGlobalGrid.jl#cuda-awarerocm-aware-mpi-support)
 and [Conda Open MPI instructions](https://github.com/conda-forge/openmpi-feedstock/blob/main/recipe/post-link-cuda.sh).

@@ -36,24 +36,12 @@ if (( EUID == 0 )); then
     export OMPI_ALLOW_RUN_AS_ROOT=1 OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 fi
 
-# Check CUDA support after MPI initialization (required by Open MPI).
+# Use this environment's MPI; IGG selects one GPU per node-local rank.
 "$julia_bin" --startup-file=no --project="$project" -e '
     using MPIPreferences
     MPIPreferences.binary == "system" &&
         MPIPreferences.System.libmpi == joinpath(ENV["CONDA_PREFIX"], "lib", "libmpi.so") ||
         error("Run setup_mpi.sh to configure Julia for the active Conda MPI environment")
-    using MPI
-    MPI.Init()
-    has_cuda = MPI.has_cuda()
-    println("MPI.has_cuda() = ", has_cuda)
-    MPI.Finalize()
-    if parse(Int, ENV["IGG_CUDAAWARE_MPI"]) > 0 && !has_cuda
-        error("CUDA-aware MPI is unavailable; fix the MPI installation or set IGG_CUDAAWARE_MPI=0")
-    end
-'
-
-# Launch from a fresh process that has not initialized MPI.
-"$julia_bin" --startup-file=no --project="$project" -e '
     using MPI
     project = dirname(Base.active_project())
     worker = ARGS[1]
