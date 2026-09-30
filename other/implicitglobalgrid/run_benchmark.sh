@@ -6,6 +6,7 @@ project="$script_dir/../../environments/implicitglobalgrid"
 
 usage() {
     echo "Usage: $0 GPUS N [N_ITER=10] [N_WARMUP=5] [N_TRIALS=5]" >&2
+    echo "N is the global square domain size, excluding halo cells." >&2
 }
 if [[ ${1:-} == --help || ${1:-} == -h ]]; then usage; exit 0; fi
 if (( $# < 2 || $# > 5 )); then usage; exit 2; fi

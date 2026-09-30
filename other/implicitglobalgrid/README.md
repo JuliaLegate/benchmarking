@@ -41,28 +41,48 @@ IGG_LOCAL_CUDA=1 bash other/implicitglobalgrid/setup_mpi.sh
 This setting persists in the project's ignored `LocalPreferences.toml`, as
 does the MPI configuration. Re-run setup if the MPI installation moves.
 
-A sweep pairs each GPU count with one local size:
+A weak-scaling sweep pairs each GPU count with one global square size:
 
 ```bash
+export JULIA_NUM_THREADS=8
 GPUS=(1 2 4 8)
-SIZES=(14000 14000 14000 14000)
-N_WARMUP=5
-N_ITER=10
+SIZES=(28000 39600 56000 79200)
+N_WARMUP=2
+N_ITER=50
 N_TRIALS=5
 
+mkdir -p results/implicitglobalgrid
+set -o pipefail
 for i in "${!GPUS[@]}"; do
     bash other/implicitglobalgrid/run_benchmark.sh \
-        "${GPUS[$i]}" "${SIZES[$i]}" "$N_ITER" "$N_WARMUP" "$N_TRIALS"
+        "${GPUS[$i]}" "${SIZES[$i]}" "$N_ITER" "$N_WARMUP" "$N_TRIALS" \
+        2>&1 | tee "results/implicitglobalgrid/igg-${GPUS[$i]}gpu-N${SIZES[$i]}.log" || break
 done
 ```
 
 The launcher also accepts `N_ITER`, `N_WARMUP`, and `N_TRIALS` as environment
 variables; explicit positional arguments take precedence.
 
-`N` is the **per-GPU square size**, including the one-cell halos, as in the
-original script. IGG chooses the process layout and prints the resulting global
-dimensions; the combined domain need not be square. Each rank updates `(N-2)^2`
-cells per step. The launcher uses the environment's MPI with one rank per GPU.
+`N` is the **global square simulation domain size**, excluding halos. Unlike the
+original script, which allocated `N×N` on every rank, this script asks MPI for
+the process layout and divides `N` across it before allocating. For a `Px×Py`
+layout, local arrays are `(N/Px + 2)×(N/Py + 2)`, including one halo cell on
+each edge. `N` must divide evenly by both process dimensions and leave at least
+two simulation cells per rank along each axis; incompatible sizes are rejected
+before allocating the arrays. Exactly `N²` cells are updated per step in total.
+
+IGG's `Global grid:` line includes the two outer halo cells in each dimension,
+so it prints `(N+2)×(N+2)×1`. The following `Simulation domain:` line reports
+the requested `N×N` and the local array dimensions. For the sweep above:
+
+| GPUs | Global simulation domain | Process layout | Local array, including halos |
+| ---: | --- | --- | --- |
+| 1 | 28000×28000 | 1×1 | 28002×28002 |
+| 2 | 39600×39600 | 2×1 | 19802×39602 |
+| 4 | 56000×56000 | 2×2 | 28002×28002 |
+| 8 | 79200×79200 | 4×2 | 19802×39602 |
+
+The launcher uses the environment's MPI with one rank per GPU.
 IGG selects GPUs by node-local rank, respecting `CUDA_VISIBLE_DEVICES`.
 Set `JULIA` or `CUNUMERIC_BENCH_JULIA` to choose the Julia executable.
 
