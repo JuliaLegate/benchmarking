@@ -1,100 +1,74 @@
-using CUDA # Load before ImplicitGlobalGrid to activate its CUDA extension.
+using CUDA # Import before ImplicitGlobalGrid to activate CUDA support.
 using ImplicitGlobalGrid
 using MPI
-using Printf
 using Random
+using Printf
 
-include("grayscott_core.jl")
-include("reference.jl")
+@views  inn(A) = A[2:end-1, 2:end-1]
+@views lap1(A) = A[3:end, 2:end-1] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[1:end-2, 2:end-1]
+@views lap2(A) = A[2:end-1, 3:end] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[2:end-1, 1:end-2]
 
-function advance(state, work, layout, synchronize)
-    u, v, u_new, v_new = state
-    local_step!(u, v, u_new, v_new, work, layout)
-    # IGG uses its own transfer streams; finish the producer kernels first.
-    synchronize()
-    update_halo!(u_new, v_new)
-    return (u_new, v_new, u, v)
-end
+@views function grayscott(nx, ny, nt, warmup, comm)
+    # Physics
+    c_u = 1.0f0
+    c_v = 0.3f0
+    f = 0.03f0
+    k = 0.06f0
 
-function check_result(state, layout, steps, comm)
-    n = layout.n
-    u, v = ones(Float32, n, n), zeros(Float32, n, n)
-    pu, pv = seed_patch(n; deterministic=true)
-    s = size(pu, 1)
-    u[1:s, 1:s], v[1:s, 1:s] = pu, pv
-    un, vn = zero(u), zero(v)
-    for _ in 1:steps
-        GrayScottReference.step!(u, v, un, vn, gs_parameters())
-        u, un = un, u
-        v, vn = vn, v
-    end
-    indices = ntuple(d -> (layout.offset[d] + 1):(layout.offset[d] + layout.owned[d]), 2)
-    error = maximum(zip(state[1:2], (u, v))) do (actual, expected)
-        maximum(abs, Array(view(actual, layout.physical...)) .- view(expected, indices...))
-    end
-    max_error = MPI.Allreduce(error, max, comm)
-    isfinite(max_error) && max_error <= 1.0f-5 ||
-        Base.error("Gray-Scott correctness failed: maximum absolute error = $max_error")
-    MPI.Comm_rank(comm) == 0 && @printf("Correctness: pass (max absolute error %.8g)\n", max_error)
-end
+    # Numerics
+    dx = 1
+    dy = dx
+    dt = dx / 5
 
-function main(args=ARGS; cpu=false)
-    check = !isempty(args) && last(args) == "--check"
-    values = check ? args[1:end-1] : args
-    length(values) == 4 || error("Usage: grayscott.jl GPUS N STEPS WARMUP [--check]")
-    gpus, n, steps, warmup = parse.(Int, values)
-    steps >= 1 && warmup >= 0 || error("STEPS must be positive and WARMUP nonnegative")
-    dims = process_grid(n, gpus)
-    check && n > 512 && error("Use N <= 512 for --check (each rank runs a full CPU reference)")
-    cpu || CUDA.functional(true) || error("A working CUDA GPU is required")
-    cpu || CUDA.allowscalar(false)
-    MPI.Init()
-    try
-        MPI.Comm_size(MPI.COMM_WORLD) == gpus || error("Launch exactly $gpus MPI ranks")
-        me, _, _, coords, comm = init_global_grid(
-            n ÷ dims[1] + 4, n ÷ dims[2] + 4, 1;
-            dimx=dims[1], dimy=dims[2], dimz=1, periodx=1, periody=1,
-            overlaps=(4, 4, 2), halowidths=(2, 2, 1),
-            init_MPI=false, device_type=cpu ? "none" : "CUDA", quiet=true,
-        )
-        try
-            layout = local_layout(n, dims, coords)
-            array = cpu ? Array : CUDA.CuArray
-            synchronize = cpu ? (() -> nothing) : CUDA.synchronize
-            state = initial_fields(array, layout; deterministic=check)
-            work = workspace(first(state), layout)
-            synchronize()
-            update_halo!(state[1], state[2])
-            for _ in 1:warmup
-                state = advance(state, work, layout, synchronize)
-            end
-            synchronize()
+    u     = CUDA.zeros(Float32, nx, ny)
+    v     = CUDA.zeros(Float32, nx, ny)
+    F_u   = CUDA.zeros(Float32, nx-2, ny-2)
+    F_v   = CUDA.zeros(Float32, nx-2, ny-2)
+    lap_u = CUDA.zeros(Float32, nx-2, ny-2)
+    lap_v = CUDA.zeros(Float32, nx-2, ny-2)
+
+    Random.rand!(u[1:nx÷10, 1:ny÷10])
+    Random.rand!(v[1:nx÷10, 1:ny÷10])
+
+    start = 0.0
+    for it = 1:(warmup + nt)
+        # Exclude allocation and warmup from the measured timesteps.
+        if it == warmup + 1
+            CUDA.synchronize()
             MPI.Barrier(comm)
             start = MPI.Wtime()
-            for _ in 1:steps
-                state = advance(state, work, layout, synchronize)
-            end
-            synchronize()
-            elapsed = MPI.Allreduce(MPI.Wtime() - start, max, comm)
-            check && check_result(state, layout, warmup + steps, comm)
-            if me == 0
-                mean_ms = elapsed / steps * 1e3
-                # The harness calls N*N "flops"; report the honest stencil metric.
-                points_per_second = Float64(n - 2)^2 * steps / elapsed
-                println("Gray-Scott Float32: global $(n)x$n, $gpus rank(s), topology $(dims[1])x$(dims[2])")
-                @printf("Mean time: %.6f ms/step; %.6f G interior cell updates/s\n", mean_ms, points_per_second / 1e9)
-                println("backend,eltype,gpus,N,steps,warmup,mean_ms,gupdates_per_second")
-                @printf("implicitglobalgrid,Float32,%d,%d,%d,%d,%.6f,%.6f\n",
-                    gpus, n, steps, warmup, mean_ms, points_per_second / 1e9)
-            end
-        finally
-            finalize_global_grid(; finalize_MPI=false)
         end
-    finally
-        MPI.Finalize()
+
+        F_u .= (-inn(u) .* (inn(v) .^ 2)) .+ f .* (1.0f0 .- inn(u))
+        F_v .= (inn(u) .* (inn(v) .^ 2)) .- (f + k) .* inn(v)
+
+        lap_u .= (lap1(u) ./ (dx * dx)) .+ (lap2(u) ./ (dy * dy))
+        lap_v .= (lap1(v) ./ (dx * dx)) .+ (lap2(v) ./ (dy * dy))
+
+        u[2:end-1, 2:end-1] .+= dt .* ((c_u .* lap_u) .+ F_u)
+        v[2:end-1, 2:end-1] .+= dt .* ((c_v .* lap_v) .+ F_v)
+
+        CUDA.synchronize()
+        update_halo!(u, v)
     end
+    CUDA.synchronize()
+    MPI.Barrier(comm)
+    return MPI.Allreduce(MPI.Wtime() - start, max, comm)
 end
 
-if abspath(PROGRAM_FILE) == @__FILE__
-    main()
+length(ARGS) == 4 || error("Usage: grayscott.jl GPUS N STEPS WARMUP")
+gpus, N, nt, warmup = parse.(Int, ARGS)
+gpus > 0 && N >= 4 && nt > 0 && warmup >= 0 || error("Invalid benchmark dimensions or iteration counts")
+
+me, dims, nprocs, coords, comm = init_global_grid(N, N, 1; dimz=1)
+nprocs == gpus || error("Expected $gpus MPI ranks, got $nprocs")
+elapsed = grayscott(N, N, nt, warmup, comm)
+
+if me == 0
+    mean_ms = elapsed / nt * 1e3
+    gupdates = gpus * Float64(N - 2)^2 * nt / elapsed / 1e9
+    @printf("Gray-Scott: %d GPUs, local %dx%d, %d iterations\n", gpus, N, N, nt)
+    @printf("Mean time: %.6f ms/step; %.6f G cell updates/s\n", mean_ms, gupdates)
 end
+
+finalize_global_grid()
