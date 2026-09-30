@@ -32,9 +32,9 @@ N=(20000 25200 31752 40000)
 for i in "${!GPUS[@]}"; do tune "${GPUS[i]}" gemm Float32 "${N[i]}" "${N[i]}"; done
 N=(1000000 2000000 4000000 8000000)
 for i in "${!GPUS[@]}"; do tune "${GPUS[i]}" montecarlo Float32 "${N[i]}" 1; done
-N=(24000 33944 48000 67888)
+N=(28000 39600 56000 79200)
 for i in "${!GPUS[@]}"; do tune "${GPUS[i]}" grayscott Float32 "${N[i]}" "${N[i]}"; done
-N=(9000000 18000000 36000000 72000000)
+N=(90000000 180000000 360000000 720000000)
 for i in "${!GPUS[@]}"; do
     tune "${GPUS[i]}" cg Float64 "${N[i]}" 1 $'check_every = 10\nmax_iter = 1000'
 done

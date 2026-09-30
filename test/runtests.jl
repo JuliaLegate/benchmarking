@@ -151,7 +151,7 @@ end
     )
     @test Set(r.model for r in runs_gray) == Set((:cunumeric, :cupynumeric, :dagger))
     @test Set(r.spec.gpus for r in runs_gray) == Set((1, 2, 4, 8))
-    gray_sizes = Dict(1=>24000, 2=>33944, 4=>48000, 8=>67888)
+    gray_sizes = Dict(1=>28000, 2=>39600, 4=>56000, 8=>79200)
     @test all(
         (r.N, r.M) == (gray_sizes[r.spec.gpus], gray_sizes[r.spec.gpus]) for
         r in runs_gray
