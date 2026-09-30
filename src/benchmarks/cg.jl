@@ -1,4 +1,4 @@
-using LinearAlgebra: Tridiagonal, norm
+using LinearAlgebra: Tridiagonal, dot, norm
 
 abstract type AbstractConjugateGradient{T} <: AbstractBenchmark{T} end
 
@@ -49,10 +49,10 @@ const CG_STEP_BODY = quote
     @views Ap[2:end] .+= lower[2:end] .* p[1:(end - 1)]
     @views Ap[1:(end - 1)] .+= upper[1:(end - 1)] .* p[2:end]
     # Zero residuals can occur before the next scheduled check.
-    alpha = rho ./ max.(sum(p .* Ap), floatmin(T))
+    alpha = rho ./ max.(dot(p, Ap), floatmin(T))
     x .+= alpha .* p
     r .-= alpha .* Ap
-    next = sum(r .* r)
+    next = sum(abs2, r)
     p .= r .+ (next ./ max.(rho, floatmin(T))) .* p
     return next
 end

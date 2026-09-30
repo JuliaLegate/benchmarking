@@ -179,9 +179,11 @@ julia --project=. plot_results.jl results/<run-id>
 ### Conjugate gradient
 
 `cg` is the default variant and runs on every model; on cuNumeric it applies
-`@accelerate` to each update. `cg_plain` is the cuNumeric variant without
-`@accelerate`, for the accelerate comparison. The generic solver is shared by the
-array workers (`src/benchmarks/cg.jl`); JACC and Dagger have native versions.
+`@accelerate` to each update. `cg_plain` uses the same step body without the
+macro, so this comparison isolates `@accelerate`. The shared array-worker body
+(`src/benchmarks/cg.jl`) uses `dot(p, Ap)` and `sum(abs2, r)` to avoid product
+temporaries.
+JACC and Dagger have native versions.
 
 ```bash
 julia --project=. run.jl --config=benchmarks_cg.toml
