@@ -1,0 +1,17 @@
+# NAS FT weak scaling sized for 140 GB GPUs (H200); class[i] runs on gpus[i]. Every
+# point is twice class B's per-GPU grid points and 20 NAS time steps; C verifies,
+# B.2 (512x512x256), C.2 (1024x512x512) and C.4 (1024x1024x512) skip.
+#   julia --project=. run.jl --config=configs/multi_gpu/large/nas_ft_weak.toml
+[Global]
+n_warmup = 1
+n_iter = 10
+n_trial = 3
+check_correctness = true
+auto_size = false
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc"]
+
+[[nas_ft]]
+T = "Float64"
+gpus = [1, 2, 4, 8]
+cpus = 8
+kwargs = { class = ["B.2", "C", "C.2", "C.4"] }

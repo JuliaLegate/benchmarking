@@ -1,6 +1,6 @@
 @testset "NAS EP contract" begin
     @test NAS_EP_NPB_GPU_COMMIT == "3f12d84920ee315ab00ef283717c1e74b68f4d00"
-    @test Set(keys(NAS_EP_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "B.2", "C.8"])
+    @test Set(keys(NAS_EP_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "B.2", "C.8", "C.4", "C.16"])
     # Weak-scaling classes keep class B's samples per GPU and have no NAS reference.
     @test [nas_ep_parameters(c).m for c in ("B", "B.2", "C", "C.8")] == [30, 31, 32, 33]
     @test nas_ep_status("B.2", 0.0, 0.0) == "skipped"
@@ -49,7 +49,7 @@ end
 
 @testset "NAS FT contract" begin
     @test NAS_FT_NPB_GPU_COMMIT == "3f12d84920ee315ab00ef283717c1e74b68f4d00"
-    @test Set(keys(NAS_FT_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "A.2", "B.4", "B.8"])
+    @test Set(keys(NAS_FT_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "A.2", "B.4", "B.8", "B.2", "C.2", "C.4"])
     # Weak-scaling classes keep class A's grid points and iterations per GPU.
     for (g, c) in ((1, "A"), (2, "A.2"), (4, "B.4"), (8, "B.8"))
         q = nas_ft_parameters(c)
@@ -101,7 +101,7 @@ end
 
 @testset "NAS MG contract" begin
     @test NAS_MG_NPB_GPU_COMMIT == "3f12d84920ee315ab00ef283717c1e74b68f4d00"
-    @test Set(keys(NAS_MG_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "S.2", "B.2", "B.4"])
+    @test Set(keys(NAS_MG_CLASSES)) == Set(["S", "W", "A", "B", "C", "D", "E", "S.2", "B.2", "B.4", "C.2", "C.4"])
     # Weak-scaling classes keep their base class's points per GPU and coarsen
     # every axis; cube classes keep their original levels.
     for (g, c) in ((1, "B"), (2, "B.2"), (4, "B.4"), (8, "C"))

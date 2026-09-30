@@ -16,6 +16,8 @@ const NAS_MG_CLASSES = Dict(
     "S.2" => (; dims=(32, 32, 64), niter=4, norm=nothing),
     "B.2" => (; dims=(256, 256, 512), niter=20, norm=nothing),
     "B.4" => (; dims=(256, 512, 512), niter=20, norm=nothing),
+    "C.2" => (; dims=(512, 512, 1024), niter=20, norm=nothing),
+    "C.4" => (; dims=(512, 1024, 1024), niter=20, norm=nothing),
 )
 
 const NAS_MG_A = (-8.0/3.0, 0.0, 1.0/6.0, 1.0/12.0)

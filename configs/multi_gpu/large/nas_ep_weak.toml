@@ -1,0 +1,16 @@
+# NAS EP weak scaling sized for 140 GB GPUs (H200); class[i] runs on gpus[i]. Every
+# point is class C's per-GPU samples; C verifies, C.8, C.4 and C.16 skip.
+#   julia --project=. run.jl --config=configs/multi_gpu/large/nas_ep_weak.toml
+[Global]
+n_warmup = 1
+n_iter = 10
+n_trial = 3
+check_correctness = true
+auto_size = false
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc"]
+
+[[nas_ep]]
+T = "Float64"
+gpus = [1, 2, 4, 8]
+cpus = 8
+kwargs = { class = ["C", "C.8", "C.4", "C.16"] }

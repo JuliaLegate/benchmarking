@@ -17,6 +17,10 @@ const NAS_EP_CLASSES = Dict(
     # B.2 on 2 GPUs, class C on 4, C.8 on 8. No NAS reference.
     "B.2" => (; m=31, sx=nothing, sy=nothing),
     "C.8" => (; m=33, sx=nothing, sy=nothing),
+    # Large weak scaling (configs/multi_gpu/large) at class C's samples per GPU:
+    # class C on 1 GPU, C.8 (the same m=33 size) on 2, C.4 on 4, C.16 on 8.
+    "C.4" => (; m=34, sx=nothing, sy=nothing),
+    "C.16" => (; m=35, sx=nothing, sy=nothing),
 )
 
 function nas_ep_parameters(class::AbstractString)

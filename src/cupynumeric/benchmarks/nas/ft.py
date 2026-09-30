@@ -27,6 +27,10 @@ CLASSES = {
     # Weak scaling at class A's grid points per GPU and 6 iterations, named
     # <class grid below>.<gpus>: A.2 on 2 GPUs, B.4 (B's grid) on 4, B.8 on 8.
     "A.2": (256, 256, 256, 6), "B.4": (512, 256, 256, 6), "B.8": (512, 512, 256, 6),
+    # Large weak scaling (configs/multi_gpu/large) at twice class B's grid per GPU
+    # and 20 iterations, named <class>.<k> for k times that class's grid: B.2 on
+    # 1 GPU, class C on 2, C.2 on 4, C.4 on 8. No NAS reference except C.
+    "B.2": (512, 512, 256, 20), "C.2": (1024, 512, 512, 20), "C.4": (1024, 1024, 512, 20),
 }
 CHECKSUMS = {
     "S": [

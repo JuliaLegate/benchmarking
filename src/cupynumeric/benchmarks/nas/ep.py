@@ -29,6 +29,10 @@ CLASSES = {
     # B.2 on 2 GPUs, class C on 4, C.8 on 8. No NAS reference.
     "B.2": (31, None, None),
     "C.8": (33, None, None),
+    # Large weak scaling (configs/multi_gpu/large) at class C's samples per GPU:
+    # class C on 1 GPU, C.8 (the same m=33 size) on 2, C.4 on 4, C.16 on 8.
+    "C.4": (34, None, None),
+    "C.16": (35, None, None),
 }
 
 

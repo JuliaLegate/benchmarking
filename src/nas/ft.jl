@@ -17,6 +17,12 @@ const NAS_FT_CLASSES = Dict(
     "A.2" => (; nx=256, ny=256, nz=256, niter=6),
     "B.4" => (; nx=512, ny=256, nz=256, niter=6),
     "B.8" => (; nx=512, ny=512, nz=256, niter=6),
+    # Large weak scaling (configs/multi_gpu/large) at twice class B's grid per GPU
+    # and 20 iterations, named <class>.<k> for k times that class's grid: B.2 on
+    # 1 GPU, class C on 2, C.2 on 4, C.4 on 8. No NAS reference except C.
+    "B.2" => (; nx=512, ny=512, nz=256, niter=20),
+    "C.2" => (; nx=1024, ny=512, nz=512, niter=20),
+    "C.4" => (; nx=1024, ny=1024, nz=512, niter=20),
 )
 
 # CUDA/FT/ft.cu::verify at NAS_FT_NPB_GPU_COMMIT.
