@@ -7,7 +7,7 @@ n_iter = 10
 n_trial = 3
 check_correctness = true
 auto_size = false
-models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc"]
 
 [[nas_ft]]
 T = "Float64"

@@ -2,7 +2,7 @@
 n_warmup = 2
 n_iter = 250
 n_trial = 5
-models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc"]
 # CUDA.jl is still timed; its CSV correctness column is skipped.
 check_correctness = true
 n_correctness_iter = 5
