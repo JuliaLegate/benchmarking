@@ -121,9 +121,15 @@ time reference for each backend.
 
 `ODE_ELTYPE=Float64`, `ODE_STEPS=20`, and `ODE_SAMPLES=5` control precision,
 fixed time steps, and timed solves. Transfers and initial-state construction
-are outside timing. Each measurement is a complete `solve` call, including
+are outside timing. Each backend/size/GPU count runs in its own Julia process;
+its two warmups and all timed samples share that process. Before every warmup
+and sample, the runner releases the previous solution, synchronizes, performs
+a full Julia GC, drains cuNumeric's deferred frees when supported, and
+synchronizes again. This cleanup is outside the timer for every backend.
+Each measurement is a complete `solve` call, including
 solver setup and cache allocation, which can take multiple internal stages
-per time step. The cuNumeric clock, `cuNumeric.get_time_nanoseconds()`, blocks
+per time step. GC or memory management needed during that solve remains part
+of its measured time. The cuNumeric clock, `cuNumeric.get_time_nanoseconds()`, blocks
 on preceding Legate work. The CuArray and Dagger paths synchronize before
 reading the host clock. The stencil does not use GEMV, so the A30 CG cuBLAS
 workspace result does not predict this benchmark. Start with the default
@@ -133,7 +139,11 @@ the backends in each comparison.
 Start with the `128` correctness case before large allocations. Any solver
 failure or host storage fallback exits nonzero; retain the error and package
 versions. The launcher saves the Manifest, sampled GPU-memory peak, and metadata with the results and
-uses a 15-minute per-case timeout by default. There is no cuNumeric-specific
+uses an 8-minute total timeout per backend/size/GPU count by default. This
+covers process startup, both warmups, all timed samples, between-sample
+cleanup, and validation; it does not reset for each sample. Set `ODE_TIMEOUT`
+to override it. A process that ignores termination is forcibly killed after
+another 30 seconds, and the sweep continues. There is no cuNumeric-specific
 extension in this experiment.
 
 ## Changing the time integrator

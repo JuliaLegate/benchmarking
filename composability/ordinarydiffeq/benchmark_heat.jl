@@ -85,6 +85,17 @@ end
 
 const ALG = CarpenterKennedy2N54(; williamson_condition=false)
 
+function cleanup_before_solve()
+    synchronized_time_ns()
+    GC.gc(true)
+    if backend == "cuNumeric" && isdefined(cuNumeric, :drain_pending_frees!)
+        # NDArray finalizers can defer handle destruction to the launch thread.
+        cuNumeric.drain_pending_frees!()
+    end
+    synchronized_time_ns()
+    return nothing
+end
+
 function run_case(n)
     n >= 4 || error("N must be at least 4")
     host_u0, k = initial_state(n)
@@ -97,10 +108,12 @@ function run_case(n)
                        save_everystep=false, save_start=false, dense=false,
                        unstable_check=(dt, u, p, t) -> false)
 
-    local sol
+    sol = nothing
     for warmup_index in 1:2
         println("warmup=$warmup_index backend=$backend N=$n")
         flush(stdout)
+        sol = nothing
+        cleanup_before_solve()
         sol = do_solve()
         synchronized_time_ns(sol.u[end])
         @assert successful_retcode(sol)
@@ -110,6 +123,10 @@ function run_case(n)
     for sample_index in 1:SAMPLES
         println("sample=$sample_index backend=$backend N=$n")
         flush(stdout)
+        # Drop the previous solution before GC; collecting with it still live
+        # would retain its state while the next solve allocates a new workspace.
+        sol = nothing
+        cleanup_before_solve()
         started = synchronized_time_ns()
         sol = do_solve()
         push!(elapsed_ms, (synchronized_time_ns(sol.u[end]) - started) / 1e6)

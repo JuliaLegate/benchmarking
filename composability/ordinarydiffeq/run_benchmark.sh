@@ -67,7 +67,7 @@ done
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     printf 'julia=%s\n' "$("$julia_bin" --version)"
     printf 'experiment=%s\nbase_n=%s\nbackends=%s\nvalues=%s\n' "$experiment" "${base_n:-}" "${backends[*]}" "$*"
-    printf 'eltype=%s\nsteps=%s\nsamples=%s\ntimeout=%s\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES" "${ODE_TIMEOUT:-15m}"
+    printf 'eltype=%s\nsteps=%s\nsamples=%s\ntimeout=%s\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES" "${ODE_TIMEOUT:-8m}"
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
@@ -100,7 +100,8 @@ for value in "$@"; do
         nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
         monitor_pid=$!
         result_line=""
-        if CUDA_VISIBLE_DEVICES="$gpu_mask" timeout --signal=TERM --kill-after=30s "${ODE_TIMEOUT:-15m}" \
+        # One total budget for startup, warmups, all samples, cleanup, and validation.
+        if CUDA_VISIBLE_DEVICES="$gpu_mask" timeout --signal=TERM --kill-after=30s "${ODE_TIMEOUT:-8m}" \
             "$julia_bin" --startup-file=no --project="$ODE_PROJECT" \
             "$script_dir/benchmark_heat.jl" "$backend" "$n" > "$log" 2>&1; then
             line=$(grep '^RESULT,' "$log" | tail -n 1 || true)

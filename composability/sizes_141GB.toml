@@ -1,19 +1,18 @@
 # Float32 sweeps for 141 GB H200 GPUs.
-# Retain the 80 GB sweep points and extend the range for each workload.
+# CG weak base uses the largest reported passing one-GPU size.
+# Heat stops at 32768 after the 65536 case proved too large.
 # single: increasing matrix/grid dimensions N for one-GPU size sweeps.
 # weak_base: dimension N on one GPU; multi-GPU runs use round(N * sqrt(G)).
 # Validate larger sizes on every backend before raising weak_base.
 
 [krylov]
-# Cover the prior H100 comparison through 114688, then add 131072.
-# Points above 81920 still need H200 validation; keep the passing weak baseline.
-single = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 81920, 98304, 114688, 131072]
-weak_base = 81920
+# Match the measured H200 sweep, which omits 98304.
+single = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 81920, 114688, 131072]
+weak_base = 131072
 
 [ordinarydiffeq]
-# Probe larger grids; keep weak scaling separate until these sizes are validated.
-single = [128, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
-weak_base = 20480
+single = [128, 512, 1024, 2048, 4096, 8192, 16384, 32768]
+weak_base = 32768
 
 [integrals_optimization]
 # Estimated endpoint at 1.25x the H100 dimension N (1.5625x array storage).

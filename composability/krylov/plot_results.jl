@@ -5,9 +5,11 @@ using Statistics: mean, std
 
 const COLORS = Dict("CUDA" => "#4c78a8", "Dagger" => "#f58518",
     "cuNumeric" => "#54a24b", "cuNumeric local" => "#b279a2")
+const SOLVER_LABELS = Dict("cg" => "CG", "bicgstab" => "BiCGStab")
 
-function read_results(experiment, paths)
+function read_results(experiment, paths; solver="cg")
     experiment in ("single", "weak") || error("Unknown experiment $experiment")
+    haskey(SOLVER_LABELS, solver) || error("Unknown solver $solver")
     expected = experiment == "single" ? collect(keys(COLORS)) : ["Dagger", "cuNumeric", "cuNumeric local"]
     rows = NamedTuple[]
     for path in paths
@@ -16,18 +18,18 @@ function read_results(experiment, paths)
                 i == 1 && continue
                 fields = split(line, ',')
                 length(fields) == 16 || error("Malformed result row $i in $path")
-                fields[1] == experiment && fields[4] == "cg" || continue
+                fields[1] == experiment && fields[4] == solver || continue
                 fields[3] in expected || error("Unexpected backend: $(fields[3])")
                 samples = parse.(Float64, split(fields[16], ';'))
                 length(samples) >= 2 && all(isfinite, samples) && all(>(0), samples) ||
                     error("Invalid timing samples in row $i of $path")
-                push!(rows, (base_n=fields[2], backend=fields[3], eltype=fields[6],
+                push!(rows, (base_n=fields[2], backend=fields[3], solver=fields[4], eltype=fields[6],
                     gpus=parse(Int, fields[7]), n=parse(Int, fields[8]),
                     mean=mean(samples), stderr=std(samples) / sqrt(length(samples))))
             end
         end
     end
-    isempty(rows) && error("No CG results for $experiment")
+    isempty(rows) && error("No $(SOLVER_LABELS[solver]) results for $experiment")
     length(unique(row.eltype for row in rows)) == 1 || error("Mixed precision in one plot")
     experiment == "single" || length(unique(row.base_n for row in rows)) == 1 ||
         error("Mixed weak-scaling base N in one plot")
@@ -36,14 +38,14 @@ function read_results(experiment, paths)
     return rows
 end
 
-function plot_results(experiment, paths, image_path)
-    rows = read_results(experiment, paths)
+function plot_results(experiment, paths, image_path; solver="cg")
+    rows = read_results(experiment, paths; solver)
     xs = experiment == "single" ? sort!(unique(row.n for row in rows)) : [1, 2, 4, 8]
     subtitle = first(rows).eltype * (experiment == "weak" ? ", N(1)=$(first(rows).base_n); N(G)≈N(1)√G" : "")
     figure = plot(;
         xlabel=experiment == "single" ? "Matrix dimension N" : "GPUs",
         ylabel="Mean complete solve (ms) ± standard error",
-        title="CG — $experiment GPU scaling — $subtitle",
+        title="$(SOLVER_LABELS[solver]) — $experiment GPU scaling — $subtitle",
         xscale=:log2, yscale=:log10, xticks=(xs, string.(xs)),
         legend=:topleft, linewidth=2, markersize=5, size=(900, 550),
         left_margin=18Plots.mm, bottom_margin=8Plots.mm,
@@ -65,9 +67,18 @@ function plot_results(experiment, paths, image_path)
 end
 
 function main(args=ARGS)
-    length(args) >= 4 && args[end-1] == "--output" ||
-        error("Usage: julia plot_results.jl {single|weak} results.csv [results.csv ...] --output timings.png")
-    plot_results(first(args), args[2:end-2], last(args))
+    solver = "cg"
+    positional = String[]
+    for arg in args
+        if startswith(arg, "--solver=")
+            solver = split(arg, '='; limit=2)[2]
+        else
+            push!(positional, arg)
+        end
+    end
+    length(positional) >= 4 && positional[end-1] == "--output" ||
+        error("Usage: julia plot_results.jl {single|weak} results.csv [results.csv ...] [--solver=cg|bicgstab] --output timings.png")
+    plot_results(first(positional), positional[2:end-2], last(positional); solver)
 end
 
 end # module

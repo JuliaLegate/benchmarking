@@ -39,10 +39,18 @@ end
     end
     @test cli_options(String[]).workloads == WORKLOADS
     @test cli_options(String[]).mode == "single"
+    @test cli_options(String[]).solvers == ["cg"]
+    @test !cli_options(String[]).include_local
+    @test cli_options(["--local"]).include_local
+    @test cli_options(["--solvers=bicgstab"]).solvers == ["bicgstab"]
+    @test cli_options(["--solvers=cg, bicgstab"]).solvers == ["cg", "bicgstab"]
     @test cli_options(["--mode=multi"]).gpus == ["1", "2", "4", "8"]
     for args in (["--only="], ["--only=missing"], ["--only=krylov,krylov"],
         ["--mode=weak"], ["--gpus=2"], ["--mode=multi", "--gpus=3"],
-        ["--mode=multi", "--gpus=1,1"], ["--gpus="], ["--output="], ["--config="], ["--unknown"])
+        ["--mode=multi", "--gpus=1,1"], ["--gpus="], ["--output="], ["--config="], ["--unknown"],
+        ["--solvers="], ["--solvers=gmres"], ["--solvers=cg,cg"], ["--solvers=cg,"],
+        ["--only=ordinarydiffeq", "--solvers=bicgstab"],
+        ["--only=ordinarydiffeq", "--local"], ["--local=false"])
         @test_throws ArgumentError cli_options(args)
     end
 
@@ -57,6 +65,25 @@ end
         @test plan[2].cmd.exec[3:end] == ["single", "128", "512", "1024", "2048", "4096", "8192", "16384", "32768"]
         @test plan[3].cmd.exec[3:end] == ["weak", "65536", "1", "4"]
         @test plan[4].cmd.exec[3:end] == ["weak", "16384", "1", "4"]
+        @test "BENCH_SOLVERS=cg" in plan[1].cmd.env
+        @test "BENCH_LOCAL=0" in plan[1].cmd.env
+        @test !haskey(Dict(plan[2].overrides), "BENCH_SOLVERS")
+        @test !haskey(Dict(plan[2].overrides), "BENCH_LOCAL")
+        for selection in ("bicgstab", "cg,bicgstab", "bicgstab,cg")
+            selected = launch_plan(cli_options(vcat(args, ["--solvers=$selection"]));
+                env=Dict("BENCH_SOLVERS" => "cg"))
+            @test length(selected) == 4
+            @test all(p -> "BENCH_SOLVERS=$selection" in p.cmd.env,
+                filter(p -> p.workload == "krylov", selected))
+            @test [p.cmd.exec for p in selected] == [p.cmd.exec for p in plan]
+            local_plan = launch_plan(cli_options(vcat(args, ["--solvers=$selection", "--local"])))
+            @test all(p -> "BENCH_LOCAL=1" in p.cmd.env && "BENCH_SOLVERS=$selection" in p.cmd.env,
+                filter(p -> p.workload == "krylov", local_plan))
+            @test !haskey(Dict(local_plan[2].overrides), "BENCH_LOCAL")
+        end
+        withenv("BENCH_LOCAL" => "1") do
+            @test "BENCH_LOCAL=0" in first(launch_plan(cli_options(args))).cmd.env
+        end
         for launch in plan
             prefix = launch.workload == "krylov" ? "BENCH" : "ODE"
             @test isfile(launch.cmd.exec[2])
@@ -107,6 +134,11 @@ end
         @test occursin("BENCH_OUTPUT=", String(take!(preview)))
         @test isempty(calls)
         @test !ispath(output)
+        @test main(vcat(args, ["--solvers=cg,bicgstab", "--local", "--dry-run"]); executor, io=preview) == 0
+        preview_text = String(take!(preview))
+        @test occursin("BENCH_SOLVERS=cg,bicgstab", preview_text)
+        @test occursin("BENCH_LOCAL=1", preview_text)
+        @test isempty(calls)
         @test main(["--help"]; executor, io=IOBuffer()) == 0
         @test isempty(calls)
         failure_output = IOBuffer()

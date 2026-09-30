@@ -62,6 +62,7 @@ jobs:
           python3 -m unittest discover -s test -p test_setup.py -v
           julia --startup-file=no --project=. test/composability_cli.jl
           julia --startup-file=no --project=. test/krylov_validation.jl
+          julia --startup-file=no --project=. test/ode_cleanup.jl
 
       - name: Instantiate and verify all environments
         shell: bash

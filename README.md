@@ -67,6 +67,7 @@ all three workloads with fixed Float32 sizes for an 80 GB H100:
 ```bash
 julia --project=. run_composability.jl
 julia --project=. run_composability.jl --only=krylov,ordinarydiffeq
+julia --project=. run_composability.jl --only=krylov --solvers=cg,bicgstab --mode=both
 julia --project=. run_composability.jl --mode=multi --gpus=1,2,4,8
 julia --project=. run_composability.jl --mode=both --output=results/composability-paper
 julia --project=. run_composability.jl --only=integrals_optimization --dry-run
@@ -89,6 +90,10 @@ scaling. Use `--config=/path/to/my-sizes.toml` to select a custom config.
 `--only=all` is the default. `--dry-run` previews commands without requiring a
 GPU or initialized environment. Use `--help` for all options and the
 [composability guide](composability/README.md) for sizes and smoke checks.
+Krylov defaults to CG; `--solvers=bicgstab` selects BiCGStab, and
+`--solvers=cg,bicgstab` runs both with separate plots in either GPU mode.
+Krylov uses stock implementations by default. Add `--local` to also run
+cuNumeric local implementations alongside cuNumeric stock.
 
 ## Run the benchmark suite
 

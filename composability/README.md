@@ -10,8 +10,8 @@ They pass `CuArray`, Dagger `DArray`, and cuNumeric `NDArray` to the same
 workload operations. Each workload has its own one-GPU launcher, correctness
 checks, raw synchronized timing samples, and mean-time plot with standard
 error bars. CUDA.jl is the one-GPU reference; Dagger and cuNumeric also have
-weak-scaling launchers. Krylov runs stock CG on all three backends and local
-CG on cuNumeric.
+weak-scaling launchers. Krylov runs stock CG or BiCGStab on all three backends;
+`--local` also enables local implementations on cuNumeric. CG is the default.
 
 ## Setup
 
@@ -55,6 +55,9 @@ julia --project=. run_composability.jl
 # One benchmark on one GPU
 julia --project=. run_composability.jl --only=krylov
 
+# Both Krylov solvers, with single-GPU sweeps and multi-GPU weak scaling
+julia --project=. run_composability.jl --only=krylov --solvers=cg,bicgstab --mode=both
+
 # Selected benchmarks with multi-GPU weak scaling
 julia --project=. run_composability.jl --only=krylov,ordinarydiffeq --mode=multi --gpus=1,2,4,8
 
@@ -71,6 +74,23 @@ comma-separated selection, or `all`. `--mode=single` runs size sweeps on one
 GPU. `--mode=multi` runs weak scaling at the specified GPU counts (default
 `1,2,4,8`, including the one-GPU baseline). `--mode=both` runs both sequentially.
 Supported counts are `1`, `2`, `4`, and `8`.
+
+`--solvers=cg` (default), `--solvers=bicgstab`, or `--solvers=cg,bicgstab`
+selects the Krylov solvers in any mode. Include `krylov` in `--only` when
+passing this option; other workloads are unaffected. Both solvers use the
+same `[krylov]` sizes and `weak_base` from the selected config. Existing
+large-size measurements are for CG; validate BiCGStab independently.
+
+Stock implementations run by default. Add `--local` to include cuNumeric
+local implementations alongside cuNumeric stock for every selected solver
+and GPU mode. Single-GPU sweeps include CUDA and Dagger stock; multi-GPU runs
+include Dagger stock. `--local` requires `krylov` in `--only`.
+
+Each Krylov result directory contains one `results.csv` with a `solver`
+column. A single selected solver writes `timings.png`; selecting both writes
+`timings-cg.png` and `timings-bicgstab.png`. Case and memory logs identify
+the solver. A failed backend or solver does not prevent the remaining cases
+or the other solver's plot.
 
 All three workloads use the Float32 preset in `sizes_80GB.toml` by default.
 Select `--config=composability/sizes_141GB.toml` for a 141 GB H200, or pass a
@@ -95,7 +115,10 @@ The workers use the current Julia executable unless `JULIA` or
 depots to workers explicitly, so `--startup-file=no` does not hide packages
 installed in a depot added by the container's startup file. Workload settings such as
 `BENCH_SAMPLES`, `ODE_SAMPLES`, `INTOPT_SAMPLES`, and project overrides remain
-available. CLI selections control the workloads, output root, and dry-run mode.
+available. CLI selections control the workloads, Krylov solvers, output root,
+and dry-run mode. The unified runner sets `BENCH_SOLVERS` from `--solvers`
+and `BENCH_LOCAL` from `--local`. For the Krylov shell launcher, set
+`BENCH_SOLVERS` directly and use `BENCH_LOCAL=1` to add local implementations.
 
 ## Set N (problem sizes)
 
@@ -120,24 +143,29 @@ side length of the two-dimensional grid/image. The maximum single-GPU N and
 
 | Workload | 80 GB maximum | 80 GB weak_base | 141 GB maximum | 141 GB weak_base |
 | --- | ---: | ---: | ---: | ---: |
-| Krylov CG | 114,688 | 65,536 | 131,072 | 81,920 |
-| OrdinaryDiffEq heat | 32,768 | 16,384 | 65,536 | 20,480 |
+| Krylov CG | 114,688 | 65,536 | 131,072 | 131,072 |
+| OrdinaryDiffEq heat | 32,768 | 16,384 | 32,768 | 32,768 |
 | Integrals + Optimization plume | 8,192 | 8,192 | 10,240 | 10,240 |
 
-Both Krylov presets include 81,920, 98,304, and 114,688 to cover the prior
-H100 comparison. The 141 GB preset adds 131,072. Krylov keeps successful
+The H100 Krylov preset includes 81,920, 98,304, and 114,688 to cover the prior
+H100 comparison. The 141 GB preset omits 98,304 to match the measured H200
+sweep and adds 131,072. Krylov keeps successful
 backend results and continues to larger sizes when another backend fails;
-failures retain logs and still produce a nonzero exit status. Sizes above
-81,920 still need H200 validation. The configured Krylov weak-scaling
-baselines remain 65,536 for H100 and the passing 81,920 point for H200.
+failures retain logs and still produce a nonzero exit status. The configured
+Krylov weak-scaling baseline remains 65,536 for H100 and uses the reported
+passing 131,072 point for H200.
 
-The H100 heat sweep extends through 32,768; the H200 sweep adds 65,536.
-All heat sweep dimensions are powers of two, with no 20,480 sweep point.
-Heat `weak_base` remains 16,384 for H100 and 20,480 for
-H200. These larger grids are exploratory: even if every
+Both heat sweeps stop at 32,768; the H200 65,536 point proved too large and
+was removed. All heat sweep dimensions are powers of two. Heat `weak_base`
+remains 16,384 for H100 and is 32,768 for H200. Even if every
 backend fails at a size, the launcher keeps earlier results and continues.
 If no case succeeds, it retains the CSV header and failure logs and skips
 plotting. Any failed case still produces a nonzero final exit status.
+
+The H200 CG weak baseline stores a 64 GiB Float32 matrix at one GPU and
+approximately 512 GiB at eight GPUs. The benchmark first constructs this
+matrix on the host, so host memory must also accommodate it and temporary
+copies before GPU distribution.
 
 The H200 plume preset appends an estimated endpoint at 1.25 times the H100
 maximum: approximately 1.5625 times the array storage for this quadratic
