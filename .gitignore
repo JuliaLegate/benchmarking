@@ -1,12 +1,20 @@
 *Manifest.toml
 *LocalPreferences.toml
+# Legacy generated environments; the shared composability project is versioned.
+/environments/krylov/
+/environments/ordinarydiffeq/
+/environments/integrals_optimization/
 __pycache__/
 *.pyc
 *.log*
 *.err*
 *.prof
 results*/
+tunes/
 plots*/
 .vscode/
 .agents/
 .codex/
+# Re-include configs/plots/ (matched by plots*/); grid.toml is local.
+!/configs/plots/
+/configs/plots/grid.toml

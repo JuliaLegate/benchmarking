@@ -18,6 +18,7 @@ struct DaggerNASMG{S,P}
     N::Int
     M::Int
     gpus::Int
+    blocks_per_gpu::Int
     scope::S
     processors::P
 end
@@ -31,9 +32,9 @@ end
 function model_build_nas_mg(config::ModelWorkerConfig)
     config.T === Float64 || error("NAS MG requires Float64")
     class = uppercase(string(get(config.kwargs, :class, "S")))
-    p = nas_mg_parameters(class)
-    (config.N, config.M) == (p.n, p.n) || error(
-        "NAS MG class $class requires N=M=$(p.n)"
+    nx, ny, _ = nas_mg_dims(nas_mg_parameters(class))
+    (config.N, config.M) == (nx, ny) || error(
+        "NAS MG class $class requires N=$nx, M=$ny"
     )
     available = length(collect(CUDA.devices()))
     available == config.gpus || error(
@@ -42,25 +43,31 @@ function model_build_nas_mg(config::ModelWorkerConfig)
     scope = Dagger.scope(; cuda_gpus=collect(1:config.gpus))
     processors = sort!(collect(Dagger.compatible_processors(scope)); by=string)
     length(processors) == config.gpus || error("Dagger CUDA processor count mismatch")
-    return DaggerNASMG(class, config.N, config.M, config.gpus, scope, processors)
+    return DaggerNASMG(
+        class, config.N, config.M, config.gpus, dagger_blocks_per_gpu(config),
+        scope, processors,
+    )
 end
 
-dagger_mg_level_sizes(p) = [2^level for level in 1:round(Int, log2(p.n))]
+# Unghosted (nx, ny, nz) per level; Dagger stencils wrap periodically instead.
+dagger_mg_level_dims(p) = [shape .- 2 for shape in nas_mg_level_shapes(p)]
 
 function dagger_nas_mg_array(host, b::DaggerNASMG)
-    n = size(host, 1)
-    block = cld(n, b.gpus)
-    nchunks = cld(n, block)
-    assignment = reshape(copy(b.processors[1:nchunks]), 1, 1, nchunks)
-    return Dagger.DArray(host, Dagger.Blocks(n, n, block), assignment)
+    nx, ny, nz = size(host)
+    block = cld(nz, b.gpus * b.blocks_per_gpu)
+    nchunks = cld(nz, block)
+    assignment = reshape(
+        [dagger_owner(b.processors, i, nchunks) for i in 1:nchunks], 1, 1, nchunks
+    )
+    return Dagger.DArray(host, Dagger.Blocks(nx, ny, block), assignment)
 end
 
 function model_initialize(b::DaggerNASMG)
     p = nas_mg_parameters(b.class)
     return Dagger.with_options(; scope=b.scope) do
-        sizes = dagger_mg_level_sizes(p)
-        u = [dagger_nas_mg_array(zeros(Float64, n, n, n), b) for n in sizes]
-        r = [dagger_nas_mg_array(zeros(Float64, n, n, n), b) for n in sizes]
+        dims = dagger_mg_level_dims(p)
+        u = [dagger_nas_mg_array(zeros(Float64, d), b) for d in dims]
+        r = [dagger_nas_mg_array(zeros(Float64, d), b) for d in dims]
         ghosted_rhs = nas_mg_rhs(p)
         rhs_host = copy(@view ghosted_rhs[2:(end - 1), 2:(end - 1), 2:(end - 1)])
         rhs = dagger_nas_mg_array(rhs_host, b)
@@ -251,13 +258,12 @@ function dagger_mg_norm_chunk(values)
 end
 
 function dagger_mg_norm_tasks(b::DaggerNASMG, residual)
-    length(residual.chunks) == length(b.processors) || error(
-        "Dagger MG expected one finest-level slab per GPU"
-    )
-    tasks = Vector{Dagger.DTask}(undef, length(b.processors))
+    nchunks = length(residual.chunks)
+    tasks = Vector{Dagger.DTask}(undef, nchunks)
     Dagger.spawn_datadeps() do
         for i in eachindex(tasks)
-            tasks[i] = Dagger.@spawn scope=Dagger.ExactScope(b.processors[i]) dagger_mg_norm_chunk(
+            owner = dagger_owner(b.processors, i, nchunks)
+            tasks[i] = Dagger.@spawn scope=Dagger.ExactScope(owner) dagger_mg_norm_chunk(
                 Dagger.In(residual.chunks[i])
             )
         end
@@ -288,10 +294,9 @@ function model_check_correctness(b::DaggerNASMG, config)
     tasks = model_run!(b, model_initialize(b))
     model_synchronize(b)
     squared = sum(only(fetch(task)) for task in tasks)
-    norm = sqrt(squared/Float64(p.n)^3)
-    return nas_mg_verified(b.class, norm) ? "pass" : "fail"
+    return nas_mg_status(b.class, sqrt(squared/Float64(prod(nas_mg_dims(p)))))
 end
 
 function model_correctness_context(b::DaggerNASMG, config)
-    return (; reference="NPB-GPU", dims=(b.N, b.N, b.N))
+    return (; reference="NPB-GPU", dims=nas_mg_dims(nas_mg_parameters(b.class)))
 end

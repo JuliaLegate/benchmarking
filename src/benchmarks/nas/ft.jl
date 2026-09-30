@@ -15,7 +15,7 @@ correctness_uses_cpu(::NASFourierTransform) = true
 
 function data(b::NASFourierTransform)
     p = nas_ft_parameters(b.class)
-    return "NAS FT class $(uppercase(b.class)): $(p.nx)×$(p.ny)×$(p.nz), NITER=$(p.niter)"
+    return "NAS FT class $(uppercase(b.class)): $(p.nx)×$(p.ny)×$(p.nz), $(p.niter) NAS time steps per run"
 end
 
 function validate_nas_ft(b::NASFourierTransform{T}) where {T}
@@ -42,4 +42,8 @@ function total_space(b::NASFourierTransform)
 end
 
 estimate_scaling(b::NASFourierTransform, ::Integer) = dims(b)
+function class_dims(::Type{<:NASFourierTransform}, kwargs)
+    p = nas_ft_parameters(get(kwargs, "class", "S"))
+    return (p.nx, p.ny)
+end
 register_benchmark("nas_ft", NASFourierTransform)

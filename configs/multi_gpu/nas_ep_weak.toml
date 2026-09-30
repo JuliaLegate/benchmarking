@@ -1,0 +1,16 @@
+# NAS EP weak scaling; class[i] runs on gpus[i]. Every point is class B's
+# per-GPU samples; B and C verify, B.2 and C.8 skip.
+#   julia --project=. run.jl --config=configs/multi_gpu/nas_ep_weak.toml
+[Global]
+n_warmup = 1
+n_iter = 10
+n_trial = 3
+check_correctness = true
+auto_size = false
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
+
+[[nas_ep]]
+T = "Float64"
+gpus = [1, 2, 4, 8]
+cpus = 8
+kwargs = { class = ["B", "B.2", "C", "C.8"] }

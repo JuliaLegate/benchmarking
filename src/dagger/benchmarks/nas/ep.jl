@@ -12,6 +12,7 @@ struct DaggerNASEP{S,P}
     N::Int
     batches::Int
     gpus::Int
+    blocks_per_gpu::Int
     scope::S
     processors::P
 end
@@ -36,25 +37,28 @@ function model_build_nas_ep(config::ModelWorkerConfig)
     processors = sort!(collect(Dagger.compatible_processors(scope)); by=string)
     length(processors) == config.gpus || error("Dagger CUDA processor count mismatch")
     return DaggerNASEP(
-        class, config.N, nas_ep_batches(p), config.gpus, scope, processors
+        class, config.N, nas_ep_batches(p), config.gpus, dagger_blocks_per_gpu(config),
+        scope, processors,
     )
 end
 
 function model_initialize(b::DaggerNASEP)
-    block = cld(b.batches, b.gpus)
+    block = cld(b.batches, b.gpus * b.blocks_per_gpu)
+    nchunks = cld(b.batches, block)
+    assignment = [dagger_owner(b.processors, i, nchunks) for i in 1:nchunks]
     return Dagger.with_options(; scope=b.scope) do
         partials = Dagger.DArray(
-            fill(NASEPPartial(), b.batches), Dagger.Blocks(block), b.processors
+            fill(NASEPPartial(), b.batches), Dagger.Blocks(block), assignment
         )
         indices = Dagger.DArray(
-            collect(Int64, 0:(b.batches - 1)), Dagger.Blocks(block), b.processors
+            collect(Int64, 0:(b.batches - 1)), Dagger.Blocks(block), assignment
         )
         foreach(wait_for_darray, (partials, indices))
         partial_chunks = map(task -> fetch(task; raw=true), partials.chunks)
-        length(partial_chunks) == b.gpus || error("Dagger EP chunk count mismatch")
+        length(partial_chunks) == nchunks || error("Dagger EP chunk count mismatch")
         processors = Dagger.processor.(partial_chunks)
         length(unique(processors)) == b.gpus || error(
-            "Dagger did not place one EP chunk on each requested GPU"
+            "Dagger did not place EP chunks on every requested GPU"
         )
         return DaggerNASEPState(partials, indices)
     end
@@ -75,7 +79,7 @@ function model_check_correctness(b::DaggerNASEP, config)
     model_run!(b, state)
     model_synchronize(b)
     partials = nas_ep_combine(collect(state.partials))
-    return nas_ep_verified(b.class, partials.sx, partials.sy) ? "pass" : "fail"
+    return nas_ep_status(b.class, partials.sx, partials.sy)
 end
 
 function model_correctness_context(b::DaggerNASEP, config)

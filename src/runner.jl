@@ -1,7 +1,7 @@
 using Dates, Pkg
 
 function cli_options(args)
-    config = joinpath(@__DIR__, "..", "benchmarks.toml")
+    config = joinpath(@__DIR__, "..", "configs", "multi_gpu", "all.toml")
     only = nothing
     fusion = nothing
     models = nothing
@@ -112,6 +112,7 @@ function execute_plan(runs, gs, opts, budget, raw; launch=run, prepare=prepare_b
                 prepared[r.model] = key
             end
             b = build_benchmark(BENCHMARKS[s.name], parse_bench_type(s.T), r.N, r.M; s.kwargs...)
+            println("  ", data(b))  # N × M above omits e.g. NAS's third dimension
             p = opts.positional
             correctness = length(p)>=11 ? parse(Bool, p[11]) : gs.check_correctness
             correct_iters = length(p)>=12 ? parse(Int, p[12]) : gs.n_correctness_iter

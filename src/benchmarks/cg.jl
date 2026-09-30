@@ -21,8 +21,35 @@ function data(b::AbstractConjugateGradient)
     return "CG: N=$(b.N), check_every=$(b.check_every), max_iter=$(b.max_iter)"
 end
 allowed_types(::Type{<:AbstractConjugateGradient}) = Union{Float32,Float64}
-# Executed iterations depend on convergence; compare elapsed time, not nominal FLOPs.
-total_flops(::AbstractConjugateGradient) = 0
+# Iterations the solve executes, from a cached CPU replay (deterministic system).
+const CG_ITERATIONS = Dict{Tuple{DataType,Int,Int,Int},Int}()
+
+function cg_iterations(b::AbstractConjugateGradient{T}) where {T}
+    return get!(CG_ITERATIONS, (T, b.N, b.check_every, b.max_iter)) do
+        N = b.N
+        x, r = zeros(T, N), fill(T(0.5), N)
+        p, Ap = copy(r), similar(r)
+        rho = sum(abs2, r)
+        target = (T==Float32 ? 1e-5 : 1e-8)^2 * N/4
+        for k in 1:b.max_iter
+            @inbounds for i in 1:N
+                Ap[i] = T(4)*p[i] + (i > 1 ? p[i - 1] : zero(T)) + (i < N ? p[i + 1] : zero(T))
+            end
+            alpha = rho/max(sum(p .* Ap), floatmin(T))
+            x .+= alpha .* p
+            r .-= alpha .* Ap
+            next = sum(abs2, r)
+            p .= r .+ (next/max(rho, floatmin(T))) .* p
+            rho = next
+            (k % b.check_every == 0 || k == b.max_iter) &&
+                (rho <= target || b.max_iter == 1) && return k
+        end
+        return b.max_iter
+    end
+end
+
+# Per iteration: matvec 5N, two dots 4N, three updates 6N.
+total_flops(b::AbstractConjugateGradient) = 2b.N + 15b.N*cg_iterations(b)
 estimate_scaling(b::AbstractConjugateGradient, p::Integer) = (scale_axis(b.N, p, 1), 1)
 total_space(b::AbstractConjugateGradient{T}) where {T} = 7big(b.N)*sizeof(T)
 correctness_uses_cpu(::AbstractConjugateGradient) = true

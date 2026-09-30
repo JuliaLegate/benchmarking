@@ -100,10 +100,6 @@ supports_gpu_count(::CUDAJLModel, gpus::Integer) = gpus == 1
 
 function supports_run(model::ExecutionModel, name::AbstractString, gpus::Integer)
     supports_benchmark(model, name) || return false
-    # JACC Gray-Scott is single-GPU pending its 2D ghost fix.
-    model isa JACCModel && startswith(name, "grayscott") && gpus != 1 && return false
-    model isa JACCModel && name == "nas_ft" && gpus != 1 && return false
-    model isa JACCModel && name == "nas_mg" && gpus != 1 && return false
     return supports_gpu_count(model, gpus)
 end
 
@@ -139,10 +135,9 @@ function kwargs_toml(kwargs)
     return sprint(io -> TOML.print(io, Dict(string(k)=>v for (k, v) in kwargs); sorted=true))
 end
 function results_subdir(s)
-    # NAS implementation variants share a plot when class and dimensions match.
-    # Their distinct CSV model keys preserve the individual measurements.
-    kwargs = s.name in ("nas_ep", "nas_mg") ?
-        Dict(k=>v for (k, v) in s.kwargs if k != :implementation) : s.kwargs
+    # NAS variants and class sweeps share a plot; rows record N/M.
+    kwargs = s.name in ("nas_ep", "nas_ft", "nas_mg") ?
+        Dict(k=>v for (k, v) in s.kwargs if k ∉ (:implementation, :class)) : s.kwargs
     return isempty(kwargs) ? s.T : s.T * "-" * bytes2hex(sha1(kwargs_toml(kwargs)))[1:12]
 end
 
@@ -230,9 +225,13 @@ function preflight_julia_model(
     julia = get(env, "CUNUMERIC_BENCH_JULIA", joinpath(Sys.BINDIR, Base.julia_exename()))
     executable = which(julia)
     executable === nothing && error("Julia executable '$julia' is unavailable")
-    check(`$executable --project=$project -e $imports`) || error(
-        "$(model_label(model)) is enabled, but its isolated environment is not instantiated. " *
-        "Run `julia --project=$project -e 'using Pkg; Pkg.instantiate()'`. " *
+    # Only verify that the environment loads; never start a Legate runtime here.
+    # Match the worker launcher, which clears LD_LIBRARY_PATH.
+    cmd = addenv(`$executable --project=$project -e $imports`,
+        "LEGATE_SKIP_RUNTIME" => "true", "LD_LIBRARY_PATH" => nothing)
+    check(cmd) || error(
+        "$(model_label(model)) is enabled, but its isolated environment failed to load (see the error above). " *
+        "If it is not instantiated, run `julia --project=$project -e 'using Pkg; Pkg.instantiate()'`. " *
         "No benchmarks have been started.",
     )
     return nothing

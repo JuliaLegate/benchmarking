@@ -39,7 +39,7 @@ function _define_grayscott_accelerated_step(type, form=:function)
     return Core.eval(@__MODULE__, _define_accelerated_definition(signature, body, form))
 end
 
-if CUNUMERIC_BENCH_RUNTIME
+if CUNUMERIC_BENCH_ACCELERATE
     for (type, form) in (
         (GrayScottAccelerated, :function),
         (GrayScottFunctionAccelerated, :function),
@@ -67,7 +67,7 @@ function accelerate_grayscott_rhs(body::Expr)
 end
 
 let body = accelerate_grayscott_rhs(deepcopy(GRAYSCOTT_STEP_BODY))
-    if CUNUMERIC_BENCH_RUNTIME
+    if CUNUMERIC_BENCH_ACCELERATE
         @eval function _gs_step!(
             b::GrayScottExpressionAccelerated, u, v, u_new, v_new, args::GSParams
         )

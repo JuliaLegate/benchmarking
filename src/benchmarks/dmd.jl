@@ -120,7 +120,7 @@ let body = quote
         (B, Ã)
     end
     @eval _dmd_project(::DMDBaseline, X, X2, U, Vt, S) = $body
-    if CUNUMERIC_BENCH_RUNTIME
+    if CUNUMERIC_BENCH_ACCELERATE
         @eval @accelerate function _dmd_project(
             ::DMDAccelerated, X, X2, U, Vt, S
         )

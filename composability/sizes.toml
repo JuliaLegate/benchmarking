@@ -1,0 +1,15 @@
+# Default Float32 sweeps for 80 GB H100 GPUs.
+# single: increasing matrix/grid dimensions N for one-GPU size sweeps.
+# weak_base: dimension N on one GPU; multi-GPU runs use round(N * sqrt(G)).
+
+[krylov]
+single = [1024, 2048, 4096, 8192, 16384, 32768, 65536]
+weak_base = 65536
+
+[ordinarydiffeq]
+single = [128, 512, 1024, 2048, 4096, 8192, 16384]
+weak_base = 16384
+
+[integrals_optimization]
+single = [32, 128, 512, 1024, 2048, 4096, 6144, 8192]
+weak_base = 8192

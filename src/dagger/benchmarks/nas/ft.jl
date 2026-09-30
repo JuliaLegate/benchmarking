@@ -17,6 +17,7 @@ struct DaggerNASFT{S,P}
     N::Int
     M::Int
     gpus::Int
+    blocks_per_gpu::Int
     scope::S
     processors::P
 end
@@ -45,7 +46,7 @@ function dagger_nas_ft_twiddle!(out, frequency_squares)
 end
 
 function dagger_nas_ft_upload(b::DaggerNASFT, s::DaggerNASFTState, host)
-    if b.gpus != 1
+    if length(s.u1.chunks) != 1
         return Dagger.DArray(host, s.blocks, s.assignment)
     end
     # DArray(host, ...) slices and copies the entire host array before moving
@@ -63,13 +64,12 @@ function dagger_nas_ft_chunk_checksum(values, mask)
 end
 
 function dagger_nas_ft_checksum_tasks(b::DaggerNASFT, s::DaggerNASFTState)
-    length(s.u1.chunks) == length(b.processors) || error(
-        "Dagger FT expected one slab per GPU"
-    )
-    tasks = Vector{Dagger.DTask}(undef, length(b.processors))
+    nchunks = length(s.u1.chunks)
+    tasks = Vector{Dagger.DTask}(undef, nchunks)
     Dagger.spawn_datadeps() do
         for i in eachindex(tasks)
-            tasks[i] = Dagger.@spawn scope=Dagger.ExactScope(b.processors[i]) dagger_nas_ft_chunk_checksum(
+            owner = dagger_owner(b.processors, i, nchunks)
+            tasks[i] = Dagger.@spawn scope=Dagger.ExactScope(owner) dagger_nas_ft_chunk_checksum(
                 Dagger.In(s.u1.chunks[i]), Dagger.In(s.mask.chunks[i])
             )
         end
@@ -91,14 +91,21 @@ function model_build_nas_ft(config::ModelWorkerConfig)
     scope = Dagger.scope(; cuda_gpus=collect(1:config.gpus))
     processors = sort!(collect(Dagger.compatible_processors(scope)); by=string)
     length(processors) == config.gpus || error("Dagger CUDA processor count mismatch")
-    return DaggerNASFT(class, config.N, config.M, config.gpus, scope, processors)
+    return DaggerNASFT(
+        class, config.N, config.M, config.gpus, dagger_blocks_per_gpu(config),
+        scope, processors,
+    )
 end
 
 function model_initialize(b::DaggerNASFT)
     p = nas_ft_parameters(b.class)
     shape = (p.nx, p.ny, p.nz)
-    blocks = Dagger.Blocks(p.nx, p.ny, cld(p.nz, b.gpus))
-    assignment = reshape(copy(b.processors), 1, 1, b.gpus)
+    block = cld(p.nz, b.gpus * b.blocks_per_gpu)
+    nchunks = cld(p.nz, block)
+    blocks = Dagger.Blocks(p.nx, p.ny, block)
+    assignment = reshape(
+        [dagger_owner(b.processors, i, nchunks) for i in 1:nchunks], 1, 1, nchunks
+    )
     host_initial = Array{ComplexF64}(undef, shape)
     host_twiddle = Array{Float64}(undef, shape)
     scratch = Vector{UInt64}(undef, min(2length(host_initial), 1 << 20))
@@ -151,7 +158,7 @@ function model_check_correctness(b::DaggerNASFT, config)
     got = ComplexF64[
         sum(only(fetch(task)) for task in tasks) for tasks in results
     ]
-    return nas_ft_verified(b.class, got) ? "pass" : "fail"
+    return nas_ft_status(b.class, got)
 end
 
 function model_correctness_context(b::DaggerNASFT, config)

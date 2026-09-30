@@ -11,13 +11,12 @@ include("../src/result_rows.jl")
 include("../src/model_worker.jl")
 include("timing.jl")
 include("nas.jl")
-include("jacc_nas_launch.jl")
 
-const CONFIG = joinpath(@__DIR__, "..", "benchmarks.toml")
-const SMOKE_CONFIG = joinpath(@__DIR__, "..", "benchmarks_smoke.toml")
-const GRAYSCOTT_MULTIGPU_CONFIG = joinpath(@__DIR__, "..", "benchmarks_grayscott_multigpu.toml")
-const FORMS_CONFIG = joinpath(@__DIR__, "..", "benchmarks_grayscott_forms.toml")
-const MONTECARLO_CONFIG = joinpath(@__DIR__, "..", "benchmarks_montecarlo.toml")
+const CONFIG = joinpath(@__DIR__, "..", "configs", "multi_gpu", "all.toml")
+const SMOKE_CONFIG = joinpath(@__DIR__, "..", "configs", "single_gpu", "smoke.toml")
+const GRAYSCOTT_MULTIGPU_CONFIG = joinpath(@__DIR__, "..", "configs", "multi_gpu", "grayscott.toml")
+const FORMS_CONFIG = joinpath(@__DIR__, "..", "configs", "multi_gpu", "grayscott_forms.toml")
+const MONTECARLO_CONFIG = joinpath(@__DIR__, "..", "configs", "multi_gpu", "montecarlo_forms.toml")
 const RAW = TOML.parsefile(CONFIG)
 const GROUPS = parse_plot_groups(CONFIG)
 const FORMS_GROUPS = parse_plot_groups(FORMS_CONFIG)
@@ -143,7 +142,7 @@ end
     @test supports_benchmark(execution_model(:jacc), "gemm")
     @test supports_benchmark(execution_model(:dagger), "gemm")
     @test !supports_gpu_count(execution_model(:cudajl), 2)
-    @test !supports_run(execution_model(:jacc), "grayscott", 2)
+    @test supports_run(execution_model(:jacc), "grayscott", 2)
     @test supports_run(execution_model(:dagger), "grayscott", 2)
 
     gs_gray, specs_gray = parse_config(GRAYSCOTT_MULTIGPU_CONFIG)
@@ -458,3 +457,4 @@ end
 end
 
 include("cg.jl")
+include("jacc_multi.jl")

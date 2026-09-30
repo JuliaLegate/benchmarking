@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-# Generate weak-scaling plots from benchmark CSVs.
+# Generate weak- or strong-scaling plots from benchmark CSVs.
 # Each figure is one `[plot.groups]` entry (or a singleton [[benchmark]]).
 
 using Plots
@@ -27,7 +27,7 @@ function parse_args(args)
     results_dir = "results"
     out_dir = nothing
     output_suffix = ""
-    config = joinpath(@__DIR__, "benchmarks.toml")
+    config = joinpath(@__DIR__, "configs", "multi_gpu", "all.toml")
 
     for arg in args
         if startswith(arg, "--out=")
@@ -93,6 +93,9 @@ const GROUP_TITLES = Dict(
     "montecarlo" => "Monte Carlo",
     "tensor_projection3" => "Tensor projection (3-mode)",
     "tensor_contract4" => "Tensor contraction (rank-4)",
+    "nas_ep" => "NAS EP",
+    "nas_ft" => "NAS FT",
+    "nas_mg" => "NAS MG",
 )
 
 include(joinpath(@__DIR__, "src", "result_rows.jl"))
@@ -169,24 +172,18 @@ function group_series(results_dir, group, members)
     return filter(!isnothing, series)
 end
 
-# Separate EP's high-level API paths from explicitly written stream kernels.
-# Both groups perform the same workload under the same timing contract.
-function ep_series(results_dir, category)
-    entries = if category == :high_level
-        (("cunumeric_struct", "cuNumeric.jl (struct broadcast)",
-          COLOR_CUNUMERIC, MARKER_CUNUMERIC),
-         ("dagger", "Dagger.jl (broadcast)", COLOR_DAGGER, MARKER_DAGGER),
-         ("cupynumeric", "cuPyNumeric (array skip-ahead)", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC),
-         ("CUDA.jl_broadcast", "CUDA.jl (broadcast)", COLOR_CUDA, MARKER_CUDA),
-         ("jacc_broadcast", "JACC.jl (array broadcast)", COLOR_JACC, MARKER_JACC),
-         ("cupynumeric_recurrence", "cuPyNumeric (array recurrence)", COLOR_CUPYNUMERIC, :diamond))
-    else
-        (("CUDA.jl", "CUDA.jl (kernel)", COLOR_CUDA, MARKER_CUDA),
-         ("jacc", "JACC.jl (kernel)", COLOR_JACC, MARKER_JACC))
-    end
+# cuNumeric saves EP as `cunumeric_struct`; otherwise the usual model series.
+function ep_series(results_dir)
+    entries = (
+        ("cunumeric_struct", "cuNumeric.jl", COLOR_CUNUMERIC, MARKER_CUNUMERIC, :solid),
+        ("dagger", "Dagger.jl", COLOR_DAGGER, MARKER_DAGGER, :solid),
+        ("cupynumeric", "cuPyNumeric", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC, :solid),
+        ("CUDA.jl", "CUDA.jl", COLOR_CUDA, MARKER_CUDA, :solid),
+        ("jacc", "JACC.jl", COLOR_JACC, MARKER_JACC, :solid),
+    )
     series = []
-    for (key, label, color, marker) in entries
-        s = load_csv_series(results_dir, "nas_ep", key, label, color, marker, :solid)
+    for (key, label, color, marker, ls) in entries
+        s = load_csv_series(results_dir, "nas_ep", key, label, color, marker, ls)
         s === nothing || push!(series, s)
     end
     return series
@@ -248,7 +245,15 @@ function positive_ylim(hi; pad=0.18)
     return (0, hi * (1 + pad))
 end
 
+# Strong = one size at every GPU count. Efficiency is throughput-based either way.
+function scaling_kind(series)
+    sweep = any(length(s.agg) > 1 for s in series)
+    fixed = all(length(unique((x.N, x.M) for x in s.agg)) == 1 for s in series)
+    return sweep && fixed ? "strong" : "weak"
+end
+
 function weak_scaling_figure(series; plot_title, log_values=false)
+    kind = scaling_kind(series)
     common = (
         xscale=:log2, xticks=([1, 2, 4, 8], ["1", "2", "4", "8"]), xlabel="GPUs",
         framestyle=:box, grid=false, gridalpha=0, gridlinewidth=0, minorgrid=false,
@@ -294,7 +299,7 @@ function weak_scaling_figure(series; plot_title, log_values=false)
         base = s.agg[i1].h
         append!(efficiencies, [x.h / (x.gpus * base) for x in s.agg])
     end
-    p3 = plot(; ylabel="Parallel efficiency", title="Weak-scaling efficiency",
+    p3 = plot(; ylabel="Parallel efficiency", title="$(titlecase(kind))-scaling efficiency",
         ylims=positive_ylim(
             max(1.0, isempty(efficiencies) ? 0.0 : maximum(efficiencies)); pad=0.12
         ),
@@ -333,29 +338,27 @@ function main(args=ARGS)
     mkpath(cfg.out_dir)
     for (group, members) in parse_plot_groups(cfg.config)
         if group == "nas_ep" && members == ["nas_ep"]
-            for (category, title) in ((:high_level, "High-level APIs"),
-                                      (:explicit_kernels, "Explicit stream kernels"))
-                series = ep_series(cfg.results_dir, category)
-                isempty(series) && continue
-                validate_series_sizes(series)
-                fig = weak_scaling_figure(
-                    series; plot_title="NAS EP — $title — weak scaling",
-                    log_values=category == :high_level
-                )
-                out = joinpath(cfg.out_dir,
-                    "nas_ep_$(category)_weak_scaling$(cfg.output_suffix).png")
-                savefig(fig, out)
-                println("wrote $out")
-            end
+            series = ep_series(cfg.results_dir)
+            isempty(series) && continue
+            validate_series_sizes(series)
+            kind = scaling_kind(series)
+            # Implementations span orders of magnitude; log axes keep all visible.
+            fig = weak_scaling_figure(
+                series; plot_title="NAS EP — $kind scaling", log_values=true
+            )
+            out = joinpath(cfg.out_dir, "nas_ep_$(kind)_scaling$(cfg.output_suffix).png")
+            savefig(fig, out)
+            println("wrote $out")
             continue
         end
         series = group_series(cfg.results_dir, group, members)
         isempty(series) && continue
         validate_series_sizes(series)
+        kind = scaling_kind(series)
         fig = weak_scaling_figure(
-            series; plot_title=group_title(group) * " — weak scaling"
+            series; plot_title=group_title(group) * " — $kind scaling"
         )
-        out = joinpath(cfg.out_dir, "$(group)_weak_scaling$(cfg.output_suffix).png")
+        out = joinpath(cfg.out_dir, "$(group)_$(kind)_scaling$(cfg.output_suffix).png")
         savefig(fig, out)
         println("wrote $out")
     end

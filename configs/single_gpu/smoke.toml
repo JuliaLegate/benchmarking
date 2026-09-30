@@ -1,5 +1,5 @@
 # Minimal end-to-end launcher check:
-# julia --project=. run.jl --config=benchmarks_smoke.toml
+# julia --project=. run.jl --config=configs/single_gpu/smoke.toml
 # Select another model with --models=cunumeric, --models=jacc, etc.
 [Global]
 models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]

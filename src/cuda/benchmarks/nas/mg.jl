@@ -27,9 +27,9 @@ end
 
 function initialize(b::NASMultiGrid{Float64}; mod=CUDA)
     p = validate_nas_mg(b)
-    sizes = nas_mg_level_sizes(p)
-    u = [CUDA.zeros(Float64, n, n, n) for n in sizes]
-    r = [CUDA.zeros(Float64, n, n, n) for n in sizes]
+    shapes = nas_mg_level_shapes(p)
+    u = [CUDA.zeros(Float64, shape) for shape in shapes]
+    r = [CUDA.zeros(Float64, shape) for shape in shapes]
     rhs = CUDA.CuArray(nas_mg_rhs(p))
     weights = cuda_nas_mg_impl(b) == "separable" ?
         reshape(CUDA.CuArray([0.0, 0.5]), 2, 1, 1, 1) : nothing
@@ -63,8 +63,7 @@ function cuda_mg_restrict!(coarse, fine)
     reduced = cuda_mg_restrict_axis(fine, 1)
     reduced = cuda_mg_restrict_axis(reduced, 2)
     reduced = cuda_mg_restrict_axis(reduced, 3)
-    n = size(coarse, 1)
-    @views coarse[2:(n - 1), 2:(n - 1), 2:(n - 1)] .= reduced ./ 16.0
+    @views coarse[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= reduced ./ 16.0
     return nas_mg_comm3!(coarse)
 end
 
@@ -109,8 +108,7 @@ function cuda_mg_separable_cycle!(s, c)
 end
 
 function cuda_nas_mg_norm2(residual)
-    n = size(residual, 1)
-    interior = @view residual[2:(n - 1), 2:(n - 1), 2:(n - 1)]
+    interior = @view residual[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     return sum(abs2, interior; dims=(1, 2, 3))
 end
 
@@ -132,6 +130,6 @@ end
 function check_benchmark_correctness(b::NASMultiGrid, gs::GlobalSettings; mod=CUDA)
     state = only(initialize(b; mod))
     squared = run!(b, state)
-    norm = sqrt(only(Array(squared)) / Float64(b.N)^3)
-    return nas_mg_verified(b.class, norm) ? "pass" : "fail"
+    points = prod(nas_mg_dims(nas_mg_parameters(b.class)))
+    return nas_mg_status(b.class, sqrt(only(Array(squared)) / points))
 end

@@ -46,6 +46,10 @@ cleanup_result!(::AbstractBenchmark, result, state...) = nothing
 # `estimate_scaling` without loading Legion; those files skip `@accelerate`
 # and `::NDArray` methods in that case.
 const CUNUMERIC_BENCH_RUNTIME = isdefined(@__MODULE__, :cuNumeric)
+# Older cuNumeric releases (e.g. 0.2) predate `@accelerate`; their workers skip
+# the accelerated definitions so the remaining benchmarks still run.
+const CUNUMERIC_BENCH_ACCELERATE =
+    CUNUMERIC_BENCH_RUNTIME && isdefined(cuNumeric, Symbol("@accelerate"))
 
 # Interface each benchmark implements (see benchmarks/gemm.jl for a template).
 function name end
@@ -103,7 +107,7 @@ function _define_accelerated_definition(signature, body, form=:function)
     return Expr(:function, signature, Expr(:block, Base.macroexpand(@__MODULE__, call)))
 end
 
-# Maps a benchmarks.toml table name to its benchmark type. Each benchmark file
+# Maps a config table name to its benchmark type. Each benchmark file
 # registers itself via `register_benchmark`.
 const BENCHMARKS = Dict{String,Type}()
 function register_benchmark(key::AbstractString, ::Type{B}) where {B<:AbstractBenchmark}
@@ -116,6 +120,9 @@ benchmark_backend_save_as(::AbstractBenchmark, backend::String, default::String)
 function build_benchmark(::Type{B}, ::Type{T}, N, M; kwargs...) where {B<:AbstractBenchmark,T}
     return B{T}(; kwargs..., N=N, M=M)
 end
+
+# (N, M) implied by kwargs (e.g. a NAS class), or nothing.
+class_dims(::Type{<:AbstractBenchmark}, kwargs) = nothing
 
 # Optional hooks for the generic correctness check (initialize + run!).
 correctness_problem(b::AbstractBenchmark) = b
@@ -142,8 +149,10 @@ end
 is_cuda_backend(mod) = nameof(mod) === :CUDA || nameof(mod) === :CUDACore
 
 function correctness_applies(gs::GlobalSettings, mod, benchmark)
+    # A CPU or published (e.g. NAS) reference does not depend on the GPU count.
+    correctness_uses_cpu(benchmark) && return true
     gs.n_gpu == 1 || return false
-    return !is_cuda_backend(mod) || correctness_uses_cpu(benchmark)
+    return !is_cuda_backend(mod)
 end
 
 function correctness_reference_label(mod, benchmark)
@@ -209,6 +218,11 @@ if CUNUMERIC_BENCH_RUNTIME
     end
 end
 
+# Newer cuNumeric returns reductions as CNScalars, which unwrap to host values
+# only inside allowautofetch. Older releases (e.g. 0.2) and other backends lack it.
+const _AUTOFETCH = CUNUMERIC_BENCH_RUNTIME && isdefined(cuNumeric, :allowautofetch)
+_with_autofetch(f) = _AUTOFETCH ? cuNumeric.allowautofetch(f) : f()
+
 _all_approx(a, b, ::Type{T}; kwargs...) where {T} = isapprox_ref(a, b, T; kwargs...)
 function _all_approx(a::Tuple, b::Tuple, ::Type{T}; kwargs...) where {T}
     length(a) == length(b) || return false
@@ -235,7 +249,7 @@ function check_benchmark_correctness(
     got = run_on(mod, check_problem)
     reference_kernel = reference === Base ? check_problem : cuda_runnable(check_problem)
     expected = run_on(reference, reference_kernel)
-    return _all_approx(got, expected, T; atol, rtol) ? "pass" : "fail"
+    return _with_autofetch(() -> _all_approx(got, expected, T; atol, rtol)) ? "pass" : "fail"
 end
 
 # One timed trial: warmup, then time `n_iter` iterations of `run!`.

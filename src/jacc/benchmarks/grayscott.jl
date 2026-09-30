@@ -1,3 +1,6 @@
+# One GPU uses the 2D launch below; more GPUs use JACC.Multi column slabs.
+include(joinpath(@__DIR__, "grayscott_multi.jl"))
+
 struct JACCGrayScott{T}
     N::Int
     M::Int
@@ -23,8 +26,8 @@ mutable struct JACCGrayScottState{A}
 end
 
 function model_build_grayscott(config::ModelWorkerConfig)
-    config.gpus == 1 || error(
-        "JACC grayscott is single-GPU; multi-GPU is deferred pending JACC's 2D ghost fix"
+    config.gpus == 1 || JACC.Multi.ndev() == config.gpus || error(
+        "JACC sees $(JACC.Multi.ndev()) GPU(s), but this run requested $(config.gpus)"
     )
     return jacc_grayscott(config.T, config.N, config.M, config.gpus)
 end
@@ -57,6 +60,7 @@ end
 function model_initialize(b::JACCGrayScott{T}) where {T}
     JACC.Multi.ndev() >= 1 || error("JACC grayscott needs a visible GPU")
     u_host, v_host = grayscott_host_init(T, b.N, b.M)
+    b.gpus > 1 && return jacc_multi_grayscott_state(JACCMultiOps(), u_host, v_host)
     return jacc_grayscott_state(T, u_host, v_host)
 end
 
@@ -70,7 +74,10 @@ function model_run!(b::JACCGrayScott, s::JACCGrayScottState)
     return s
 end
 
-model_synchronize(::JACCGrayScott) = JACC.synchronize()
+model_run!(b::JACCGrayScott, s::GSMultiState) = gsm_step!(JACCMultiOps(), s, b)
+
+# JACC.Multi launches and copies synchronize every device before returning.
+model_synchronize(b::JACCGrayScott) = b.gpus > 1 ? nothing : JACC.synchronize()
 # Timesteps form one trajectory; do not fence between iterations.
 model_fence_each_iteration(::JACCGrayScott) = false
 
@@ -83,13 +90,18 @@ function model_check_correctness(b::JACCGrayScott{T}, config) where {T}
     n = min(32, b.N, b.M)
     steps = config.n_correctness_iter
     u0, v0 = grayscott_host_init(T, n, n; deterministic=true)
-    check = jacc_grayscott(T, n, n, 1)
-    s = jacc_grayscott_state(T, copy(u0), copy(v0))
-    for _ in 1:steps
-        model_run!(check, s)
+    check = jacc_grayscott(T, n, n, b.gpus)
+    if b.gpus > 1
+        ops = JACCMultiOps()
+        s = jacc_multi_grayscott_state(ops, copy(u0), copy(v0))
+        foreach(_ -> model_run!(check, s), 1:steps)
+        gu, gv = gsm_to_host(ops, s.u, s.L), gsm_to_host(ops, s.v, s.L)
+    else
+        s = jacc_grayscott_state(T, copy(u0), copy(v0))
+        foreach(_ -> model_run!(check, s), 1:steps)
+        model_synchronize(check)
+        gu, gv = JACC.to_host(s.u), JACC.to_host(s.v)
     end
-    model_synchronize(check)
-    gu, gv = JACC.to_host(s.u), JACC.to_host(s.v)
     cu, cv = grayscott_cpu_steps(T, u0, v0, steps, grayscott_gs_params(T))
     return grayscott_correctness_status(gu, gv, cu, cv, T)
 end

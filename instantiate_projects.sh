@@ -10,16 +10,31 @@ if [[ ! -f "$source_dir/Project.toml" || ! -f "$source_dir/lib/CNPreferences/Pro
     exit 1
 fi
 source_dir="$(cd -- "$source_dir" && pwd)"
+export CUNUMERIC_SOURCE="$source_dir"
 
 cd "$benchmark_dir"
+
+echo "Checking Julia package registry"
+"$julia_bin" --startup-file=no -e 'using Pkg; isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General")'
 
 echo "Instantiating the benchmark orchestrator"
 "$julia_bin" --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
 
 for environment in cuda jacc dagger; do
     echo "Instantiating environments/$environment"
-    "$julia_bin" --project="environments/$environment" \
-        -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
+    "$julia_bin" --project="environments/$environment" -e '
+        using Pkg
+        Pkg.resolve()
+        # Existing manifests may still track the old Dagger development branch.
+        for (uuid, info) in Pkg.dependencies()
+            if info.name == "Dagger" && info.is_direct_dep
+                # Pkg.free first unpins a pinned repo; a second call releases it.
+                info.is_pinned && Pkg.free(PackageSpec(uuid=uuid))
+                !info.is_tracking_registry && Pkg.free(PackageSpec(uuid=uuid))
+            end
+        end
+        Pkg.instantiate()
+    '
 done
 
 echo "Setting JACC backend to cuda"
@@ -28,5 +43,10 @@ echo "Setting JACC backend to cuda"
 
 echo "Developing local packages and instantiating environments/cunumeric"
 "$julia_bin" --project="environments/cunumeric" \
+    -e 'using Pkg; Pkg.develop([PackageSpec(path=ARGS[1]), PackageSpec(path=ARGS[2])]); Pkg.instantiate()' \
+    "$source_dir" "$source_dir/lib/CNPreferences"
+
+echo "Developing local packages and instantiating environments/composability"
+"$julia_bin" --project="environments/composability" \
     -e 'using Pkg; Pkg.develop([PackageSpec(path=ARGS[1]), PackageSpec(path=ARGS[2])]); Pkg.instantiate()' \
     "$source_dir" "$source_dir/lib/CNPreferences"

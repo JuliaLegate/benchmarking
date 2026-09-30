@@ -1,6 +1,7 @@
 struct DaggerMonteCarlo{T,S,P}
     n_samples::Int
     gpus::Int
+    blocks_per_gpu::Int
     scope::S
     processors::P
 end
@@ -24,23 +25,27 @@ function model_build_montecarlo(config::ModelWorkerConfig)
         "expected $(config.gpus)",
     )
     return DaggerMonteCarlo{config.T,typeof(scope),typeof(processors)}(
-        config.N, config.gpus, scope, processors
+        config.N, config.gpus, dagger_blocks_per_gpu(config), scope, processors
     )
+end
+
+dagger_montecarlo_block(b::DaggerMonteCarlo, n) = cld(n, b.gpus * b.blocks_per_gpu)
+
+function dagger_montecarlo_assignment(b::DaggerMonteCarlo, n)
+    nchunks = cld(n, dagger_montecarlo_block(b, n))
+    return [dagger_owner(b.processors, i, nchunks) for i in 1:nchunks]
 end
 
 function dagger_montecarlo_state(samples, expected_gpus)
     chunks = map(samples.chunks) do task
         return fetch(task; raw=true)
     end
-    length(chunks) == expected_gpus || error(
-        "Dagger created $(length(chunks)) Monte Carlo chunk(s), expected $expected_gpus"
-    )
     all(chunk -> Dagger.chunktype(chunk) <: CUDA.CuArray, chunks) || error(
         "Dagger Monte Carlo chunks must be resident CUDA arrays"
     )
     processors = Dagger.processor.(chunks)
     length(unique(processors)) == expected_gpus || error(
-        "Dagger did not place exactly one Monte Carlo chunk on each requested GPU"
+        "Dagger did not place Monte Carlo chunks on every requested GPU"
     )
     scopes = Dagger.ExactScope.(processors)
     return DaggerMonteCarloState(samples, chunks, scopes)
@@ -57,12 +62,12 @@ function dagger_montecarlo_chunk_sum(samples)
 end
 
 function model_initialize(benchmark::DaggerMonteCarlo{T}) where {T}
-    block = cld(benchmark.n_samples, benchmark.gpus)
+    n = benchmark.n_samples
     return Dagger.with_options(; scope=benchmark.scope) do
         samples =
             T(10) .* rand(
-                Dagger.Blocks(block), T, benchmark.n_samples;
-                assignment=benchmark.processors,
+                Dagger.Blocks(dagger_montecarlo_block(benchmark, n)), T, n;
+                assignment=dagger_montecarlo_assignment(benchmark, n),
             )
         wait_for_darray(samples)
         return dagger_montecarlo_state(samples, benchmark.gpus)
@@ -78,10 +83,11 @@ function model_run!(benchmark::DaggerMonteCarlo{T}, state::DaggerMonteCarloState
 end
 
 function dagger_montecarlo_correctness_state(benchmark::DaggerMonteCarlo, host_samples)
-    block = cld(length(host_samples), benchmark.gpus)
+    n = length(host_samples)
     return Dagger.with_options(; scope=benchmark.scope) do
         samples = Dagger.DArray(
-            host_samples, Dagger.Blocks(block), benchmark.processors
+            host_samples, Dagger.Blocks(dagger_montecarlo_block(benchmark, n)),
+            dagger_montecarlo_assignment(benchmark, n),
         )
         wait_for_darray(samples)
         return dagger_montecarlo_state(samples, benchmark.gpus)
@@ -100,7 +106,7 @@ function model_check_correctness(benchmark::DaggerMonteCarlo{T}, config) where {
     check_benchmark = DaggerMonteCarlo{
         T,typeof(benchmark.scope),typeof(benchmark.processors)
     }(
-        n, benchmark.gpus, benchmark.scope, benchmark.processors
+        n, benchmark.gpus, benchmark.blocks_per_gpu, benchmark.scope, benchmark.processors
     )
     actual = model_run!(check_benchmark, state)
     model_synchronize(check_benchmark)

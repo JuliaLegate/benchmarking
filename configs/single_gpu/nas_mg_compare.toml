@@ -1,6 +1,6 @@
 [Global]
 n_warmup = 1
-n_iter = 1
+n_iter = 10
 n_trial = 3
 check_correctness = true
 auto_size = false
@@ -10,16 +10,12 @@ models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 T = "Float64"
 gpus = 1
 cpus = 8
-N = 32
-M = 32
-kwargs = { class = "S" }
+kwargs = { class = "B" }
 
 # Same three-axis restriction/interpolation decomposition as cuNumeric.
 [[nas_mg]]
 T = "Float64"
 gpus = 1
 cpus = 8
-N = 32
-M = 32
 models = ["cudajl"]
-kwargs = { class = "S", implementation = "separable" }
+kwargs = { class = "B", implementation = "separable" }

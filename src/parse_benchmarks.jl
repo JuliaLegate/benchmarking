@@ -1,7 +1,7 @@
 using TOML
 
 """
-One benchmark invocation parsed from `benchmarks.toml`. `name` selects the
+One benchmark invocation parsed from a config under `configs/`. `name` selects the
 benchmark type from `BENCHMARKS`; `T` is the element type (e.g. "Float32");
 `args` are the sizes (`N M`) when pinned. When `autosize` is true, `args` is
 unused and `N_hint` / `M_hint` feed `fit_one_gpu`.
@@ -54,7 +54,7 @@ function sweep_length(name, fields)
     lengths = [length(field) for (_, field) in fields if length(field) > 1]
     isempty(lengths) && return 1
     allequal(lengths) || error(
-        "benchmark '$(name)': zipped fields gpus/cpus/N/M must share one length " *
+        "benchmark '$(name)': zipped fields gpus/cpus/N/M/class must share one length " *
         "or be scalar; got " * join(("$k=$(length(v))" for (k, v) in fields), ", "),
     )
     return first(lengths)
@@ -129,6 +129,25 @@ function parse_config(path; only=nothing, fusion_override=nothing, models_overri
             fusion = aslist(fusion_override === nothing ? get(e, "fusion", true) : fusion_override)
             nmode, nvals = size_field(get(e, "N", nothing))
             mmode, mvals = size_field(get(e, "M", nothing))
+            # Only `class` may be a list; it zips with gpus.
+            for (k, v) in kwargs
+                v isa AbstractVector && k != "class" &&
+                    error("$name.kwargs.$k cannot be a list; only class is swept")
+            end
+            classes = haskey(kwargs, "class") ? aslist(kwargs["class"]) : [nothing]
+            fixed = if haskey(BENCHMARKS, name)
+                [class_dims(BENCHMARKS[name],
+                    c === nothing ? kwargs : merge(kwargs, Dict("class" => c)))
+                 for c in classes]
+            else
+                [nothing]
+            end
+            if all(!isnothing, fixed)
+                nmode == :omitted && ((nmode, nvals) = (:pinned, [d[1] for d in fixed]))
+                mmode == :omitted && ((mmode, mvals) = (:pinned, [d[2] for d in fixed]))
+            elseif length(classes) > 1
+                error("$name.kwargs.class is a list, but $name has no class sizes")
+            end
             models = if models_override !== nothing
                 models_override
             elseif haskey(e, "models")
@@ -174,7 +193,8 @@ function parse_config(path; only=nothing, fusion_override=nothing, models_overri
                 mmode == :omitted && (mvals = [1])
                 N_hint = nothing
                 M_hint = nothing
-                n = sweep_length(name, ["gpus" => gpus, "cpus" => cpus, "N" => nvals, "M" => mvals])
+                n = sweep_length(name, ["gpus" => gpus, "cpus" => cpus, "N" => nvals,
+                    "M" => mvals, "class" => classes])
             end
 
             for T in types, fuse in fusion, i in 1:n
@@ -196,7 +216,8 @@ function parse_config(path; only=nothing, fusion_override=nothing, models_overri
                         N_hint,
                         M_hint,
                         mem_frac,
-                        Dict{Symbol,Any}(Symbol(k)=>v for (k,v) in kwargs),
+                        Dict{Symbol,Any}(Symbol(k) => k == "class" ? sweep_value(classes, i) : v
+                            for (k, v) in kwargs),
                     ),
                 )
             end

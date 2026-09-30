@@ -3,8 +3,8 @@
 LIMITATION: cuPyNumeric has no NPB 46-bit RNG primitive, so the exact initial
 field is generated with compiled NumPy operations and copied to Legate.
 Host generation and transfer are timed, unlike CUDA/JACC's device RNG.
-The FFT auto task broadcasts transformed axes: a full 3-D FFT cannot partition
-across GPUs, though other array operations may distribute. Native take gathers
+The FFT auto task broadcasts transformed axes, so the 3-D FFT runs as two slab
+passes (axes 1-2, then 0) that each partition along the untransformed axes. Native take gathers
 the prescribed 1024 checksum samples. ifftn normalizes the full array; FFT and
 evolution temporaries are allocated inside timing. Official verification is kept.
 """
@@ -24,6 +24,9 @@ CLASSES = {
     "A": (256, 256, 128, 6), "B": (512, 256, 256, 20),
     "C": (512, 512, 512, 20), "D": (2048, 1024, 1024, 25),
     "E": (4096, 2048, 2048, 25),
+    # Weak scaling at class A's grid points per GPU and 6 iterations, named
+    # <class grid below>.<gpus>: A.2 on 2 GPUs, B.4 (B's grid) on 4, B.8 on 8.
+    "A.2": (256, 256, 256, 6), "B.4": (512, 256, 256, 6), "B.8": (512, 512, 256, 6),
 }
 CHECKSUMS = {
     "S": [
@@ -96,6 +99,8 @@ CHECKSUMS = {
         511.9876028049+512.0550079284j,
     ],
 }
+# B.4 is class B's grid for 6 iterations; checksums are per iteration.
+CHECKSUMS["B.4"] = CHECKSUMS["B"][:6]
 
 def initial_conditions(out, scratch):
     flat = out.reshape(-1)
@@ -151,16 +156,19 @@ class NASFourierTransform:
         u0 = np.asarray(state["host_initial"])
         twiddle = np.exp((-4.0*ALPHA*math.pi**2) *
             (state["ix2"]+state["iy2"]+state["iz2"]))
-        u0, checksums = np.fft.fftn(u0), []
+        u0, checksums = np.fft.fft(np.fft.fftn(u0, axes=(1, 2)), axis=0), []
         for _ in range(niter):
             u0 *= twiddle
+            u1 = np.fft.ifft(np.fft.ifftn(u0, axes=(1, 2)), axis=0)
             # All indices are valid; clip avoids a host-side bounds check.
-            samples = np.take(np.fft.ifftn(u0), state["indices"], mode="clip")
+            samples = np.take(u1, state["indices"], mode="clip")
             checksums.append(np.sum(samples))
         return checksums
     def correctness_dims(self):
         return self.N, self.M
     def check_correctness(self):
+        if self.class_name not in CHECKSUMS:  # weak-scaling size without a NAS reference
+            return "skipped"
         got = [complex(host_np.asarray(x)) for x in self.run(self.initialize())]
         ok = all(abs((x-r)/r) <= 1.0e-12 for x, r in zip(got, CHECKSUMS[self.class_name]))
         return "pass" if ok else "fail"

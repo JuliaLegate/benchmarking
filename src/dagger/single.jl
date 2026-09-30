@@ -46,4 +46,5 @@ function model_build_benchmark(config::ModelWorkerConfig)
     end
 end
 
-run_model_worker(:dagger, "Dagger.jl")
+# tune.jl includes this file for the benchmark definitions only.
+abspath(PROGRAM_FILE) == (@__FILE__) && run_model_worker(:dagger, "Dagger.jl")

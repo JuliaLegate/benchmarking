@@ -61,9 +61,13 @@ SPEC="cupynumeric=$VER.*"
 # numpy 2.3 dropped the private numpy.linalg.linalg path that cupynumeric 25.10 imports.
 NUMPY_SPEC="numpy<2.3"
 
+# cuFile (loaded by Legate) dlopens libnuma.so.1.0.0 and warns on every run when
+# the host lacks it, as in slim containers. Ship it in the env.
+NUMA_SPEC="libnuma"
+
 if [[ -n "$INTO_ENV" ]]; then
     echo "Installing $SPEC into existing env '$INTO_ENV'..."
-    "$CONDA" install -y -n "$INTO_ENV" -c conda-forge -c legate "$SPEC" "$NUMPY_SPEC"
+    "$CONDA" install -y -n "$INTO_ENV" -c conda-forge -c legate "$SPEC" "$NUMPY_SPEC" "$NUMA_SPEC"
     echo "Done. Activate with: conda activate $INTO_ENV"
     exit 0
 fi
@@ -77,6 +81,6 @@ if "$CONDA" env list | awk '{print $1}' | grep -qx "$ENV_NAME"; then
 fi
 
 echo "Creating env '$ENV_NAME' with $SPEC..."
-"$CONDA" create -y -n "$ENV_NAME" -c conda-forge -c legate "$SPEC" "$NUMPY_SPEC"
+"$CONDA" create -y -n "$ENV_NAME" -c conda-forge -c legate "$SPEC" "$NUMPY_SPEC" "$NUMA_SPEC"
 
 echo "Done. Activate with: conda activate $ENV_NAME"

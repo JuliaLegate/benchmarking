@@ -4,7 +4,6 @@ Base.@kwdef struct NASEmbarrassinglyParallel{T} <: AbstractBenchmark{T}
     N::Int
     M::Int
     class::String = "S"
-    implementation::String = "default"
 end
 
 name(::NASEmbarrassinglyParallel) = "nas_ep"
@@ -42,4 +41,7 @@ function total_space(b::NASEmbarrassinglyParallel)
 end
 
 estimate_scaling(b::NASEmbarrassinglyParallel, ::Integer) = dims(b)
+function class_dims(::Type{<:NASEmbarrassinglyParallel}, kwargs)
+    return (nas_ep_random_numbers(nas_ep_parameters(get(kwargs, "class", "S"))), 1)
+end
 register_benchmark("nas_ep", NASEmbarrassinglyParallel)
