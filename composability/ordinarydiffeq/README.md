@@ -146,6 +146,13 @@ to override it. A process that ignores termination is forcibly killed after
 another 30 seconds, and the sweep continues. There is no cuNumeric-specific
 extension in this experiment.
 
+Failed cases print their backend, size, GPU count, exit status (or timeout),
+and the last 20 log lines directly in the terminal. Missing result logs mark
+only that case as failed. Missing memory samples leave the peak field empty;
+successful timing rows are retained and later cases still run. Either condition
+produces a nonzero final exit status. Full logs remain in the result directory
+when available.
+
 ## Changing the time integrator
 
 [`integrator_smoke.jl`](integrator_smoke.jl) runs the same cuNumeric heat problem

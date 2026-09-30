@@ -100,22 +100,45 @@ for value in "$@"; do
         nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
         monitor_pid=$!
         result_line=""
+        case_error=""
         # One total budget for startup, warmups, all samples, cleanup, and validation.
         if CUDA_VISIBLE_DEVICES="$gpu_mask" timeout --signal=TERM --kill-after=30s "${ODE_TIMEOUT:-8m}" \
             "$julia_bin" --startup-file=no --project="$ODE_PROJECT" \
             "$script_dir/benchmark_heat.jl" "$backend" "$n" > "$log" 2>&1; then
-            line=$(grep '^RESULT,' "$log" | tail -n 1 || true)
-            if [[ -n $line ]]; then
-                result_line="$experiment,${base_n:-},${line#RESULT,}"
+            if [[ -f $log ]]; then
+                line=$(grep '^RESULT,' "$log" | tail -n 1 || true)
+                if [[ -n $line ]]; then
+                    result_line="$experiment,${base_n:-},${line#RESULT,}"
+                else
+                    case_error="No RESULT row in $log"
+                fi
             else
-                echo "No RESULT row in $log" >&2; status=1; size_failed=1
+                case_error="Result log missing: $log"
             fi
         else
-            echo "$backend G=$gpus N=$n failed; see $log" >&2; status=1; size_failed=1
+            case_exit=$?
+            case_error="exit status $case_exit"
+            if [[ $case_exit == 124 ]]; then
+                case_error="timed out after ${ODE_TIMEOUT:-8m} total (exit status 124)"
+            fi
         fi
         kill "$monitor_pid" 2>/dev/null || true
         wait "$monitor_pid" 2>/dev/null || true
-        peak=$(awk '$1 ~ /^[0-9]+$/ && $1 > peak { peak=$1 } END { print peak+0 }' "$memory_log")
+        if [[ -n $case_error ]]; then
+            echo "$backend G=$gpus N=$n failed: $case_error; continuing the sweep" >&2
+            status=1; size_failed=1
+            if [[ -s $log ]]; then
+                echo "Last 20 lines of $log:" >&2
+                tail -n 20 "$log" >&2 || true
+            fi
+        fi
+        # Telemetry must not discard a successful solve or abort later cases.
+        # Leave the peak empty when unavailable rather than reporting zero usage.
+        if ! peak=$(awk '$1 ~ /^[0-9]+$/ { seen=1; if ($1 > peak) peak=$1 } END { if (seen) print peak+0 }' "$memory_log" 2>/dev/null) || [[ -z $peak ]]; then
+            peak=""
+            echo "Memory log unavailable for $backend G=$gpus N=$n: $memory_log; keeping timing results and continuing" >&2
+            status=1
+        fi
         printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$peak" >> "$output/memory.csv"
         if [[ -n $result_line ]]; then
             printf '%s\n' "$result_line" >> "$csv"
