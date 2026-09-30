@@ -109,7 +109,7 @@ not FLOP/s.
 The reaction terms and five-point Laplacian match the existing
 [`src/benchmarks/grayscott.jl`](../../src/benchmarks/grayscott.jl), but the original
 script has different initial conditions (zeros with a random patch on each
-rank), a Float64 `dt`, and nonperiodic outer boundaries. The cuNumeric/CUDA
+rank) and nonperiodic outer boundaries. The cuNumeric/CUDA
 Float32 benchmark starts `u` at one, uses a global `min(150,N)` seed patch and
 Float32 `dt`, and copies periodic borders from the previous step. Those
 differences are preserved here, so the full trajectories are not identical.

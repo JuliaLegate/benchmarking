@@ -20,7 +20,7 @@ using Statistics
     # Numerics
     dx = 1
     dy = dx
-    dt = dx / 5
+    dt = Float32(dx / 5)
 
     u     = CUDA.zeros(Float32, nx, ny)
     v     = CUDA.zeros(Float32, nx, ny)
