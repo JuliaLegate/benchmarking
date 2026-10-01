@@ -1,0 +1,272 @@
+/*
+ * ------------------------------------------------------------------------------
+ *
+ * MIT License
+ *
+ * Copyright (c) 2021 Parallel Applications Modelling Group - GMAP
+ *      GMAP website: https://gmap.pucrs.br
+ *
+ * Pontifical Catholic University of Rio Grande do Sul (PUCRS)
+ * Av. Ipiranga, 6681, Porto Alegre - Brazil, 90619-900
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * ------------------------------------------------------------------------------
+ *
+ * The original NPB 3.4 version was written in Fortran and belongs to:
+ *      http://www.nas.nasa.gov/Software/NPB/
+ *
+ * Authors of the Fortran code:
+ *      D. Bailey
+ *      W. Saphir
+ *
+ * ------------------------------------------------------------------------------
+ *
+ * The serial C++ version is a translation of the original NPB 3.4
+ * Serial C++ version: https://github.com/GMAP/NPB-CPP/tree/master/NPB-SER
+ *
+ * Authors of the C++ code:
+ *      Dalvan Griebler <dalvangriebler@gmail.com>
+ *      Gabriell Araujo <hexenoften@gmail.com>
+ *      JÃºnior LÃ¶ff <loffjh@gmail.com>
+ *
+ * ------------------------------------------------------------------------------
+ *
+ * The CUDA version is a parallel implementation of the serial C++ version
+ * CUDA version: https://github.com/GMAP/NPB-GPU/tree/master/CUDA
+ *
+ * Authors of the CUDA code:
+ *      Gabriell Araujo <hexenoften@gmail.com>
+ *
+ * ------------------------------------------------------------------------------
+ */
+
+// Adapted cuFFT variant of cuda.cu.ref; non-executable comparison reference.
+// Original source (the cuFFT substitution is local, not upstream):
+// https://github.com/GMAP/NPB-GPU/blob/3f12d84920ee315ab00ef283717c1e74b68f4d00/CUDA/FT/ft.cu
+// Scope and intentional omissions: ../../README.md (CUDA C++ references).
+// npbparams.hpp denotes externally supplied problem sizes; no class table is counted.
+#include <cuda_runtime.h>
+#include <cufft.h>
+#include <cmath>
+#include "npbparams.hpp"
+#include <omp.h>
+
+// Retain the arithmetic helpers, using cuFFT's native complex type throughout.
+typedef cufftDoubleComplex dcomplex;
+#define dcomplex_create(r,i) dcomplex{r, i}
+#define dcomplex_add(a,b) dcomplex{(a).x+(b).x, (a).y+(b).y}
+#define dcomplex_mul2(a,b) dcomplex{(a).x*(b), (a).y*(b)}
+
+#define	PI (3.141592653589793238)
+#define	ALPHA (1.0e-6)
+#define AP (-4.0*ALPHA*PI*PI)
+#define OMP_THREADS (2)
+#define TASK_INDEXMAP (0)
+#define TASK_INITIAL_CONDITIONS (1)
+#define CHECKSUM_TASKS (1024)
+
+static int niter;
+static cufftHandle fft_plan;
+/* gpu variables */
+double * starts_device, * twiddle_device;
+dcomplex *sums_device, *u0_device, *u1_device;
+size_t size_sums_device, size_starts_device, size_twiddle_device, size_u0_device, size_u1_device, size_shared_data;
+int blocks_per_grid_on_compute_indexmap, blocks_per_grid_on_compute_initial_conditions, blocks_per_grid_on_init_ui, blocks_per_grid_on_evolve, blocks_per_grid_on_checksum, threads_per_block_on_compute_indexmap, threads_per_block_on_compute_initial_conditions, threads_per_block_on_init_ui, threads_per_block_on_evolve, threads_per_block_on_checksum;
+extern __shared__ dcomplex extern_share_data[];
+
+int main(){
+	int iter=0;
+	niter = NITER_DEFAULT;
+	setup_gpu();
+	init_ui_gpu(u0_device, u1_device, twiddle_device);
+#pragma omp parallel
+	{
+		if(omp_get_thread_num()==TASK_INDEXMAP){
+			compute_indexmap_gpu(twiddle_device);
+		}else if(omp_get_thread_num()==TASK_INITIAL_CONDITIONS){
+			compute_initial_conditions_gpu(u1_device);
+		}
+	}cudaDeviceSynchronize();
+	// NAS +1 has a positive exponent: CUFFT_INVERSE, without normalization.
+	cufftExecZ2Z(fft_plan, u1_device, u0_device, CUFFT_INVERSE);
+	for(iter=1; iter<=niter; iter++){
+		evolve_gpu(u0_device, u1_device, twiddle_device);
+		// NAS -1 has a negative exponent; checksum_gpu supplies the 1/NTOTAL factor.
+		cufftExecZ2Z(fft_plan, u1_device, u1_device, CUFFT_FORWARD);
+		checksum_gpu(iter, u1_device);
+	}
+
+	// Checksums remain in sums_device; host printing/verification is excluded.
+	return 0;
+}
+
+static void checksum_gpu(int iteration,
+		dcomplex u1[]){
+	checksum_gpu_kernel<<<blocks_per_grid_on_checksum,
+		threads_per_block_on_checksum,
+		size_shared_data>>>(iteration,
+				u1,
+				sums_device);
+}
+
+__global__ void checksum_gpu_kernel(int iteration,
+		dcomplex u1[],
+		dcomplex sums[]){
+	dcomplex* share_sums = extern_share_data;
+	int j = (blockIdx.x * blockDim.x + threadIdx.x) + 1, q, r, s;
+
+	if(j<=CHECKSUM_TASKS){
+		q = j % NX;
+		r = 3*j % NY;
+		s = 5*j % NZ;
+		share_sums[threadIdx.x] = u1[ q + r*NX + s*NX*NY ];
+	}else{
+		share_sums[threadIdx.x] = dcomplex_create(0.0, 0.0);
+	}
+
+	__syncthreads();
+	for(int i=blockDim.x/2; i>0; i>>=1){
+		if(threadIdx.x<i){
+			share_sums[threadIdx.x] = dcomplex_add(share_sums[threadIdx.x], share_sums[threadIdx.x+i]);
+		}
+		__syncthreads();
+	}
+	if(threadIdx.x==0){
+		share_sums[0].x = share_sums[0].x/(double)(NTOTAL);
+		atomicAdd(&sums[iteration].x,share_sums[0].x);
+		share_sums[0].y = share_sums[0].y/(double)(NTOTAL);
+		atomicAdd(&sums[iteration].y,share_sums[0].y);
+	}
+}
+
+static void compute_indexmap_gpu(double twiddle[]){
+	compute_indexmap_gpu_kernel<<<blocks_per_grid_on_compute_indexmap,
+		threads_per_block_on_compute_indexmap>>>(twiddle);
+}
+
+__global__ void compute_indexmap_gpu_kernel(double twiddle[]){
+	int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(thread_id>=NTOTAL){
+		return;
+	}
+
+	int i = thread_id % NX, j = (thread_id / NX) % NY, k = thread_id / (NX * NY), kk, kk2, jj, kj2, ii;
+
+	kk = ((k+NZ/2) % NZ) - NZ/2;
+	kk2 = kk*kk;
+	jj = ((j+NY/2) % NY) - NY/2;
+	kj2 = jj*jj+kk2;
+	ii = ((i+NX/2) % NX) - NX/2;
+
+	twiddle[thread_id] = exp(AP*(double)(ii*ii+kj2));
+}
+
+static void compute_initial_conditions_gpu(dcomplex u0[]){
+	double starts[NZ];
+	// Plane-seed generation and the initial-field kernel body are excluded.
+	nas_ft_plane_starts(starts, NX, NY, NZ);
+
+	cudaMemcpy(starts_device, starts, size_starts_device, cudaMemcpyHostToDevice);
+
+	compute_initial_conditions_gpu_kernel<<<blocks_per_grid_on_compute_initial_conditions,
+		threads_per_block_on_compute_initial_conditions>>>(u0,
+				starts_device);
+}
+
+static void evolve_gpu(dcomplex u0[],
+		dcomplex u1[],
+		double twiddle[]){
+	evolve_gpu_kernel<<<blocks_per_grid_on_evolve,
+		threads_per_block_on_evolve>>>(u0,
+				u1,
+				twiddle);
+}
+
+__global__ void evolve_gpu_kernel(dcomplex u0[],
+		dcomplex u1[],
+		double twiddle[]){
+	int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(thread_id>=(NZ*NY*NX)){
+		return;
+	}
+
+	u0[thread_id] = dcomplex_mul2(u0[thread_id], twiddle[thread_id]);
+	u1[thread_id] = u0[thread_id];
+}
+
+static void init_ui_gpu(dcomplex u0[],
+		dcomplex u1[],
+		double twiddle[]){
+	init_ui_gpu_kernel<<<blocks_per_grid_on_init_ui,
+		threads_per_block_on_init_ui>>>(u0,
+				u1,
+				twiddle);
+	cudaDeviceSynchronize();
+}
+
+__global__ void init_ui_gpu_kernel(dcomplex u0[],
+		dcomplex u1[],
+		double twiddle[]){
+	int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(thread_id>=NTOTAL){
+		return;
+	}
+
+	u0[thread_id] = dcomplex_create(0.0, 0.0);
+	u1[thread_id] = dcomplex_create(0.0, 0.0);
+	twiddle[thread_id] = 0.0;
+}
+
+static void setup_gpu(){
+	// x + y*NX + z*NX*NY: cuFFT takes dimensions from slowest to fastest.
+	// One double-complex plan, with library-managed workspace, is reused in both directions.
+	cufftPlan3d(&fft_plan, NZ, NY, NX, CUFFT_Z2Z);
+	threads_per_block_on_compute_indexmap = 32;
+	threads_per_block_on_compute_initial_conditions = 32;
+	threads_per_block_on_init_ui = 32;
+	threads_per_block_on_evolve = 32;
+	threads_per_block_on_checksum = 32;
+	blocks_per_grid_on_compute_indexmap=ceil(double(NTOTAL)/double(threads_per_block_on_compute_indexmap));
+	blocks_per_grid_on_compute_initial_conditions=ceil(double(NZ)/double(threads_per_block_on_compute_initial_conditions));
+	blocks_per_grid_on_init_ui=ceil(double(NTOTAL)/double(threads_per_block_on_init_ui));
+	blocks_per_grid_on_evolve=ceil(double(NTOTAL)/double(threads_per_block_on_evolve));
+	blocks_per_grid_on_checksum=ceil(double(CHECKSUM_TASKS)/double(threads_per_block_on_checksum));
+
+	size_sums_device=(NITER_DEFAULT+1)*sizeof(dcomplex);
+	size_starts_device=NZ*sizeof(double);
+	size_twiddle_device=NTOTAL*sizeof(double);
+	size_u0_device=NTOTAL*sizeof(dcomplex);
+	size_u1_device=NTOTAL*sizeof(dcomplex);
+	size_shared_data=threads_per_block_on_checksum*sizeof(dcomplex);
+
+	cudaMalloc(&sums_device, size_sums_device);
+	cudaMalloc(&starts_device, size_starts_device);
+	cudaMalloc(&twiddle_device, size_twiddle_device);
+	cudaMalloc(&u0_device, size_u0_device);
+	cudaMalloc(&u1_device, size_u1_device);
+
+	// The checksum kernel uses atomic accumulation.
+	cudaMemset(sums_device, 0, size_sums_device);
+
+	omp_set_num_threads(OMP_THREADS);
+}

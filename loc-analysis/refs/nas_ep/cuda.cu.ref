@@ -1,0 +1,174 @@
+/*
+ * ------------------------------------------------------------------------------
+ *
+ * MIT License
+ *
+ * Copyright (c) 2021 Parallel Applications Modelling Group - GMAP
+ *      GMAP website: https://gmap.pucrs.br
+ *
+ * Pontifical Catholic University of Rio Grande do Sul (PUCRS)
+ * Av. Ipiranga, 6681, Porto Alegre - Brazil, 90619-900
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * ------------------------------------------------------------------------------
+ *
+ * The original NPB 3.4 version was written in Fortran and belongs to:
+ *      http://www.nas.nasa.gov/Software/NPB/
+ *
+ * Authors of the Fortran code:
+ *      P. O. Frederickson
+ *      D. H. Bailey
+ *      A. C. Woo
+ *
+ * ------------------------------------------------------------------------------
+ *
+ * The serial C++ version is a translation of the original NPB 3.4
+ * Serial C++ version: https://github.com/GMAP/NPB-CPP/tree/master/NPB-SER
+ *
+ * Authors of the C++ code:
+ *      Dalvan Griebler <dalvangriebler@gmail.com>
+ *      Gabriell Araujo <hexenoften@gmail.com>
+ *      JÃºnior LÃ¶ff <loffjh@gmail.com>
+ *
+ * ------------------------------------------------------------------------------
+ *
+ * The CUDA version is a parallel implementation of the serial C++ version
+ * CUDA version: https://github.com/GMAP/NPB-GPU/tree/master/CUDA
+ *
+ * Authors of the CUDA code:
+ *      Gabriell Araujo <hexenoften@gmail.com>
+ *
+ * ------------------------------------------------------------------------------
+ */
+
+// Curated, non-executable comparison reference. Source:
+// https://github.com/GMAP/NPB-GPU/blob/3f12d84920ee315ab00ef283717c1e74b68f4d00/CUDA/EP/ep.cu
+// Scope and intentional omissions: ../../README.md (CUDA C++ references).
+// npbparams.hpp denotes externally supplied problem sizes; no class table is counted.
+#include <cuda_runtime.h>
+#include <cmath>
+#include <cstdlib>
+#include "npbparams.hpp"
+
+#define	MK (16)
+#define	MM (M - MK)
+#define	NN (1 << MM)
+#define	NK (1 << MK)
+#define	NQ (10)
+#define	A (1220703125.0)
+#define RECOMPUTATION (128)
+
+double * q_device, * sx_device, * sy_device;
+int threads_per_block, blocks_per_grid;
+size_t size_q, size_sx, size_sy;
+
+int main(){
+	// RNG helper bodies are excluded, as in the Julia/Python references.
+	double an = nas_ep_batch_jump();
+	setup_gpu();
+	gpu_kernel<<<blocks_per_grid,
+		threads_per_block>>>(q_device,
+				sx_device,
+				sy_device,
+				an);
+	// Results remain in the per-block q/sx/sy device arrays.
+	return 0;
+}
+
+__global__ void gpu_kernel(double* q_global,
+		double* sx_global,
+		double* sy_global,
+		double an){
+	double x_local[2*RECOMPUTATION], q_local[NQ], sx_local, sy_local, t1, t2, t3, t4, x1, x2, seed;
+	int i, ii, kk, l;
+
+	q_local[0]=0.0;
+	q_local[1]=0.0;
+	q_local[2]=0.0;
+	q_local[3]=0.0;
+	q_local[4]=0.0;
+	q_local[5]=0.0;
+	q_local[6]=0.0;
+	q_local[7]=0.0;
+	q_local[8]=0.0;
+	q_local[9]=0.0;
+	sx_local=0.0;
+	sy_local=0.0;
+
+	kk=blockIdx.x*blockDim.x+threadIdx.x;
+
+	if(kk>=NN){return;}
+
+	seed=nas_ep_start_seed(kk, an);
+	for(ii=0; ii<NK; ii=ii+RECOMPUTATION){
+		/* compute uniform pseudorandom numbers */
+		vranlc_device(2*RECOMPUTATION, &seed, A, x_local);
+
+		/*
+		 * compute gaussian deviates by acceptance-rejection method and
+		 * tally counts in concentric square annuli. this loop is not
+		 * vectorizable.
+		 */
+		for(i=0; i<RECOMPUTATION; i++){
+			x1=2.0*x_local[2*i]-1.0;
+			x2=2.0*x_local[2*i+1]-1.0;
+			t1=x1*x1+x2*x2;
+			if(t1<=1.0){
+				t2=sqrt(-2.0*log(t1)/t1);
+				t3=(x1*t2);
+				t4=(x2*t2);
+				l=max(fabs(t3), fabs(t4));
+				q_local[l]+=1.0;
+				sx_local+=t3;
+				sy_local+=t4;
+			}
+		}
+	}
+
+	atomicAdd(q_global+blockIdx.x*NQ+0, q_local[0]);
+	atomicAdd(q_global+blockIdx.x*NQ+1, q_local[1]);
+	atomicAdd(q_global+blockIdx.x*NQ+2, q_local[2]);
+	atomicAdd(q_global+blockIdx.x*NQ+3, q_local[3]);
+	atomicAdd(q_global+blockIdx.x*NQ+4, q_local[4]);
+	atomicAdd(q_global+blockIdx.x*NQ+5, q_local[5]);
+	atomicAdd(q_global+blockIdx.x*NQ+6, q_local[6]);
+	atomicAdd(q_global+blockIdx.x*NQ+7, q_local[7]);
+	atomicAdd(q_global+blockIdx.x*NQ+8, q_local[8]);
+	atomicAdd(q_global+blockIdx.x*NQ+9, q_local[9]);
+	atomicAdd(sx_global+blockIdx.x, sx_local);
+	atomicAdd(sy_global+blockIdx.x, sy_local);
+}
+
+static void setup_gpu(){
+	threads_per_block = 32;
+	blocks_per_grid = (ceil((double)NN/(double)threads_per_block));
+
+	size_q = blocks_per_grid * NQ * sizeof(double);
+	size_sx = blocks_per_grid * sizeof(double);
+	size_sy = blocks_per_grid * sizeof(double);
+
+	cudaMalloc(&q_device, size_q);
+	cudaMalloc(&sx_device, size_sx);
+	cudaMalloc(&sy_device, size_sy);
+	// The kernel atomically accumulates into these arrays.
+	cudaMemset(q_device, 0, size_q);
+	cudaMemset(sx_device, 0, size_sx);
+	cudaMemset(sy_device, 0, size_sy);
+}
