@@ -156,19 +156,26 @@ legend_dims(st) = (swatch=34st.legend_k, char=0.8st.legend, gap=10st.legend_k, r
 const LEGEND_INSET_PX = 90
 
 entry_px(s, d) = d.swatch + 4 + d.char * length(s.label)
-legend_col_px(series, d) = maximum(s -> entry_px(s, d), series) + d.gap
+
+# Each column is as wide as its own longest entry (rows fill left to right).
+function legend_col_widths(series, cols, d)
+    return [maximum(entry_px(s, d) for s in series[c:cols:end]) + d.gap for c in 1:cols]
+end
 
 function legend_rows(series, width, st)
     d = legend_dims(st)
-    cols = clamp(floor(Int, (width - LEGEND_INSET_PX) / legend_col_px(series, d)),
-        1, length(series))
+    cols = something(findlast(c -> sum(legend_col_widths(series, c, d)) <= width - LEGEND_INSET_PX,
+        1:length(series)), 1)
+    # Same row count, entries spread evenly (5 -> 3 + 2, not 4 + 1).
+    cols = cld(length(series), cld(length(series), cols))
     return [series[i:min(i + cols - 1, end)] for i in 1:cols:length(series)]
 end
 
 # `slot_h` set: the legend fills an empty grid slot, rows hanging from the top.
-function grid_legend(rows, width, st; slot_h=nothing)
+# `shift` moves the rows up by that fraction of the legend's height.
+function grid_legend(rows, width, st; slot_h=nothing, shift=0.0)
     d = legend_dims(st)
-    col_px = legend_col_px(reduce(vcat, rows), d)
+    col_x = cumsum([0.0; legend_col_widths(reduce(vcat, rows), length(first(rows)), d)])
     pl = plot(; framestyle=:none, grid=false, ticks=false, legend=false,
         xlims=(0, width - LEGEND_INSET_PX), ylims=(0, 1), widen=false,
         # Cancel GR's 2mm padding; at the canvas bottom, stop short so rounding
@@ -177,9 +184,9 @@ function grid_legend(rows, width, st; slot_h=nothing)
     for (r, row) in enumerate(rows)
         # In a slot, GR padding shrinks the height; spread rows instead.
         step = slot_h === nothing ? 1 / length(rows) : min(1 / length(rows), 1.6d.row / slot_h)
-        y = 1 - (r - 0.5) * step
+        y = 1 - (r - 0.5) * step + shift
         for (c, s) in enumerate(row)
-            x = (c - 1) * col_px
+            x = col_x[c]
             scale = st.legend_k / st.k
             plot!(pl, [x, x + d.swatch], [y, y]; color=s.color, lw=0.9scale * st.lw, ls=s.ls,
                 label="")
