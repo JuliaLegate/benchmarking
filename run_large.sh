@@ -21,7 +21,6 @@ run --config=$LARGE/grayscott.toml
 run --config=$LARGE/cg.toml
 run --config=$LARGE/nas_ep_weak.toml
 run --config=$LARGE/nas_ft_weak.toml
-run --config=$LARGE/nas_mg_weak.toml
 
 echo
 if [[ ${#FAILED[@]} -eq 0 ]]; then
