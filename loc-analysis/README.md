@@ -1,19 +1,105 @@
 # LOC analysis
 
-Compares the code each model needs for the 7 shared benchmarks.
+Compares the code each model needs for the 7 shared benchmarks. CUDA C++ covers
+EP/FT/MG, and its cuFFT variant covers FT only.
 
 ```bash
-./install_scc.sh                        # scc v4.0.0 into opt/scc (needs --uloc/--cognitive)
-python3 loc-analysis/analyze_model_loc.py   # writes loc-analysis/results/
+python -m pip install -r loc-analysis/requirements.txt
+python loc-analysis/analyze_model_loc.py --scc-bin /path/to/scc
+python loc-analysis/plot_model_loc.py
 ```
 
-Counts come from scc only. Before counting, temporary copies are formatted with
-JuliaFormatter and black at an unbounded margin (one statement per line), so
-hand wrapping doesn't change the counts. JuliaFormatter comes from
-`loc-analysis/Project.toml`, black from the Python that runs the script.
+The analysis runner requires Python 3.10+ and an existing scc v4 executable.
+Julia refs also require Julia with the JuliaFormatter environment in this
+directory's `Project.toml`; Python refs require Black. Set `CUNUMERIC_BENCH_JULIA`
+to override the Julia executable. The existing Julia setup instantiates that
+environment when formatting.
+
+`--scc-bin` accepts a full path, including a Windows `scc.exe` path. Without it,
+the runner uses `opt/scc/bin/scc` if present, otherwise `scc` on PATH. The existing
+`install_scc.sh` remains an optional Linux installer; the runner does not install scc.
+
+The existing JuliaFormatter and Black workflow is preserved: temporary Julia
+and Python copies are formatted at a 10,000-column margin before counting.
+Checked-in Julia/Python refs are unchanged. CUDA C++ refs are copied byte-for-byte
+to temporary `.cu` files for language detection and counted as checked in.
+CUDA-only analysis does not invoke JuliaFormatter or Black.
+
+The four C++ refs have been preformatted with clang-format 20.1.8 using
+`clang-format.yaml` (10,000-column margin, attached braces, expanded short
+control-flow blocks, preserved grouped declarations). Their comments and license
+headers have moved out of the measured files; full licensing and attribution are
+in [refs/README.md](refs/README.md). clang-format and Matplotlib are pinned in
+`requirements.txt` for maintenance and plotting; the analysis runner does not
+invoke clang-format.
+
+To reformat C++ refs after future edits, from the repository root in PowerShell:
+
+```powershell
+$cudaRefs = Get-ChildItem loc-analysis/refs -Recurse -Filter "cuda*.cu.ref"
+clang-format --style=file:loc-analysis/clang-format.yaml -i $cudaRefs.FullName
+```
+
+To count only the CUDA refs on Windows:
+
+```powershell
+python loc-analysis/analyze_model_loc.py --variants cuda cuda_cufft --scc-bin "C:\path\to\scc.exe" --output-dir loc-analysis/results/cuda
+```
+
+Omit `--variants` to include all models. Only explicitly unsupported pairs are
+skipped; a missing expected reference is an error. Overall
+tables show each model's benchmark count, and reductions use shared benchmarks
+only (three for CUDA C++, one for cuFFT).
 
 Output: `summary.csv`, `overall_metrics.csv`, and `report.md`. The report gives
-reductions for cuNumeric.jl vs CUDA.jl, JACC.jl, Dagger.jl and cuPyNumeric.
+reductions for cuNumeric.jl vs CUDA.jl, JACC.jl, Dagger.jl, cuPyNumeric, and the
+CUDA C++ variants. scc's complexity scores are heuristic estimates and should
+not be treated as exact cyclomatic complexity or direct cross-language rankings.
+scc v4.0.0's ULOC includes comment/license text and unique blank lines, so it can
+exceed SLOC; overall ULOC here is the sum of per-file values, not a globally
+deduplicated count. See [scc's metric definitions](https://github.com/boyter/scc/tree/v4.0.0#unique-lines-of-code-uloc).
+
+## Bar charts
+
+`plot_model_loc.py` reads `summary.csv` and writes grouped bar charts as both
+PNG and PDF, defaulting to SLOC and ULOC:
+
+```bash
+python loc-analysis/plot_model_loc.py --input loc-analysis/results/summary.csv
+python loc-analysis/plot_model_loc.py --benchmarks nas_ep nas_ft nas_mg
+```
+
+Charts go to a `plots` directory beside the input CSV, or to `--output-dir`.
+`--variants` filters implementations, and `--metrics sloc uloc complexity`
+selects metrics (complexity is opt-in because it is not a cross-language ranking).
+A missing implementation is marked with a × in its series color, never an artificial zero.
+Colors match the benchmark plots in `plot_results.jl`. The grey CUDA C++ series
+uses the EP/MG CUDA references and the cuFFT reference for FT; the manual FT
+implementation remains in the CSV but is excluded from plots. `--variants cuda`
+selects this combined C++ series.
+For CUDA-only output, use `--input loc-analysis/results/cuda/summary.csv`.
+No GPU or benchmark execution is involved.
+
+### Condensed comparisons
+
+```bash
+python loc-analysis/plot_model_comparison.py
+```
+
+This writes the `comparison_pooled` grouped bar chart (PNG/PDF) and `comparisons.csv` alongside the
+other plots. Each group compares cuNumeric.jl with one backend, using only their
+shared benchmarks (seven for the Julia/Python backends, three for CUDA C++).
+The C++ group uses cuFFT for FT. `--benchmarks nas_ep nas_ft nas_mg` restricts all
+groups to the same NAS subset when a common comparison set is preferred.
+
+All three metrics use `100 * (sum(backend_count) / sum(cuNumeric_count) - 1)`.
+Positive percentages mean the other backend has higher counts than cuNumeric.jl;
+negative means lower. These are changes in summed counts, not mean percentages.
+Zero complexity counts are included without adjustment or pseudocounts.
+A zero cuNumeric total has an undefined percentage and is displayed as N/A.
+Complexity remains an scc heuristic whose language-specific rules limit
+cross-language interpretation. Full benchmark coverage and totals are recorded
+in `comparisons.csv`; plot colors match the benchmark palette.
 
 ## Refs
 
@@ -42,8 +128,8 @@ Update the refs when `src/` changes.
 
 `refs/nas_{ep,ft,mg}/cuda.cu.ref` are curated from
 [GMAP/NPB-GPU's CUDA implementations](https://github.com/GMAP/NPB-GPU/tree/3f12d84920ee315ab00ef283717c1e74b68f4d00/CUDA),
-pinned to commit `3f12d84920ee315ab00ef283717c1e74b68f4d00`. Each file retains its
-upstream MIT license and attribution. These are non-executable comparison
+pinned to commit `3f12d84920ee315ab00ef283717c1e74b68f4d00`. The upstream MIT license and attribution are preserved in
+[refs/README.md](refs/README.md), outside the measured C++ files. These are non-executable comparison
 excerpts: initialization remains in globals, `main`/`run`, and the original
 setup functions. Function order, GPU kernels, indexing, launch wrappers, and
 the main algorithm are preserved rather than rewritten to match the Julia API.
@@ -121,6 +207,4 @@ headers, error handling, and final teardown (including `cufftDestroy`) are
 outside the comparison. This is a source reference, not a GPU-tested or
 performance-tested implementation.
 
-These files are reference-only additions. The analysis script still selects
-only the existing Julia/Python variants; CUDA language/formatting support and
-metric runs are outside this change.
+These are source-comparison references only; the analysis script counts them without compiling or executing any benchmark.

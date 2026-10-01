@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Compare lines of code across the Julia/Python GPU programming models.
+"""Compare lines of code across the Julia/Python/CUDA GPU programming models.
 
 Counts the curated refs/<benchmark>/<model>.<ext>.ref files (see README.md)
 with scc v4, then writes summary.csv, overall_metrics.csv, and report.md.
 Refs are first normalized (temporary copies) with JuliaFormatter / black at an
 unbounded margin, so every statement sits on one line in both languages and
-counts do not depend on wrapping style.
+counts do not depend on wrapping style. CUDA C++ refs are preformatted separately
+and copied unchanged.
 """
 
 import argparse
@@ -28,17 +29,25 @@ DEFAULT_OUTPUT_DIR = HERE / "results"
 VENDORED_SCC = REPO_ROOT / "opt" / "scc" / "bin" / "scc"
 
 BENCHMARK_ORDER = ("gemm", "montecarlo", "grayscott", "cg", "nas_ep", "nas_ft", "nas_mg")
-VARIANT_ORDER = ("cunumeric", "cupynumeric", "cudajl", "jacc", "dagger")
+VARIANT_ORDER = ("cunumeric", "cupynumeric", "cudajl", "jacc", "dagger", "cuda", "cuda_cufft")
 VARIANT_LABEL = {
     "cunumeric": "cuNumeric.jl",
     "cupynumeric": "cuPyNumeric",
     "cudajl": "CUDA.jl",
     "jacc": "JACC.jl",
     "dagger": "Dagger.jl",
+    "cuda": "CUDA C++",
+    "cuda_cufft": "CUDA C++ with cuFFT",
 }
 VARIANT_SUFFIX = {v: "py" if v == "cupynumeric" else "jl" for v in VARIANT_ORDER}
 SCC_LANGUAGE = {v: "Python" if v == "cupynumeric" else "Julia" for v in VARIANT_ORDER}
-SINGLE_GPU_ONLY = {"cudajl"}
+for _variant in ("cuda", "cuda_cufft"):
+    VARIANT_SUFFIX[_variant] = "cu"
+    SCC_LANGUAGE[_variant] = "Cuda"
+VARIANT_BENCHMARKS = {v: set(BENCHMARK_ORDER) for v in VARIANT_ORDER}
+VARIANT_BENCHMARKS["cuda"] = {"nas_ep", "nas_ft", "nas_mg"}
+VARIANT_BENCHMARKS["cuda_cufft"] = {"nas_ft"}
+SINGLE_GPU_ONLY = {"cudajl", "cuda", "cuda_cufft"}
 FORMAT_MARGIN = 10_000  # effectively unbounded: one statement per line
 
 # (subject, reference): percent less code in subject than in reference.
@@ -47,6 +56,8 @@ COMPARISONS = (
     ("cunumeric", "jacc"),
     ("cunumeric", "dagger"),
     ("cunumeric", "cupynumeric"),
+    ("cunumeric", "cuda"),
+    ("cunumeric", "cuda_cufft"),
 )
 
 Column = namedtuple("Column", "scc_key field label")
@@ -85,7 +96,7 @@ foreach(f -> format_file(f; margin={FORMAT_MARGIN}, join_lines_based_on_source=f
 
 
 def format_copies(targets: list[tuple[str, Path]], workdir: Path) -> tuple[dict[Path, Path], str]:
-    """Copy refs to real .jl/.py files in `workdir` and format them identically."""
+    """Format temporary Julia/Python copies; preserve preformatted CUDA C++ bytes."""
     copies = {}
     for variant, path in targets:
         dest = workdir / path.parent.name / f"{variant}.{VARIANT_SUFFIX[variant]}"
@@ -128,7 +139,9 @@ def run_scc(binary: str, targets: list[tuple[str, Path]]) -> dict[Path, dict]:
 
 
 def summarize(benchmarks, variants, scc_binary: str, workdir: Path) -> tuple[list[dict], str]:
-    targets = [(v, ref_path(b, v)) for b in benchmarks for v in variants]
+    targets = [(v, ref_path(b, v)) for b in benchmarks for v in variants if b in VARIANT_BENCHMARKS[v]]
+    if not targets:
+        raise SystemExit("No references cover the requested benchmark/variant selection.")
     missing = [str(p) for _, p in targets if not p.is_file()]
     if missing:
         raise SystemExit("Missing ref files:\n  " + "\n  ".join(missing))
@@ -137,6 +150,8 @@ def summarize(benchmarks, variants, scc_binary: str, workdir: Path) -> tuple[lis
     rows = []
     for benchmark in benchmarks:
         for variant in variants:
+            if benchmark not in VARIANT_BENCHMARKS[variant]:
+                continue
             path = ref_path(benchmark, variant)
             file = scc.get(copies[path].resolve(), {})
             row = {
@@ -157,31 +172,41 @@ def aggregate(rows: list[dict], benchmarks, variants, view: MetricView) -> dict:
     value = {(r["benchmark"], r["variant"]): r[view.field] for r in rows}
     metrics = {f"{view.prefix}benchmark_count": len(benchmarks)}
     for variant in variants:
-        metrics[f"{view.prefix}total_{variant}_loc"] = sum(value[b, variant] for b in benchmarks)
+        available = [b for b in benchmarks if (b, variant) in value]
+        metrics[f"{view.prefix}{variant}_benchmark_count"] = len(available)
+        metrics[f"{view.prefix}total_{variant}_loc"] = sum(value[b, variant] for b in available)
     for subject, reference in COMPARISONS:
         if subject not in variants or reference not in variants:
             continue
-        total_ref = metrics[f"{view.prefix}total_{reference}_loc"]
-        total_sub = metrics[f"{view.prefix}total_{subject}_loc"]
+        shared = [b for b in benchmarks if (b, subject) in value and (b, reference) in value]
+        if not shared:
+            continue
+        total_ref = sum(value[b, reference] for b in shared)
+        total_sub = sum(value[b, subject] for b in shared)
         key = f"{subject}_vs_{reference}_pct"
+        metrics[f"{view.prefix}{subject}_vs_{reference}_benchmarks"] = ";".join(shared)
         metrics[f"{view.prefix}total_{key}"] = round(pct_reduction(total_ref, total_sub), 2)
         metrics[f"{view.prefix}mean_{key}"] = round(mean(
-            pct_reduction(value[b, reference], value[b, subject]) for b in benchmarks
+            pct_reduction(value[b, reference], value[b, subject]) for b in shared
         ), 2)
     return metrics
 
 
 def metric_table(title: str, metrics: dict, view: MetricView, variants) -> str:
     p = view.prefix
-    lines = [f"### {title}", "", "| Model | Total |", "|---|---:|"]
+    lines = [f"### {title}", "", "| Model | Available benchmarks | Total |", "|---|---:|---:|"]
     for variant in variants:
-        lines.append(f"| {VARIANT_LABEL[variant]} | {metrics[f'{p}total_{variant}_loc']} |")
-    lines += ["", "| cuNumeric.jl vs | Pooled reduction | Mean per-benchmark reduction |",
-              "|---|---:|---:|"]
+        count = metrics[f"{p}{variant}_benchmark_count"]
+        if count:
+            lines.append(f"| {VARIANT_LABEL[variant]} | {count} | {metrics[f'{p}total_{variant}_loc']} |")
+    lines += ["", "Totals cover each model's available refs; reductions use only shared benchmarks.", "",
+              "| cuNumeric.jl vs | Shared benchmarks | Pooled reduction | Mean per-benchmark reduction |",
+              "|---|---|---:|---:|"]
     for subject, reference in COMPARISONS:
         key = f"{subject}_vs_{reference}_pct"
         if f"{p}total_{key}" in metrics:
-            lines.append(f"| {VARIANT_LABEL[reference]} | {metrics[f'{p}total_{key}']:.1f}% "
+            shared = metrics[f"{p}{subject}_vs_{reference}_benchmarks"]
+            lines.append(f"| {VARIANT_LABEL[reference]} | {shared} | {metrics[f'{p}total_{key}']:.1f}% "
                          f"| {metrics[f'{p}mean_{key}']:.1f}% |")
     return "\n".join(lines)
 
@@ -197,9 +222,12 @@ def build_report(rows, benchmarks, variants, version, formatter) -> str:
     parts = [
         "# Programming-model LOC analysis",
         "",
-        f"Counted with {version} after formatting with {formatter}.",
+        (f"Counted with {version} after formatting with {formatter}."
+         if any(VARIANT_SUFFIX[v] in ("jl", "py") for v in variants)
+         else f"Counted with {version}."),
         "Refs follow the inclusion rules in `README.md`.",
-        "CUDA.jl refs are single-GPU only; every other model supports multiple GPUs.",
+        "CUDA.jl and both CUDA C++ variants are single-GPU references.",
+        "CUDA C++ refs are preformatted separately and counted unchanged.",
         "",
     ]
     for view in VIEWS:
@@ -207,6 +235,8 @@ def build_report(rows, benchmarks, variants, version, formatter) -> str:
         parts += [metric_table(f"Overall ({view.label})", metrics, view, variants), ""]
     parts += ["## Per benchmark", ""]
     for benchmark in benchmarks:
+        if not any(r["benchmark"] == benchmark for r in rows):
+            continue
         parts += [f"### {benchmark}", "",
                   "| Model | scc SLOC | scc ULOC | scc Complexity | scc Cognitive | File |",
                   "|---|---:|---:|---:|---:|---|"]
