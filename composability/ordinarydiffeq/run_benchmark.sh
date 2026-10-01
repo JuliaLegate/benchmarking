@@ -67,7 +67,7 @@ done
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     printf 'julia=%s\n' "$("$julia_bin" --version)"
     printf 'experiment=%s\nbase_n=%s\nbackends=%s\nvalues=%s\n' "$experiment" "${base_n:-}" "${backends[*]}" "$*"
-    printf 'eltype=%s\nsteps=%s\nsamples=%s\ntimeout=%s\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES" "${ODE_TIMEOUT:-8m}"
+    printf 'eltype=%s\nsteps=%s\nsamples=%s\nsample_isolation=process\nwarmups_per_sample=1\ntimeout=none\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES"
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
@@ -101,10 +101,10 @@ for value in "$@"; do
         monitor_pid=$!
         result_line=""
         case_error=""
-        # One total budget for startup, warmups, all samples, cleanup, and validation.
-        if CUDA_VISIBLE_DEVICES="$gpu_mask" timeout --signal=TERM --kill-after=30s "${ODE_TIMEOUT:-8m}" \
-            "$julia_bin" --startup-file=no --project="$ODE_PROJECT" \
-            "$script_dir/benchmark_heat.jl" "$backend" "$n" > "$log" 2>&1; then
+        # The CPU-only coordinator waits for each fresh sample process to exit.
+        # No time limit: a case runs until completion, failure, or cancellation.
+        if CUDA_VISIBLE_DEVICES="$gpu_mask" "$julia_bin" --startup-file=no --project="$ODE_PROJECT" \
+            "$script_dir/run_samples.jl" "$log" "$backend" "$n" > "$log" 2>&1; then
             if [[ -f $log ]]; then
                 line=$(grep '^RESULT,' "$log" | tail -n 1 || true)
                 if [[ -n $line ]]; then
@@ -118,9 +118,6 @@ for value in "$@"; do
         else
             case_exit=$?
             case_error="exit status $case_exit"
-            if [[ $case_exit == 124 ]]; then
-                case_error="timed out after ${ODE_TIMEOUT:-8m} total (exit status 124)"
-            fi
         fi
         kill "$monitor_pid" 2>/dev/null || true
         wait "$monitor_pid" 2>/dev/null || true
