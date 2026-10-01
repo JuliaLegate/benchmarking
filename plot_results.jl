@@ -26,7 +26,9 @@ default(;
 function parse_args(args)
     results_dir = "results"
     out_dir = nothing
-    output_suffix = ""
+    output_suffix = nothing
+    fusion = "both"
+    format = "png"
     config = joinpath(@__DIR__, "configs", "multi_gpu", "all.toml")
 
     for arg in args
@@ -36,6 +38,11 @@ function parse_args(args)
             output_suffix = last(split(arg, "="; limit=2))
         elseif startswith(arg, "--config=")
             config = last(split(arg, "="; limit=2))
+        elseif startswith(arg, "--format=")
+            format = last(split(arg, "="; limit=2))
+        elseif startswith(arg, "--fusion=")
+            fusion = last(split(arg, "="; limit=2))
+            fusion in ("on", "off", "both") || error("--fusion must be on, off, or both")
         else
             results_dir = arg
         end
@@ -51,7 +58,11 @@ function parse_args(args)
     else
         out_dir = isabspath(out_dir) ? out_dir : joinpath(@__DIR__, out_dir)
     end
-    return (; results_dir, out_dir, output_suffix, config)
+    # One figure per fusion setting: default file suffix _fused / _unfused.
+    if output_suffix === nothing
+        output_suffix = Dict("on" => "_fused", "off" => "_unfused", "both" => "")[fusion]
+    end
+    return (; results_dir, out_dir, output_suffix, config, fusion, format)
 end
 
 # Fixed across every figure so GEMM / Gray-Scott / DMD read as one set.
@@ -151,7 +162,7 @@ function overlay_refs(results_dir, members)
     return series
 end
 
-function group_series(results_dir, group, members)
+function group_series(results_dir, group, members; fusion="both")
     series = []
     n_members = length(members)
     for (i, member) in enumerate(members)
@@ -165,7 +176,14 @@ function group_series(results_dir, group, members)
             ("cunumeric", true, :solid),
             ("cunumeric_nofusion", false, :dash),
         )
+            fusion == "both" || fused == (fusion == "on") || continue
             label = cunumeric_series_label(group, member, fused)
+            # One fusion setting per figure: name just the form, all lines solid.
+            if fusion != "both" && n_members > 1
+                stem = something(variant_label(group, member), "cuNumeric.jl")
+                label = replace(stem, " accelerated" => "", "expression" => "expr")
+                ls = :solid
+            end
             s = load_csv_series(results_dir, member, key, label, color, marker, ls)
             s === nothing || push!(series, s)
         end
@@ -197,13 +215,20 @@ function addline!(p, s, y; kw...)
         label=s.label, kw...)
 end
 
+# Long variant labels ("function accelerated, unfused") need wider columns.
+function legend_cols(series)
+    longest = maximum(s -> length(s.label), series; init=0)
+    return min(max(length(series), 1), longest > 30 ? 3 : longest <= 12 ? 5 : 4)
+end
+
 function build_legend(series)
     n = length(series)
-    cols = min(max(n, 1), 4)
+    cols = legend_cols(series)
     rows = cld(n, cols)
     slot = min(0.32, 0.92 / cols)
     x0 = (1 - cols * slot) / 2
-    y0 = 0.50 + 0.18 * (rows - 1) / 2
+    step = rows > 1 ? min(0.36, 0.8 / (rows - 1)) : 0.0
+    y0 = 0.50 + step * (rows - 1) / 2
 
     pl = plot(;
         framestyle=:none, grid=false, ticks=false, legend=false,
@@ -218,7 +243,7 @@ function build_legend(series)
     for (i, s) in enumerate(series)
         r, c = divrem(i - 1, cols)
         x = x0 + c * slot
-        y = y0 - r * 0.36
+        y = y0 - r * step
         plot!(pl, [x, x + 0.028], [y, y]; color=s.color, lw=2.8, ls=s.ls, label="")
         scatter!(pl, [x + 0.014], [y]; color=s.color, marker=s.marker,
             ms=7, msc=s.color, markerstrokewidth=0.6, label="")
@@ -314,8 +339,10 @@ function weak_scaling_figure(series; plot_title, log_values=false)
         addline!(p3, s, [x.h / (x.gpus * base) for x in s.agg])
     end
 
-    nrows = cld(length(series), 4)
-    layout = if nrows > 1
+    nrows = cld(length(series), legend_cols(series))
+    layout = if nrows > 2
+        @layout([grid(1, 3); leg{0.24h}])
+    elseif nrows > 1
         @layout([grid(1, 3); leg{0.16h}])
     else
         @layout([grid(1, 3); leg{0.14h}])
@@ -323,7 +350,7 @@ function weak_scaling_figure(series; plot_title, log_values=false)
     return plot(
         p1, p2, p3, build_legend(series);
         layout,
-        size=(1760, nrows > 1 ? 680 : 620), dpi=220, plot_title,
+        size=(1760, nrows > 2 ? 780 : nrows > 1 ? 680 : 620), dpi=220, plot_title,
         plot_titlefontsize=20, plot_titlefontcolor=:black,
         background_color=:white,
     )
@@ -348,19 +375,20 @@ function main(args=ARGS)
             fig = weak_scaling_figure(
                 series; plot_title="NAS EP — $kind scaling", log_values=true
             )
-            out = joinpath(cfg.out_dir, "nas_ep_$(kind)_scaling$(cfg.output_suffix).png")
+            out = joinpath(cfg.out_dir, "nas_ep_$(kind)_scaling$(cfg.output_suffix).$(cfg.format)")
             savefig(fig, out)
             println("wrote $out")
             continue
         end
-        series = group_series(cfg.results_dir, group, members)
+        series = group_series(cfg.results_dir, group, members; cfg.fusion)
         isempty(series) && continue
         validate_series_sizes(series)
         kind = scaling_kind(series)
         fig = weak_scaling_figure(
-            series; plot_title=group_title(group) * " — $kind scaling"
+            series; plot_title=group_title(group) * " — $kind scaling" *
+                Dict("on" => " (fused)", "off" => " (unfused)", "both" => "")[cfg.fusion]
         )
-        out = joinpath(cfg.out_dir, "$(group)_$(kind)_scaling$(cfg.output_suffix).png")
+        out = joinpath(cfg.out_dir, "$(group)_$(kind)_scaling$(cfg.output_suffix).$(cfg.format)")
         savefig(fig, out)
         println("wrote $out")
     end

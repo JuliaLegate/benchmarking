@@ -1,0 +1,14 @@
+# Standalone figures: one file per metric, one panel per fusion setting.
+#   config   benchmark config whose [plot.groups] defines the series
+#   results  run directory
+#   fusion   "on", "off", "both", or a list
+# Style keys match grid.toml (panel_size, font_size, legend_scale).
+
+format = "pdf"
+panel_size = [400, 220]
+legend_scale = 1.3
+
+[[figure]]   # Gray-Scott @accelerate forms
+config = "configs/multi_gpu/grayscott_forms.toml"
+results = "results/<run-id>"
+fusion = ["on", "off"]

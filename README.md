@@ -271,7 +271,13 @@ To plot existing CSV files:
 
 ```bash
 julia --project=. plot_results.jl results/<run-id>
+julia --project=. plot_results.jl results/<run-id> --fusion=on --format=pdf   # fused series only
 ```
+
+For the paper figures, run `./plot_all.sh`. It reads two local configs (copy
+the `.example.toml` next to each): `configs/plots/grid.toml` for the benchmark
+grid and speedup summary (`plots/grid/`), and `configs/plots/figures.toml` for
+standalone figures such as the Gray-Scott forms, fused and unfused (`plots/figures/`).
 
 ### Conjugate gradient
 
