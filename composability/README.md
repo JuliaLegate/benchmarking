@@ -204,6 +204,9 @@ and 8 GPUs; it is an output record, not a configuration file.
 launchers. They handle process isolation, timeouts, GPU memory sampling, result
 collection, and plotting. They remain useful for custom sizes and small smoke
 checks; there are no separate shell entry points for the full suite.
+GPU selection, memory monitoring, and result-log handling are shared in
+[`common.sh`](common.sh). Backend choices and worker commands remain in each
+launcher. Package versions are recorded in the saved `Manifest.toml`.
 
 ```sh
 bash composability/krylov/run.sh single 1024 2048
