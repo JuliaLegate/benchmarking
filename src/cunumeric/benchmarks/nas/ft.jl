@@ -1,6 +1,4 @@
-# Initial conditions are generated on the host. The 3-D FFT runs as two slab
-# passes: a full 3-D FFT task cannot partition, but a pass partitions along the
-# axes it does not transform.
+# Initial conditions are generated on the host. Each 3-D FFT is one pass.
 # Checksums use a masked reduction whose scale accounts for `bfft!`.
 
 struct CuNumericNASFTState{A,M,X,Y,Z,H,R,C}
@@ -71,20 +69,16 @@ function initialize(b::NASFourierTransform{Float64}; mod=cuNumeric)
     ),)
 end
 
-const CUNUMERIC_NAS_FT_SLAB = (2, 3)
-
 function run!(b::NASFourierTransform, s::CuNumericNASFTState)
     p = nas_ft_parameters(b.class)
     nas_ft_initial_conditions_uint64!(s.host_initial, s.rng_scratch)
     cunumeric_nas_ft_upload!(s.u0, s.host_initial)
     ap = -4.0*NAS_FT_ALPHA*pi^2
     cuNumeric.@allowpromotion s.twiddle .= exp.(ap .* (s.ix2 .+ s.iy2 .+ s.iz2))
-    fft!(s.u0, CUNUMERIC_NAS_FT_SLAB)
-    fft!(s.u0, 1)
+    fft!(s.u0)
     for _ in 1:p.niter
         map!(*, s.u0, s.u0, s.twiddle)
-        cuNumeric.fft_task!(s.u1, s.u0, CUNUMERIC_NAS_FT_SLAB, Int32(cuNumeric.FFT_INVERSE))
-        bfft!(s.u1, 1)
+        bfft!(s.u1, s.u0)
         map!(*, s.product, s.u1, s.mask)
         push!(s.checksums, sum(s.product))
     end
