@@ -81,7 +81,7 @@ end
             @test parse.(Float64, split(fields[end], ';')) == fill(2.0, SAMPLES)
             @test parse(Float64, fields[end - 1]) < 1e-4
         end
-        @test CALLS[] == 2 + SAMPLES
+        @test CALLS[] == 1 + SAMPLES
         GC.gc(true)
         @test LIVE[] == 0
     end

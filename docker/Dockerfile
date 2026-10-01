@@ -26,6 +26,7 @@ COPY environments/cuda/Project.toml environments/cuda/Project.toml
 COPY environments/cunumeric/Project.toml environments/cunumeric/Project.toml
 COPY environments/dagger/Project.toml environments/dagger/Project.toml
 COPY environments/jacc/Project.toml environments/jacc/Project.toml
+COPY environments/implicitglobalgrid/Project.toml environments/implicitglobalgrid/Project.toml
 COPY environments/composability/Project.toml environments/composability/Project.toml
 COPY instantiate_projects.sh install_cupynumeric.sh ./
 

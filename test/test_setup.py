@@ -114,12 +114,6 @@ echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1
                     for solver in solvers:
                         image = "timings.png" if len(solvers) == 1 else f"timings-{solver}.png"
                         self.assertEqual((output / image).exists(), solver in plotted and solver != plot_failure)
-                        baseline = output / f"base_n-{solver}.txt"
-                        if mode == "single" and not (solver == "cg" and failure == "all_cg"):
-                            self.assertEqual(baseline.read_text().strip(), "16" if solver == "cg" and failure else "32")
-                        else:
-                            self.assertFalse(baseline.exists())
-                    self.assertEqual((output / "base_n.txt").exists(), mode == "single" and len(solvers) == 1)
                     self.assertIn(f"BENCH_SOLVERS={selection}", (output / "environment.txt").read_text())
                     self.assertIn(f"BENCH_LOCAL={int(include_local)}", (output / "environment.txt").read_text())
 
@@ -230,8 +224,10 @@ esac
                             self.assertEqual(len(rows), len(expected))
                             size_key = "n" if workload == "krylov" else "N"
                             self.assertEqual({(row["backend"], row[size_key]) for row in rows}, expected)
-                            # Later complete success advances the baseline; partial success does not.
-                            if expected:
+                            # Only the plume launcher records the largest fully passing baseline.
+                            if workload != "integrals_optimization":
+                                self.assertFalse((output / "base_n.txt").exists())
+                            elif expected:
                                 self.assertEqual((output / "base_n.txt").read_text().strip(), "48")
                             else:
                                 self.assertFalse((output / "base_n.txt").exists())
@@ -324,6 +320,7 @@ esac
                 self.assertEqual(args[-2:],
                                  [shell_path(source), shell_path(source / "lib/CNPreferences")])
                 self.assertEqual(args.count("--project=environments/composability"), 1)
+                self.assertEqual(args.count("--project=environments/implicitglobalgrid"), 1)
                 self.assertFalse(any("setup.jl" in arg for arg in args))
                 self.assertFalse((bench / "environments/krylov").exists())
                 log.unlink()

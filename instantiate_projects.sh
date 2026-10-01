@@ -20,7 +20,7 @@ echo "Checking Julia package registry"
 echo "Instantiating the benchmark orchestrator"
 "$julia_bin" --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
 
-for environment in cuda jacc dagger; do
+for environment in cuda jacc dagger implicitglobalgrid; do
     echo "Instantiating environments/$environment"
     "$julia_bin" --project="environments/$environment" -e '
         using Pkg

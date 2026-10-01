@@ -101,6 +101,11 @@ See [loc-analysis/README.md](loc-analysis/README.md).
 
 ## Run the benchmark suite
 
+The standalone [ImplicitGlobalGrid Gray–Scott benchmark](other/implicitglobalgrid/README.md)
+lives under `other/` and uses `environments/implicitglobalgrid`, installed by the
+same setup script. Run a square local grid on each of four GPUs with
+`bash other/implicitglobalgrid/run_benchmark.sh 4 14000 10 5`.
+
 Use the smoke test for a quick end-to-end check:
 
 ```bash
@@ -270,7 +275,13 @@ To plot existing CSV files:
 
 ```bash
 julia --project=. plot_results.jl results/<run-id>
+julia --project=. plot_results.jl results/<run-id> --fusion=on --format=pdf   # fused series only
 ```
+
+For the paper figures, run `./plot_all.sh`. It reads two local configs (copy
+the `.example.toml` next to each): `configs/plots/grid.toml` for the benchmark
+grid and speedup summary (`plots/grid/`), and `configs/plots/figures.toml` for
+standalone figures such as the Gray-Scott forms, fused and unfused (`plots/figures/`).
 
 ### Conjugate gradient
 

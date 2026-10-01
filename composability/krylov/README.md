@@ -61,13 +61,11 @@ this setting through `--local`, regardless of an inherited `BENCH_LOCAL`.
 For weak scaling, set the **one-GPU** dimension followed by GPU counts. The
 runner chooses `N(G) = round(N(1) × sqrt(G))`, keeping dense matrix elements per
 GPU approximately constant. Use the largest dimension that passed all enabled
-single-GPU variants as `N(1)` for each solver; the single-GPU sweep writes it
-to `base_n-cg.txt` or `base_n-bicgstab.txt`. A single selected solver also
-writes the compatibility file `base_n.txt`; a run selecting both does not.
+single-GPU variants in `results.csv` as `N(1)` for each solver.
 A backend failure retains the other backends' successful results and the sweep
 continues to larger sizes. Failed cases retain logs, and the launcher returns
 a nonzero exit status after collecting and plotting the remaining results.
-The unified runner uses the config's `weak_base`, not `base_n.txt`.
+The unified runner uses the config's `weak_base`.
 Every backend gets the same `N(G)` at each count:
 
 ```sh
@@ -90,7 +88,7 @@ On a one-GPU machine, use `BENCH_DRY_RUN=1` with the weak command to write
 `planned-cases.csv` for all four GPU counts without launching them. Run the
 one-GPU point normally with `weak "$BASE_N" 1`.
 
-The runner writes one `results.csv` with a `solver` column, per-case logs,
+The runner writes one `results.csv` with a `solver` column, per-case and per-sample logs,
 the package manifest, sampled GPU-memory logs and peak summary, and
 `environment.txt` together. `memory.csv` and `planned-cases.csv` identify
 the solver, and log filenames include it. A single selected solver writes
@@ -99,7 +97,8 @@ the solver, and log filenames include it. A single selected solver writes
 already-instantiated equivalent environment.
 Set `JULIA`, `BENCH_THREADS`, or `BENCH_CPUS` for the machine.
 Set `BENCH_TIMEOUT` to a per-case duration accepted by GNU `timeout`
-(default `15m`). Failed or timed-out cases keep their logs; completed CSV
+(default `15m`, total for all sample processes, including startup and warmups).
+Failed or timed-out cases keep their logs; completed CSV
 rows remain plottable without hiding other backends or sizes.
 Legate auto-sizes its memory pool. The sampled `nvidia-smi` memory peak is
 diagnostic; pool reservation can make it much larger than live array storage.
@@ -130,13 +129,19 @@ Solution correctness is determined by the independent relative residual
 tridiagonal operator and right-hand side. The limit is `1e-5` for Float32 and
 `1e-8` for Float64; non-finite residuals also fail. A solver convergence flag
 alone cannot pass this check, and a correct solution is accepted regardless
-of its final GPU placement or convergence flag. The two warm-up solves and
-an additional solve after timing are checked.
+of its final GPU placement or convergence flag. Each process checks its warmup
+and its actual timed solution; validation does not run an additional solve.
 
-Each case gets a fresh Julia process, two warm-up solves, and five synchronized
-timed solves. Allocation, host-to-device transfer, compilation, explicit GC,
-and an independent Float64 residual check are outside the timer. The CSV records
-iteration count, residual, mean time, standard error, and raw samples. The plot
+Each case gets five fresh Julia sample processes by default (`BENCH_SAMPLES`
+sets the count, at least two). Each process runs one warmup and one synchronized
+timed solve, then exits before the next process starts. Both CG and BiCGStab,
+single- and multi-GPU runs, and the optional local loops use this isolation.
+[`run_samples.jl`](run_samples.jl) aggregates only after all samples pass;
+each `*-sample-N.log` contains the worker PID and its individual result.
+Allocation, host-to-device transfer, startup, the warmup, explicit GC, and an
+independent Float64 residual check are outside the timer. Repeated startup and
+warmups add wall-clock time. The CSV records the maximum iteration count and
+residual across samples, mean time, standard error, and raw times. The plot
 shows mean time with standard-error bars. For weak scaling, each backend has a
 horizontal ideal-time reference at its one-GPU mean. CG uses a symmetric
 tridiagonal source and BiCGStab uses a nonsymmetric tridiagonal source; the

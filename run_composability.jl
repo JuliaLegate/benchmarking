@@ -6,6 +6,9 @@ using Dates, TOML
 const WORKLOADS = ["krylov", "ordinarydiffeq", "integrals_optimization"]
 const ROOT = @__DIR__
 const DEFAULT_CONFIG = joinpath(ROOT, "composability", "sizes_80GB.toml")
+# --models names -> launcher backend names. CUDA.jl (CuArray) is single-GPU only.
+const MODEL_BACKENDS = Dict("cuda" => "CuArray", "dagger" => "Dagger", "cunumeric" => "cuNumeric")
+const MODELS = ["cuda", "dagger", "cunumeric"]
 const LAUNCHERS = Dict(
     "krylov" => (script="run.sh", prefix="BENCH"),
     "ordinarydiffeq" => (script="run_benchmark.sh", prefix="ODE"),
@@ -22,6 +25,9 @@ function usage(io=stdout)
       --mode=single               single (default), multi, or both
       --solvers=cg                Krylov solvers: cg, bicgstab, or cg,bicgstab
       --local                     Also run cuNumeric local Krylov implementations
+      --models=cuda,dagger,cunumeric
+                                  Models to run (default: all); CUDA.jl runs only
+                                  in single mode, e.g. --models=cuda,cunumeric
       --gpus=1,2,4,8              GPU counts for multi mode (default: 1,2,4,8);
                                   single mode always uses one GPU
       --config=PATH               Size config (default: composability/sizes_80GB.toml)
@@ -44,6 +50,7 @@ function usage(io=stdout)
       julia --project=. run_composability.jl --only=krylov --solvers=cg,bicgstab --mode=both
       julia --project=. run_composability.jl --only=krylov --solvers=cg,bicgstab --local
       julia --project=. run_composability.jl --only=krylov,ordinarydiffeq --mode=multi
+      julia --project=. run_composability.jl --mode=multi --models=cunumeric
       julia --project=. run_composability.jl --mode=both --gpus=1,2,4 --output=results/paper
       julia --project=. run_composability.jl --config=composability/sizes_141GB.toml
       julia --project=. run_composability.jl --config=my-sizes.toml --dry-run
@@ -56,6 +63,7 @@ function cli_options(args)
     solver_arg = "cg"
     solvers_explicit = false
     include_local = false
+    model_arg = join(MODELS, ',')
     gpu_arg = nothing
     output = nothing
     config = DEFAULT_CONFIG
@@ -72,6 +80,8 @@ function cli_options(args)
         elseif startswith(arg, "--solvers=")
             solver_arg = split(arg, '='; limit=2)[2]
             solvers_explicit = true
+        elseif startswith(arg, "--models=")
+            model_arg = split(arg, '='; limit=2)[2]
         elseif startswith(arg, "--gpus=")
             gpu_arg = split(arg, '='; limit=2)[2]
         elseif startswith(arg, "--config=")
@@ -97,6 +107,11 @@ function cli_options(args)
         throw(ArgumentError("--solvers requires krylov in --only"))
     include_local && !("krylov" in workloads) &&
         throw(ArgumentError("--local requires krylov in --only"))
+    models = String.(strip.(split(lowercase(model_arg), ',')))
+    all(m -> m in MODELS, models) && allunique(models) ||
+        throw(ArgumentError("--models must be a list of $(join(MODELS, ","))"))
+    mode != "single" && models == ["cuda"] &&
+        throw(ArgumentError("--models=cuda only runs in single mode"))
     gpu_values = gpu_arg === nothing ? (mode == "single" ? "1" : "1,2,4,8") : gpu_arg
     gpus = String.(strip.(split(gpu_values, ',')))
     all(g -> g in ("1", "2", "4", "8"), gpus) ||
@@ -108,7 +123,7 @@ function cli_options(args)
         run_id = Dates.format(now(), "yyyymmdd-HHMMSS-sss") * "-$(getpid())"
         output = joinpath(ROOT, "results", "composability-$run_id")
     end
-    return (; workloads, mode, solvers, include_local, gpus, output=abspath(output), config=abspath(config), dry)
+    return (; workloads, mode, solvers, include_local, models, gpus, output=abspath(output), config=abspath(config), dry)
 end
 
 function workload_sizes(config, workload)
@@ -153,6 +168,8 @@ function launch_plan(opts; env=ENV)
             # Workers disable startup.jl. Preserve depots added by the parent
             # startup (the container adds /depot there) so packages stay visible.
             "JULIA_DEPOT_PATH" => join(DEPOT_PATH, Sys.iswindows() ? ';' : ':'),
+            "$(spec.prefix)_BACKENDS" => join(
+                [MODEL_BACKENDS[m] for m in opts.models if mode == "single" || m != "cuda"], ' '),
         ]
         if workload == "krylov"
             push!(overrides, "BENCH_SOLVERS" => join(opts.solvers, ','),

@@ -16,8 +16,9 @@ includes the `1/DX²` factor for the second spatial derivatives. Increasing
 initial state is a discrete sine
 eigenmode, so the final state has an independent exact reference. It asserts
 that the solution keeps its input array backend and reports mean time, standard
-error, raw samples, and relative error. [`run_benchmark.sh`](run_benchmark.sh) runs each
-backend and size in a fresh Julia process, saves logs and CSV results, and
+error, raw samples, and relative error. [`run_benchmark.sh`](run_benchmark.sh) uses
+[`run_samples.jl`](run_samples.jl) to run each sample in a fresh Julia process,
+saves logs and CSV results, and
 uses [`plot_results.jl`](plot_results.jl) to make a PNG comparison plot.
 
 The `heat.jl` N=128 cuNumeric example completed on one H100 with Julia 1.13
@@ -90,8 +91,8 @@ The default single-GPU backends are `CuArray Dagger cuNumeric`. The setup
 installs Dagger. The Dagger variant checks GPU-backed chunks and uses one chunk
 per requested GPU. For weak scaling, choose a dimension that passed all three
 single-GPU backends, amortizes launch overhead, and leaves enough memory and
-time headroom for all GPU counts. A complete single-GPU sweep writes its
-largest common passing size to `base_n.txt`. Failed cases keep their logs;
+time headroom for all GPU counts. `results.csv` shows which sizes passed for
+every backend. Failed cases keep their logs;
 successful backend results are retained and the sweep continues to larger
 sizes. Record the selected practical baseline separately if it is smaller.
 
@@ -121,9 +122,15 @@ time reference for each backend.
 
 `ODE_ELTYPE=Float64`, `ODE_STEPS=20`, and `ODE_SAMPLES=5` control precision,
 fixed time steps, and timed solves. Transfers and initial-state construction
-are outside timing. Each backend/size/GPU count runs in its own Julia process;
-its two warmups and all timed samples share that process. Before every warmup
-and sample, the runner releases the previous solution, synchronizes, performs
+are outside timing. For each backend/size/GPU count, a CPU-only coordinator
+launches five sequential Julia processes by default. Each process constructs
+its own problem, runs one warmup and one timed solve, validates that solution,
+and exits before the next process starts. `ODE_SAMPLES` controls the number of
+processes (at least two); the worker receives `ODE_SAMPLES=1`. Both single-GPU
+and multi-GPU sweeps use this isolation. Startup and the warmup in each
+process are outside the solve timer, so total wall time includes more startup
+and warmup work than the previous shared-process sampling.
+Before every warmup and sample, the worker releases the previous solution, synchronizes, performs
 a full Julia GC, drains cuNumeric's deferred frees when supported, and
 synchronizes again. This cleanup is outside the timer for every backend.
 Each measurement is a complete `solve` call, including
@@ -139,14 +146,18 @@ the backends in each comparison.
 Start with the `128` correctness case before large allocations. Any solver
 failure or host storage fallback exits nonzero; retain the error and package
 versions. The launcher saves the Manifest, sampled GPU-memory peak, and metadata with the results and
-uses an 8-minute total timeout per backend/size/GPU count by default. This
-covers process startup, both warmups, all timed samples, between-sample
-cleanup, and validation; it does not reset for each sample. Set `ODE_TIMEOUT`
-to override it. A process that ignores termination is forcibly killed after
-another 30 seconds, and the sweep continues. There is no cuNumeric-specific
-extension in this experiment.
+has no time limit. `ODE_TIMEOUT` is no longer used. A case runs until it
+completes, fails, or is cancelled.
 
-Failed cases print their backend, size, GPU count, exit status (or timeout),
+The case log (for example, `cuNumeric-1-32768.log`) records sample progress
+and the combined `RESULT` row. Individual worker logs add `-sample-1` through
+`-sample-5` before `.log`, and include the worker PID. The final CSV retains
+the existing mean, standard error, median, minimum, maximum, and raw samples;
+its relative error is the maximum across the independently validated samples.
+If any sample fails, completed sample logs are retained, no partial case row
+is published, and the sweep continues with the next case.
+
+Failed cases print their backend, size, GPU count, exit status,
 and the last 20 log lines directly in the terminal. Missing result logs mark
 only that case as failed. Missing memory samples leave the peak field empty;
 successful timing rows are retained and later cases still run. Either condition

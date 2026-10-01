@@ -81,10 +81,12 @@ end
 text_px(pt) = 1.4 * pt * 100 / 72   # GR line height; Plots' px is 1/100 inch
 
 # All sizes scale with the tick font, so proportions hold at print width.
-function grid_style(font_size)
+function grid_style(font_size; legend_scale=1.0)
     k = font_size / 11
     return (tick=font_size, guide=font_size + 1, title=font_size + 2,
-            legend=font_size - 1, lw=2.4k, ms=6k, k)
+            # Int: Plots reads a Float text size as a rotation angle.
+            legend=round(Int, legend_scale * (font_size - 1)), legend_k=legend_scale * k,
+            lw=2.4k, ms=6k, k)
 end
 
 # GR sizes margins as if text were normalized per side, but it is normalized
@@ -106,19 +108,21 @@ function grid_line!(p, s, y, st; kw...)
 end
 
 # Axis labels only on the outer edge of the grid; every panel shares them.
-function panel_plot(series, metric; title, log_values, first_col, last_row, fix, st)
+function panel_plot(series, metric; title, log_values, first_col, last_row, bottom_row, fix, st)
     gpus = sort(unique(x.gpus for s in series for x in s.agg))
     p = plot(;
-        title, xlabel=last_row ? "GPUs" : "",
+        title, xlabel=bottom_row ? "GPUs" : "",
         ylabel=first_col ? METRICS[metric].ylabel : "",
-        xscale=:log2, xticks=(gpus, string.(gpus)),
+        # GPU ticks are shared, so only the bottom panel of each column labels them.
+        xscale=:log2, xticks=(gpus, last_row ? string.(gpus) : fill("", length(gpus))),
         xlims=(minimum(gpus) / 1.15, maximum(gpus) * 1.15), widen=false,
         framestyle=:box, legend=false,
         tickfontsize=st.tick, guidefontsize=st.guide, titlefontsize=st.title,
         titlefontfamily="DejaVuSans-Bold",   # TTF bold of the default font; GR built-ins mis-size
         left_margin=(fix.ticks + (first_col ? fix.guide : 0)) * Plots.px +
                     (first_col ? 3st.k * Plots.mm : 0Plots.mm),
-        bottom_margin=(fix.bottom + (last_row ? fix.guide : 0)) * Plots.px,
+        bottom_margin=last_row ? (fix.bottom + (bottom_row ? fix.guide : 0)) * Plots.px :
+                      -1Plots.mm,
         # GR adds 2mm on every side; above the title that is only white space.
         top_margin=fix.top * Plots.px - 2Plots.mm, right_margin=2Plots.mm,
     )
@@ -147,24 +151,31 @@ end
 
 # Hand-drawn legend table in canvas pixels; Plots' multi-column legend drops
 # entries when short on height.
-legend_dims(st) = (swatch=18st.k, char=0.8st.legend, gap=10st.k, row=2.7st.legend)
+legend_dims(st) = (swatch=34st.legend_k, char=0.8st.legend, gap=10st.legend_k, row=2.7st.legend)
 # GR padding around an axis-less subplot; excluding it keeps px ≈ plot units.
 const LEGEND_INSET_PX = 90
 
 entry_px(s, d) = d.swatch + 4 + d.char * length(s.label)
-legend_col_px(series, d) = maximum(s -> entry_px(s, d), series) + d.gap
+
+# Each column is as wide as its own longest entry (rows fill left to right).
+function legend_col_widths(series, cols, d)
+    return [maximum(entry_px(s, d) for s in series[c:cols:end]) + d.gap for c in 1:cols]
+end
 
 function legend_rows(series, width, st)
     d = legend_dims(st)
-    cols = clamp(floor(Int, (width - LEGEND_INSET_PX) / legend_col_px(series, d)),
-        1, length(series))
+    cols = something(findlast(c -> sum(legend_col_widths(series, c, d)) <= width - LEGEND_INSET_PX,
+        1:length(series)), 1)
+    # Same row count, entries spread evenly (5 -> 3 + 2, not 4 + 1).
+    cols = cld(length(series), cld(length(series), cols))
     return [series[i:min(i + cols - 1, end)] for i in 1:cols:length(series)]
 end
 
 # `slot_h` set: the legend fills an empty grid slot, rows hanging from the top.
-function grid_legend(rows, width, st; slot_h=nothing)
+# `shift` moves the rows up by that fraction of the legend's height.
+function grid_legend(rows, width, st; slot_h=nothing, shift=0.0)
     d = legend_dims(st)
-    col_px = legend_col_px(reduce(vcat, rows), d)
+    col_x = cumsum([0.0; legend_col_widths(reduce(vcat, rows), length(first(rows)), d)])
     pl = plot(; framestyle=:none, grid=false, ticks=false, legend=false,
         xlims=(0, width - LEGEND_INSET_PX), ylims=(0, 1), widen=false,
         # Cancel GR's 2mm padding; at the canvas bottom, stop short so rounding
@@ -173,12 +184,14 @@ function grid_legend(rows, width, st; slot_h=nothing)
     for (r, row) in enumerate(rows)
         # In a slot, GR padding shrinks the height; spread rows instead.
         step = slot_h === nothing ? 1 / length(rows) : min(1 / length(rows), 1.6d.row / slot_h)
-        y = 1 - (r - 0.5) * step
+        y = 1 - (r - 0.5) * step + shift
         for (c, s) in enumerate(row)
-            x = (c - 1) * col_px
-            plot!(pl, [x, x + d.swatch], [y, y]; color=s.color, lw=0.9st.lw, ls=s.ls, label="")
+            x = col_x[c]
+            scale = st.legend_k / st.k
+            plot!(pl, [x, x + d.swatch], [y, y]; color=s.color, lw=0.9scale * st.lw, ls=s.ls,
+                label="")
             scatter!(pl, [x + d.swatch / 2], [y]; color=s.color, marker=s.marker,
-                ms=0.65st.ms, msc=s.color, markerstrokewidth=0.5st.k, label="")
+                ms=0.65scale * st.ms, msc=s.color, markerstrokewidth=0.5st.legend_k, label="")
             annotate!(pl, x + d.swatch + 4, y, text(s.label, st.legend, :black, :left))
         end
     end
@@ -200,7 +213,8 @@ function grid_figure(panels, metric, columns; panel_w, panel_h, st)
 
     plots = Any[panel_plot(p.series, metric; title=p.title, log_values=p.log,
                     first_col=(i - 1) % columns == 0,
-                    last_row=i > length(panels) - columns, fix, st)
+                    last_row=i > length(panels) - columns,
+                    bottom_row=i > (rows - 1) * columns, fix, st)
                 for (i, p) in enumerate(panels)]
     in_slot && push!(plots, grid_legend(rows_legend, panel_w, st; slot_h=panel_h))
     for _ in (length(plots) + 1):(rows * columns)
@@ -212,6 +226,56 @@ function grid_figure(panels, metric, columns; panel_w, panel_h, st)
     body = plot(plots...; layout=grid(rows, columns))
     return plot(body, grid_legend(rows_legend, width, st);
         layout=grid(2, 1; heights=[rows * panel_h, legend_h] ./ height), fig_kw...)
+end
+
+# cuNumeric.jl speedups for the paper text: (label, GPU counts compared).
+# Speedup = reference time / cuNumeric.jl time at the same GPU count; panels
+# already guarantee equal problem sizes per GPU count.
+const SPEEDUP_REFERENCES = (
+    ("cuPyNumeric", :all), ("JACC.jl", :all), ("Dagger.jl", :all), ("CUDA.jl", 1),
+)
+
+geomean(x) = exp(sum(log, x) / length(x))
+fmt_x(x) = string(round(x; sigdigits=3), "×")
+
+function speedups(panel, reference, gpus)
+    find(label) = findfirst(s -> s.label == label, panel.series)
+    i, j = find("cuNumeric.jl"), find(reference)
+    (i === nothing || j === nothing) && return nothing
+    ours = Dict(x.gpus => x.t for x in panel.series[i].agg)
+    theirs = Dict(x.gpus => x.t for x in panel.series[j].agg)
+    shared = sort([g for g in keys(ours) if haskey(theirs, g) && (gpus === :all || g == gpus)])
+    isempty(shared) && return nothing
+    return [(gpus=g, speedup=theirs[g] / ours[g]) for g in shared]
+end
+
+# Per benchmark: geomean over shared GPU counts; overall: geomean of those.
+function speedup_summary(panels)
+    lines = ["# cuNumeric.jl speedup summary", ""]
+    overall = Dict{String,Any}()
+    for (reference, gpus) in SPEEDUP_REFERENCES
+        scope = gpus === :all ? "all shared GPU counts" : "$gpus GPU"
+        rows = [(p.title, s) for p in panels for s in (speedups(p, reference, gpus),) if s !== nothing]
+        push!(lines, "## vs $reference ($scope)", "")
+        if isempty(rows)
+            push!(lines, "No $reference results in these panels.", "")
+            continue
+        end
+        push!(lines, "| Benchmark | GPUs | Speedup |", "|---|---|---:|")
+        per_bench = Float64[]
+        for (title, s) in rows
+            g = geomean(getfield.(s, :speedup))
+            push!(per_bench, g)
+            detail = join(["$(x.gpus): $(fmt_x(x.speedup))" for x in s], ", ")
+            push!(lines, "| $title | $detail | $(fmt_x(g)) |")
+        end
+        overall[reference] = (geomean=geomean(per_bench), n=length(rows),
+            lo=minimum(per_bench), hi=maximum(per_bench))
+        o = overall[reference]
+        push!(lines, "", "Geomean over $(o.n) benchmarks: **$(fmt_x(o.geomean))** " *
+            "(per-benchmark range $(fmt_x(o.lo))–$(fmt_x(o.hi))).", "")
+    end
+    return join(lines, "\n")
 end
 
 function grid_main(args=ARGS)
@@ -233,7 +297,7 @@ function grid_main(args=ARGS)
         panel_w, panel_h = w, panel_h * w / panel_w
         font_size *= 2
     end
-    st = grid_style(font_size)
+    st = grid_style(font_size; legend_scale=get(raw, "legend_scale", 1.0))
     format = get(raw, "format", "png")
     panels = map(get(raw, "panel", [])) do p
         (series=panel_series(p),
@@ -249,6 +313,10 @@ function grid_main(args=ARGS)
         savefig(fig, out)
         println("wrote $out")
     end
+    summary = speedup_summary(panels)
+    out = joinpath(cfg.out_dir, "speedup_summary.md")
+    write(out, summary)
+    println("wrote $out")
     return nothing
 end
 

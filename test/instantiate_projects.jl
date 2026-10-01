@@ -6,7 +6,8 @@ using Test, TOML
 
 const ROOT = dirname(@__DIR__)
 const PROJECTS = [".", "environments/cuda", "environments/jacc",
-    "environments/dagger", "environments/cunumeric", "environments/composability"]
+    "environments/dagger", "environments/implicitglobalgrid",
+    "environments/cunumeric", "environments/composability"]
 
 function stage_projects(destination)
     cp(joinpath(ROOT, "instantiate_projects.sh"), joinpath(destination, "instantiate_projects.sh"))
