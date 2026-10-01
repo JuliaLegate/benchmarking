@@ -43,6 +43,7 @@ echo 'backend,solver,mode,gpus,n,legate_config,cuda_visible_devices' > "$output/
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     "$julia_bin" --version
     nvidia-smi
+    printf 'sample_isolation=process\nwarmups_per_sample=1\n'
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=%s\nBENCH_LOCAL=%s\nBENCH_SAMPLES=%s\nBENCH_CPUS=%s\nBENCH_TIMEOUT=%s\nLEGATE_AUTO_CONFIG=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "$BENCH_SOLVERS" "$BENCH_LOCAL" "$BENCH_SAMPLES" "${BENCH_CPUS:-2}" \
         "${BENCH_TIMEOUT:-15m}" "$LEGATE_AUTO_CONFIG"
@@ -66,7 +67,7 @@ run_case() {
     if result=$(CUDA_VISIBLE_DEVICES="$gpu_mask" run_logged_case "$log" "$memory_log" \
         timeout --signal=TERM --kill-after=30s "${BENCH_TIMEOUT:-15m}" \
         "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
-        "$script_dir/krylov.jl" "$backend" "$solver" "$mode" "$n"); then
+        "$script_dir/run_samples.jl" "$log" "$backend" "$solver" "$mode" "$n"); then
         printf '%s,%s,%s\n' "$experiment" "${base_n:-}" "$result" >> "$csv"
     else
         echo "Failed: $backend $solver $mode, G=$gpus N=$n ($log)" >&2

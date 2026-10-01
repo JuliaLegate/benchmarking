@@ -2,7 +2,8 @@
 # exactly one timed solve. Wait for it to exit before launching the next child.
 module ODESamples
 
-using Statistics: mean, median, std
+include("../process_samples.jl")
+using .ProcessSamples: collect_samples, print_result
 
 function sample_result(log, expected)
     rows = filter(line -> startswith(line, "RESULT,"), readlines(log))
@@ -28,44 +29,11 @@ function run_samples(log, backend, n; worker=joinpath(@__DIR__, "benchmark_heat.
     project = dirname(Base.active_project())
     cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project $worker $backend $n`,
                  "ODE_SAMPLES" => "1")
-    elapsed_ms = Float64[]
-    errors = Float64[]
-    for sample_index in 1:count
-        sample_log = "$(splitext(log)[1])-sample-$sample_index.log"
-        println("Starting sample $sample_index/$count in a fresh Julia process; log=$sample_log")
-        flush(stdout)
-        try
-            open(sample_log, "w") do io
-                process = run(pipeline(cmd; stdout=io, stderr=io); wait=false)
-                try
-                    success(process) || error("Sample $sample_index failed: exit status $(process.exitcode), signal $(process.termsignal)")
-                finally
-                    # An interrupted coordinator must not leave its worker running.
-                    if process_running(process)
-                        kill(process, Base.SIGKILL)
-                        wait(process)
-                    end
-                end
-            end
-            elapsed, relative_error = sample_result(sample_log, expected)
-            push!(elapsed_ms, elapsed)
-            push!(errors, relative_error)
-            println("Completed sample $sample_index/$count: $(elapsed) ms, relative_error=$relative_error")
-            flush(stdout)
-        catch
-            if isfile(sample_log)
-                println(stderr, "Last 20 lines of $sample_log:")
-                lines = readlines(sample_log)
-                foreach(line -> println(stderr, line), Iterators.drop(lines, max(0, length(lines) - 20)))
-            end
-            rethrow()
-        end
+    results = collect_samples(log, cmd, count) do sample_log
+        elapsed, relative_error = sample_result(sample_log, expected)
+        return (; elapsed, relative_error)
     end
-    # Publish a case only after all requested independent samples validate.
-    stderr_ms = std(elapsed_ms) / sqrt(count)
-    println("RESULT,$(join(expected, ',')),$(mean(elapsed_ms)),$stderr_ms,$(median(elapsed_ms)),$(minimum(elapsed_ms)),$(maximum(elapsed_ms)),$(maximum(errors)),$(join(elapsed_ms, ';'))")
-    flush(stdout)
-    return nothing
+    return print_result(expected, results)
 end
 
 end # module

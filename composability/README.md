@@ -207,6 +207,9 @@ checks; there are no separate shell entry points for the full suite.
 GPU selection, memory monitoring, and result-log handling are shared in
 [`common.sh`](common.sh). Backend choices and worker commands remain in each
 launcher. Package versions are recorded in the saved `Manifest.toml`.
+Krylov and ODE share [`process_samples.jl`](process_samples.jl): each sample
+runs one warmup and one timed solve in a fresh Julia process, sequentially.
+Per-sample logs are kept alongside the aggregated case log and CSV.
 
 ```sh
 bash composability/krylov/run.sh single 1024 2048
