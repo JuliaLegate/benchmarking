@@ -72,12 +72,14 @@ const COLOR_CUDA = "#1a7f37"
 const COLOR_CUTENSOR = "#0d7377"
 const COLOR_JACC = "#8e44ad"
 const COLOR_DAGGER = "#c49a00"
+const COLOR_IGG = "#6d4c41"
 const MARKER_CUNUMERIC = :circle
 const MARKER_CUPYNUMERIC = :rect
 const MARKER_CUDA = :utriangle
 const MARKER_CUTENSOR = :star5
 const MARKER_JACC = :diamond
 const MARKER_DAGGER = :hexagon
+const MARKER_IGG = :pentagon
 
 # Extra cuNumeric variants (Gray-Scott forms, DMD accelerated). Avoid the
 # reference orange/green so CUDA.jl and cuPyNumeric stay unique.
@@ -91,6 +93,7 @@ const REF_FAMILIES = [
     ("tensoroperations_cuda", "TensorOperations.jl / cuTENSOR", COLOR_CUTENSOR, MARKER_CUTENSOR),
     ("jacc", "JACC.jl", COLOR_JACC, MARKER_JACC),
     ("dagger", "Dagger.jl", COLOR_DAGGER, MARKER_DAGGER),
+    ("igg", "ImplicitGlobalGrid.jl", COLOR_IGG, MARKER_IGG),
 ]
 
 const INK = "#111111"

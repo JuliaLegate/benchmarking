@@ -91,6 +91,15 @@ if me == 0
         gpus, N, N, n_trials, n_iter, n_warmup)
     @printf("Mean time: %.6f ms/step; stddev: %.6f ms; SEM: %.6f ms\n", mean_ms, std_ms, sem_ms)
     @printf("Throughput: %.6f G cell updates/s\n", gupdates)
+    # Harness CSV row per trial: model,gpus,N,M,trial,ms/step,G cell updates/s,correctness.
+    if haskey(ENV, "IGG_CSV")
+        mkpath(dirname(ENV["IGG_CSV"]))
+        open(ENV["IGG_CSV"], "a") do io
+            for (trial, ms) in enumerate(times_ms)
+                @printf(io, "igg,%d,%d,%d,%d,%.6f,%.6f,skipped\n", gpus, N, N, trial, ms, Float64(N)^2 / (ms * 1e6))
+            end
+        end
+    end
 end
 
 finalize_global_grid()

@@ -31,6 +31,8 @@ source "$conda_base/etc/profile.d/conda.sh"
 conda activate "$mpi_prefix"
 trap 'conda deactivate' EXIT
 
+# IGG_OUTPUT=<run dir>: append harness rows to <run dir>/Float32/grayscott_igg.csv.
+[[ -z ${IGG_OUTPUT:-} ]] || export IGG_CSV="$IGG_OUTPUT/Float32/grayscott_igg.csv"
 export OMPI_MCA_opal_cuda_support=true
 export IGG_CUDAAWARE_MPI=${IGG_CUDAAWARE_MPI:-1}
 if (( EUID == 0 )); then

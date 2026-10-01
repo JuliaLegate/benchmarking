@@ -151,7 +151,7 @@ end
 
 # Hand-drawn legend table in canvas pixels; Plots' multi-column legend drops
 # entries when short on height.
-legend_dims(st) = (swatch=18st.legend_k, char=0.8st.legend, gap=10st.legend_k, row=2.7st.legend)
+legend_dims(st) = (swatch=34st.legend_k, char=0.8st.legend, gap=10st.legend_k, row=2.7st.legend)
 # GR padding around an axis-less subplot; excluding it keeps px ≈ plot units.
 const LEGEND_INSET_PX = 90
 

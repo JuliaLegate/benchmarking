@@ -1,14 +1,22 @@
-# Standalone figures: one file per metric, one panel per fusion setting.
+# Standalone figures. A fusion list gives one file per metric (a panel per
+# setting); a single setting gives one file with a panel per metric.
 #   config   benchmark config whose [plot.groups] defines the series
 #   results  run directory
 #   fusion   "on", "off", "both", or a list
+#   name     output file name (default: the plot group)
 # Style keys match grid.toml (panel_size, font_size, legend_scale).
 
 format = "pdf"
 panel_size = [400, 220]
-legend_scale = 1.3
+legend_scale = 1.15
 
 [[figure]]   # Gray-Scott @accelerate forms
 config = "configs/multi_gpu/grayscott_forms.toml"
 results = "results/<run-id>"
 fusion = ["on", "off"]
+
+[[figure]]   # Gray-Scott: cuNumeric (accelerated, fused/unfused), cuPyNumeric, ImplicitGlobalGrid
+config = "configs/multi_gpu/grayscott.toml"
+results = "results/<compare-dir>"
+fusion = "both"
+name = "grayscott_compare"

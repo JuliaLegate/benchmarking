@@ -1,11 +1,27 @@
 #!/usr/bin/env julia
 # Standalone figures listed in configs/plots/figures.toml, drawn in the grid's
-# style: one file per metric, one panel per fusion setting, side by side.
+# style. Several fusion settings: one file per metric, one panel per setting.
+# One setting: one file, one panel per metric.
 #   julia --project=. plot_figures.jl [--config=PATH] [--out=DIR]
 
 include(joinpath(@__DIR__, "plot_grid.jl"))
 
 const FUSION_TAG = Dict("on" => " (fused)", "off" => " (unfused)", "both" => "")
+
+# One row of metric panels sharing a legend; the title sits over the middle panel.
+function metric_row(series, metrics, title; panel_w, panel_h, st)
+    width = panel_w * length(metrics)
+    rows_legend = legend_rows(series, width, st)
+    legend_h = legend_dims(st).row * length(rows_legend) + 4
+    height = panel_h + legend_h
+    fix = gr_margin_fix(width, height, st)
+    plots = [panel_plot(series, m; title=i == cld(length(metrics), 2) ? title : "",
+                 log_values=false, first_col=true, last_row=true, bottom_row=true, fix, st)
+             for (i, m) in enumerate(metrics)]
+    return plot(plot(plots...; layout=grid(1, length(metrics))), grid_legend(rows_legend, width, st);
+        layout=grid(2, 1; heights=[panel_h, legend_h] ./ height),
+        size=(width, height), dpi=200, background_color=:white)
+end
 
 function figures_main(args=ARGS)
     config = joinpath(@__DIR__, "configs", "plots", "figures.toml")
@@ -36,9 +52,17 @@ function figures_main(args=ARGS)
                 (; series, title=group_title(group) * FUSION_TAG[fusion], log=false)
             end
             all(p -> isempty(p.series), panels) && continue
+            name = get(f, "name", group)
+            if length(panels) == 1
+                fig = metric_row(only(panels).series, metrics, only(panels).title; panel_w, panel_h, st)
+                out = joinpath(out_dir, "$(name).$(format)")
+                savefig(fig, out)
+                println("wrote $out")
+                continue
+            end
             for m in metrics
                 fig = grid_figure(panels, m, length(panels); panel_w, panel_h, st)
-                out = joinpath(out_dir, "$(group)_$(m).$(format)")
+                out = joinpath(out_dir, "$(name)_$(m).$(format)")
                 savefig(fig, out)
                 println("wrote $out")
             end
