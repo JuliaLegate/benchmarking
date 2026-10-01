@@ -89,6 +89,7 @@ const GROUP_TITLES = Dict(
     "grayscott" => "Gray-Scott",
     "dmd" => "DMD",
     "gemm" => "GEMM",
+    "cg" => "CG",
     "poisson_fft" => "Poisson FFT",
     "montecarlo" => "Monte Carlo",
     "tensor_projection3" => "Tensor projection (3-mode)",
@@ -120,16 +121,17 @@ function group_title(group)
     return get(GROUP_TITLES, group, titlecase(replace(group, '_' => ' ')))
 end
 
+# Variants are cuNumeric-only, so every label names the model.
 function variant_label(group, member)
-    member == group && return "cuNumeric.jl"
+    member == group && return nothing
     prefix = group * "_"
     stem = startswith(member, prefix) ? member[(length(prefix) + 1):end] : member
     return replace(stem, '_' => ' ')
 end
 
 function cunumeric_series_label(group, member, fused)
-    base = variant_label(group, member)
-    return fused ? base : "$(base) (unfused)"
+    notes = filter(!isnothing, [variant_label(group, member), fused ? nothing : "unfused"])
+    return isempty(notes) ? "cuNumeric.jl" : "cuNumeric.jl ($(join(notes, ", ")))"
 end
 
 function overlay_refs(results_dir, members)
