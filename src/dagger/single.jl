@@ -23,6 +23,11 @@ const SUPPORTED_BENCHMARKS = [
     "montecarlo", "gemm", "grayscott", "cg", "nas_ep", "nas_ft", "nas_mg"
 ]
 
+const DaggerBenchmark = Union{
+    DaggerMonteCarlo,DaggerGEMM,DaggerGrayScott,DaggerCG,DaggerNASEP,DaggerNASFT,DaggerNASMG,
+}
+model_release_memory(::DaggerBenchmark) = dagger_release_memory()
+
 function model_build_benchmark(config::ModelWorkerConfig)
     config.name in SUPPORTED_BENCHMARKS || error(
         "Dagger benchmark '$(config.name)' is not implemented; known: " *

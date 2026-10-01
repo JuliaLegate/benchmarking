@@ -1,0 +1,18 @@
+# Dagger.jl-only multi-GPU weak scaling, 1-4 GPUs.
+# Dagger has native gemm, grayscott, montecarlo, and cg workers.
+[Global]
+n_warmup = 2
+n_iter = 5
+n_trial = 5
+models = ["cunumeric", "dagger"]
+check_correctness = true
+n_correctness_iter = 5
+auto_size = true
+mem_frac = 0.75
+
+[[gemm]]
+T = ["Float32"]
+gpus = [1, 2, 4]
+cpus = 8
+n_iter = 5
+mem_frac = 0.8

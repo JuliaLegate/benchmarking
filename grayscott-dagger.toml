@@ -1,0 +1,18 @@
+# cuNumeric vs Dagger.jl Gray-Scott weak scaling, 1-4 GPUs. Auto-sized: the
+# configs/multi_gpu sizes (N=28000 on 1 GPU) do not fit cuNumeric on 48 GB GPUs,
+# which holds ~15 full-size arrays per GPU at mem_frac 0.75 sizes.
+[Global]
+models = ["cunumeric", "dagger"]
+n_warmup = 2
+n_iter = 50
+n_trial = 5
+check_correctness = true
+n_correctness_iter = 5
+auto_size = true
+mem_frac = 0.5
+
+[[grayscott]]
+T = "Float32"
+gpus = [1, 2, 4]
+cpus = 8
+fusion = true
