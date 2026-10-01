@@ -15,7 +15,8 @@ plots*/
 .vscode/
 .agents/
 .codex/
-# Re-include configs/plots/ (matched by plots*/); grid.toml and figures.toml are local.
+# Re-include configs/plots/ (matched by plots*/); grid*.toml and figures.toml are local.
 !/configs/plots/
-/configs/plots/grid.toml
+/configs/plots/grid*.toml
 /configs/plots/figures.toml
+!/configs/plots/grid.example.toml

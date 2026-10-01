@@ -4,7 +4,9 @@
 #   results  run directory
 #   fusion   "on", "off", "both", or a list
 #   name     output file name (default: the plot group)
-# Style keys match grid.toml (panel_size, font_size, legend_scale).
+#   metrics  per-figure metric panels (default: the top-level metrics)
+#   title    panel title ("" for none; default: the benchmark name)
+# Style keys match grid.toml (panel_size, font_size, legend_scale, width_in).
 
 format = "pdf"
 panel_size = [400, 220]
@@ -20,3 +22,5 @@ config = "configs/multi_gpu/grayscott.toml"
 results = "results/<compare-dir>"
 fusion = "both"
 name = "grayscott_compare"
+metrics = ["throughput", "time"]
+title = ""   # the paper caption names the benchmark

@@ -38,9 +38,18 @@ function figures_main(args=ARGS)
     isfile(config) || error("$config not found; copy configs/plots/figures.example.toml")
     raw = TOML.parsefile(config)
     metrics = string.(get(raw, "metrics", ["throughput", "time", "efficiency"]))
-    panel_w, panel_h = get(raw, "panel_size", [400, 300])
-    st = grid_style(get(raw, "font_size", 11); legend_scale=get(raw, "legend_scale", 1.0))
     format = get(raw, "format", "pdf")
+    # Per-figure sizing; with width_in, the row is that printed width (as in the grid).
+    function sizing(columns)
+        w, h = get(raw, "panel_size", [400, 300])
+        font_size = get(raw, "font_size", 11)
+        if haskey(raw, "width_in")
+            w, h = 144raw["width_in"] / columns, h * (144raw["width_in"] / columns) / w
+            font_size *= 2
+        end
+        return (; panel_w=w, panel_h=h,
+            st=grid_style(font_size; legend_scale=get(raw, "legend_scale", 1.0)))
+    end
     mkpath(out_dir)
     for f in get(raw, "figure", [])
         dir = csv_dir(f["results"])
@@ -49,19 +58,20 @@ function figures_main(args=ARGS)
             panels = map(aslist(get(f, "fusion", "both"))) do fusion
                 series = group_series(dir, group, members; fusion)
                 validate_series_sizes(series)
-                (; series, title=group_title(group) * FUSION_TAG[fusion], log=false)
+                (; series, title=get(f, "title", group_title(group)) * FUSION_TAG[fusion], log=false)
             end
             all(p -> isempty(p.series), panels) && continue
             name = get(f, "name", group)
             if length(panels) == 1
-                fig = metric_row(only(panels).series, metrics, only(panels).title; panel_w, panel_h, st)
+                row = string.(get(f, "metrics", metrics))
+                fig = metric_row(only(panels).series, row, only(panels).title; sizing(length(row))...)
                 out = joinpath(out_dir, "$(name).$(format)")
                 savefig(fig, out)
                 println("wrote $out")
                 continue
             end
             for m in metrics
-                fig = grid_figure(panels, m, length(panels); panel_w, panel_h, st)
+                fig = grid_figure(panels, m, length(panels); sizing(length(panels))...)
                 out = joinpath(out_dir, "$(name)_$(m).$(format)")
                 savefig(fig, out)
                 println("wrote $out")
