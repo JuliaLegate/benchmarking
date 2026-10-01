@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$script_dir/../common.sh"
 INTOPT_PROJECT=${INTOPT_PROJECT:-"$script_dir/../../environments/composability"}
 
 usage() {
@@ -25,23 +26,6 @@ for value in "$@"; do
 done
 
 julia_bin=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
-visible_pool=${CUDA_VISIBLE_DEVICES-}
-gpu_mask_for_count() {
-    local count=$1 i mask
-    local -a devices=()
-    if [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
-        [[ -n $visible_pool ]] || { echo "CUDA_VISIBLE_DEVICES is empty" >&2; return 2; }
-        IFS=, read -r -a devices <<< "$visible_pool"
-        (( ${#devices[@]} >= count )) || {
-            echo "CUDA_VISIBLE_DEVICES has fewer than $count devices" >&2
-            return 2
-        }
-    else
-        for ((i=0; i<count; i++)); do devices+=("$i"); done
-    fi
-    printf -v mask '%s,' "${devices[@]:0:count}"
-    printf '%s\n' "${mask%,}"
-}
 output=${INTOPT_OUTPUT:-"$script_dir/results-$experiment-$(date +%Y%m%d-%H%M%S)-$$"}
 mkdir -p "$output"
 csv="$output/results.csv"
@@ -52,7 +36,14 @@ export INTOPT_SAMPLES=${INTOPT_SAMPLES:-5}
 export LEGATE_AUTO_CONFIG=1
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 
-read -r -a backends <<< "${INTOPT_BACKENDS:-$( [[ $experiment == single ]] && echo 'CuArray Dagger cuNumeric' || echo 'Dagger cuNumeric' )}"
+if [[ $experiment == single ]]; then
+    backends=(CuArray Dagger cuNumeric)
+else
+    backends=(Dagger cuNumeric)
+fi
+if [[ -n ${INTOPT_BACKENDS:-} ]]; then
+    read -r -a backends <<< "$INTOPT_BACKENDS"
+fi
 [[ ${#backends[@]} -gt 0 ]] || usage
 for backend in "${backends[@]}"; do
     case "$backend" in
@@ -75,7 +66,6 @@ done
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-    "$julia_bin" --startup-file=no --project="$INTOPT_PROJECT" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/metadata.txt" 2>&1
 cp "$INTOPT_PROJECT/Manifest.toml" "$output/Manifest.toml"
 [[ ! -f "$INTOPT_PROJECT/LocalPreferences.toml" ]] || cp "$INTOPT_PROJECT/LocalPreferences.toml" "$output/LocalPreferences.toml"
@@ -101,28 +91,16 @@ for value in "$@"; do
         log="$output/$backend-$gpus-$n.log"
         echo "Running $backend G=$gpus N=$n"
         memory_log="$output/gpu-memory-$backend-$gpus-$n.log"
-        nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
-        monitor_pid=$!
-        result_line=""
-        if CUDA_VISIBLE_DEVICES="$gpu_mask" timeout --signal=TERM --kill-after=30s "${INTOPT_TIMEOUT:-15m}" \
+        if result=$(CUDA_VISIBLE_DEVICES="$gpu_mask" run_logged_case "$log" "$memory_log" \
+            timeout --signal=TERM --kill-after=30s "${INTOPT_TIMEOUT:-15m}" \
             "$julia_bin" --startup-file=no --project="$INTOPT_PROJECT" \
-            "$script_dir/benchmark.jl" "$backend" "$n" > "$log" 2>&1; then
-            line=$(grep '^RESULT,' "$log" | tail -n 1 || true)
-            if [[ -n $line ]]; then
-                result_line="$experiment,${base_n:-},${line#RESULT,}"
-            else
-                echo "No RESULT row in $log" >&2; status=1; size_failed=1
-            fi
+            "$script_dir/benchmark.jl" "$backend" "$n"); then
+            printf '%s,%s,%s\n' "$experiment" "${base_n:-}" "$result" >> "$csv"
         else
             echo "$backend G=$gpus N=$n failed; see $log" >&2; status=1; size_failed=1
         fi
-        kill "$monitor_pid" 2>/dev/null || true
-        wait "$monitor_pid" 2>/dev/null || true
-        peak=$(awk '$1 ~ /^[0-9]+$/ && $1 > peak { peak=$1 } END { print peak+0 }' "$memory_log")
+        peak=$(read_peak_memory "$memory_log") || status=1
         printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$peak" >> "$output/memory.csv"
-        if [[ -n $result_line ]]; then
-            printf '%s\n' "$result_line" >> "$csv"
-        fi
     done
     if [[ $experiment == single ]]; then
         if [[ $size_failed -ne 0 ]]; then

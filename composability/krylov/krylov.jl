@@ -14,7 +14,7 @@ GPUS > 0 || error("BENCH_GPUS must be positive")
 const T = get(ENV, "BENCH_ELTYPE", "Float32") == "Float64" ? Float64 : Float32
 const TOL = T === Float32 ? T(1e-5) : T(1e-8)
 const SAMPLES = parse(Int, get(ENV, "BENCH_SAMPLES", "5"))
-SAMPLES >= 2 || error("BENCH_SAMPLES must be at least 2 for a standard error")
+SAMPLES >= 1 || error("BENCH_SAMPLES must be positive")
 BLAS.set_num_threads(1)
 if BACKEND == "cuNumeric"
     @eval using cuNumeric
@@ -82,8 +82,8 @@ function solve!(w, A, b)
     return SOLVER == "cg" ? local_cg!(w, A, b) : local_bicgstab!(w, A, b)
 end
 
-function checked_solve!(w, A, b, reference, bh)
-    x, iterations, _ = permitted_solve!(w, A, b)
+function checked_solve!(w, A, b, reference, bh; solution=nothing)
+    x, iterations, _ = solution === nothing ? permitted_solve!(w, A, b) : solution
     sync(w)
     # Validate the answer independently of the solver's convergence flag and
     # the final vector's placement; input placement is checked in make_array.
@@ -96,6 +96,8 @@ function checked_solve!(w, A, b, reference, bh)
 end
 
 function benchmark()
+    println("Worker PID=$(getpid()): $BACKEND $SOLVER $MODE, G=$GPUS N=$N")
+    flush(stdout)
     lower = fill(T(SOLVER == "cg" ? -0.5 : -0.3), N - 1)
     upper = fill(T(SOLVER == "cg" ? -0.5 : -0.8), N - 1)
     diagonal = T.(range(2.0, 4.0; length=N))
@@ -109,21 +111,23 @@ function benchmark()
     Ah = nothing
     GC.gc()
 
-    for _ in 1:2
-        checked_solve!(w, A, b, reference, bh)
-    end
+    checked_solve!(w, A, b, reference, bh)
+    println("Warmup complete; starting $SAMPLES timed solve(s)")
+    flush(stdout)
     samples = Float64[]
+    solution = nothing
     for _ in 1:SAMPLES
         GC.gc(); sync(w)
         start = time_ns()
-        permitted_solve!(w, A, b)
+        solution = permitted_solve!(w, A, b)
         sync(w)
         push!(samples, (time_ns() - start) / 1e6)
     end
-    iterations, residual = checked_solve!(w, A, b, reference, bh)
+    # Validate the actual timed solution without running an additional solve.
+    iterations, residual = checked_solve!(w, A, b, reference, bh; solution)
     label = BACKEND == "CuArray" ? "CUDA" :
             BACKEND == "cuNumeric" && MODE != "stock" ? "cuNumeric $(MODE)" : BACKEND
-    stderr = std(samples) / sqrt(length(samples))
+    stderr = length(samples) > 1 ? std(samples) / sqrt(length(samples)) : NaN
     println("RESULT,$label,$SOLVER,$MODE,$T,$GPUS,$N,$iterations,$(mean(samples)),$stderr,$(median(samples)),$(minimum(samples)),$(maximum(samples)),$residual,$(join(samples, ';'))")
 end
 

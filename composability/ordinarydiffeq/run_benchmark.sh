@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$script_dir/../common.sh"
 ODE_PROJECT=${ODE_PROJECT:-"$script_dir/../../environments/composability"}
 
 usage() {
@@ -25,23 +26,6 @@ for value in "$@"; do
 done
 
 julia_bin=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
-visible_pool=${CUDA_VISIBLE_DEVICES-}
-gpu_mask_for_count() {
-    local count=$1 i mask
-    local -a devices=()
-    if [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
-        [[ -n $visible_pool ]] || { echo "CUDA_VISIBLE_DEVICES is empty" >&2; return 2; }
-        IFS=, read -r -a devices <<< "$visible_pool"
-        (( ${#devices[@]} >= count )) || {
-            echo "CUDA_VISIBLE_DEVICES has fewer than $count devices" >&2
-            return 2
-        }
-    else
-        for ((i=0; i<count; i++)); do devices+=("$i"); done
-    fi
-    printf -v mask '%s,' "${devices[@]:0:count}"
-    printf '%s\n' "${mask%,}"
-}
 output=${ODE_OUTPUT:-"$script_dir/results-$experiment-$(date +%Y%m%d-%H%M%S)-$$"}
 mkdir -p "$output"
 csv="$output/results.csv"
@@ -52,7 +36,14 @@ export ODE_SAMPLES=${ODE_SAMPLES:-5}
 export LEGATE_AUTO_CONFIG=1
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 
-read -r -a backends <<< "${ODE_BACKENDS:-$( [[ $experiment == single ]] && echo 'CuArray Dagger cuNumeric' || echo 'Dagger cuNumeric' )}"
+if [[ $experiment == single ]]; then
+    backends=(CuArray Dagger cuNumeric)
+else
+    backends=(Dagger cuNumeric)
+fi
+if [[ -n ${ODE_BACKENDS:-} ]]; then
+    read -r -a backends <<< "$ODE_BACKENDS"
+fi
 [[ ${#backends[@]} -gt 0 ]] || usage
 for backend in "${backends[@]}"; do
     case "$backend" in
@@ -67,11 +58,10 @@ done
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     printf 'julia=%s\n' "$("$julia_bin" --version)"
     printf 'experiment=%s\nbase_n=%s\nbackends=%s\nvalues=%s\n' "$experiment" "${base_n:-}" "${backends[*]}" "$*"
-    printf 'eltype=%s\nsteps=%s\nsamples=%s\ntimeout=%s\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES" "${ODE_TIMEOUT:-8m}"
+    printf 'eltype=%s\nsteps=%s\nsamples=%s\nsample_isolation=process\nwarmups_per_sample=1\ntimeout=none\n' "${ODE_ELTYPE:-Float32}" "${ODE_STEPS:-20}" "$ODE_SAMPLES"
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\nLEGATE_AUTO_CONFIG=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$LEGATE_AUTO_CONFIG"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-    "$julia_bin" --startup-file=no --project="$ODE_PROJECT" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/metadata.txt" 2>&1
 cp "$ODE_PROJECT/Manifest.toml" "$output/Manifest.toml"
 [[ ! -f "$ODE_PROJECT/LocalPreferences.toml" ]] || cp "$ODE_PROJECT/LocalPreferences.toml" "$output/LocalPreferences.toml"
@@ -97,52 +87,18 @@ for value in "$@"; do
         log="$output/$backend-$gpus-$n.log"
         echo "Running $backend G=$gpus N=$n"
         memory_log="$output/gpu-memory-$backend-$gpus-$n.log"
-        nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
-        monitor_pid=$!
-        result_line=""
-        case_error=""
-        # One total budget for startup, warmups, all samples, cleanup, and validation.
-        if CUDA_VISIBLE_DEVICES="$gpu_mask" timeout --signal=TERM --kill-after=30s "${ODE_TIMEOUT:-8m}" \
+        # The CPU-only coordinator waits for each fresh sample process to exit.
+        # No time limit: a case runs until completion, failure, or cancellation.
+        if result=$(CUDA_VISIBLE_DEVICES="$gpu_mask" run_logged_case "$log" "$memory_log" \
             "$julia_bin" --startup-file=no --project="$ODE_PROJECT" \
-            "$script_dir/benchmark_heat.jl" "$backend" "$n" > "$log" 2>&1; then
-            if [[ -f $log ]]; then
-                line=$(grep '^RESULT,' "$log" | tail -n 1 || true)
-                if [[ -n $line ]]; then
-                    result_line="$experiment,${base_n:-},${line#RESULT,}"
-                else
-                    case_error="No RESULT row in $log"
-                fi
-            else
-                case_error="Result log missing: $log"
-            fi
+            "$script_dir/run_samples.jl" "$log" "$backend" "$n"); then
+            printf '%s,%s,%s\n' "$experiment" "${base_n:-}" "$result" >> "$csv"
         else
-            case_exit=$?
-            case_error="exit status $case_exit"
-            if [[ $case_exit == 124 ]]; then
-                case_error="timed out after ${ODE_TIMEOUT:-8m} total (exit status 124)"
-            fi
-        fi
-        kill "$monitor_pid" 2>/dev/null || true
-        wait "$monitor_pid" 2>/dev/null || true
-        if [[ -n $case_error ]]; then
-            echo "$backend G=$gpus N=$n failed: $case_error; continuing the sweep" >&2
+            echo "$backend G=$gpus N=$n failed; continuing the sweep" >&2
             status=1; size_failed=1
-            if [[ -s $log ]]; then
-                echo "Last 20 lines of $log:" >&2
-                tail -n 20 "$log" >&2 || true
-            fi
         fi
-        # Telemetry must not discard a successful solve or abort later cases.
-        # Leave the peak empty when unavailable rather than reporting zero usage.
-        if ! peak=$(awk '$1 ~ /^[0-9]+$/ { seen=1; if ($1 > peak) peak=$1 } END { if (seen) print peak+0 }' "$memory_log" 2>/dev/null) || [[ -z $peak ]]; then
-            peak=""
-            echo "Memory log unavailable for $backend G=$gpus N=$n: $memory_log; keeping timing results and continuing" >&2
-            status=1
-        fi
+        peak=$(read_peak_memory "$memory_log") || status=1
         printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$peak" >> "$output/memory.csv"
-        if [[ -n $result_line ]]; then
-            printf '%s\n' "$result_line" >> "$csv"
-        fi
     done
     if [[ $experiment == single ]]; then
         if [[ $size_failed -ne 0 ]]; then

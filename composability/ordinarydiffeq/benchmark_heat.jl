@@ -1,5 +1,5 @@
 # The same OrdinaryDiffEq solver and heat-equation RHS run on each array backend.
-# Each backend belongs in a separate Julia process.
+# run_samples.jl launches this worker with ODE_SAMPLES=1 for sample isolation.
 import OrdinaryDiffEqLowStorageRK
 using OrdinaryDiffEqLowStorageRK: CarpenterKennedy2N54
 using SciMLBase: ODEProblem, solve, successful_retcode, FullSpecialize
@@ -15,7 +15,7 @@ const NSTEPS = parse(Int, get(ENV, "ODE_STEPS", "20"))
 const SAMPLES = parse(Int, get(ENV, "ODE_SAMPLES", "5"))
 const GPUS = parse(Int, get(ENV, "ODE_GPUS", "1"))
 NSTEPS > 0 || error("ODE_STEPS must be positive")
-SAMPLES >= 2 || error("ODE_SAMPLES must be at least 2 for a standard error")
+SAMPLES >= 1 || error("ODE_SAMPLES must be positive")
 GPUS > 0 || error("ODE_GPUS must be positive")
 (backend != "CuArray" || GPUS == 1) || error("CuArray baseline uses one GPU")
 
@@ -109,15 +109,12 @@ function run_case(n)
                        unstable_check=(dt, u, p, t) -> false)
 
     sol = nothing
-    for warmup_index in 1:2
-        println("warmup=$warmup_index backend=$backend N=$n")
-        flush(stdout)
-        sol = nothing
-        cleanup_before_solve()
-        sol = do_solve()
-        synchronized_time_ns(sol.u[end])
-        @assert successful_retcode(sol)
-    end
+    println("warmup=1 backend=$backend N=$n")
+    flush(stdout)
+    cleanup_before_solve()
+    sol = do_solve()
+    synchronized_time_ns(sol.u[end])
+    @assert successful_retcode(sol)
 
     elapsed_ms = Float64[]
     for sample_index in 1:SAMPLES
@@ -141,12 +138,14 @@ function run_case(n)
     error_rel = maximum(abs.(actual .- reference)) / maximum(abs.(reference))
     tolerance = T == Float32 ? 1e-4 : 1e-7
     @assert error_rel < tolerance "relative error $error_rel exceeds $tolerance"
-    stderr = std(elapsed_ms) / sqrt(length(elapsed_ms))
+    # A single worker sample has no standard-error estimate. The coordinator
+    # computes it from all independent samples before publishing the CSV row.
+    stderr = length(elapsed_ms) > 1 ? std(elapsed_ms) / sqrt(length(elapsed_ms)) : NaN
     println("RESULT,$backend,$T,$GPUS,$n,$NSTEPS,$(mean(elapsed_ms)),$stderr,$(median(elapsed_ms)),$(minimum(elapsed_ms)),$(maximum(elapsed_ms)),$error_rel,$(join(elapsed_ms, ';'))")
     flush(stdout)
 end
 
-println("backend=$backend eltype=$T gpus=$GPUS dx=$DX steps=$NSTEPS Julia=$VERSION threads=$(Threads.nthreads())")
+println("backend=$backend eltype=$T gpus=$GPUS dx=$DX steps=$NSTEPS Julia=$VERSION threads=$(Threads.nthreads()) pid=$(getpid())")
 println("workspace=", get(ENV, "CUBLAS_WORKSPACE_CONFIG", "<default>"),
         " OrdinaryDiffEqLowStorageRK=", pkgversion(OrdinaryDiffEqLowStorageRK))
 flush(stdout)

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$script_dir/../common.sh"
 julia_bin=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
 project=${BENCH_PROJECT:-"$script_dir/../../environments/composability"}
 export BENCH_ELTYPE=${BENCH_ELTYPE:-Float32}
@@ -16,26 +17,6 @@ export BENCH_LOCAL=${BENCH_LOCAL-0}
 [[ $BENCH_ELTYPE == Float32 || $BENCH_ELTYPE == Float64 ]] || { echo "BENCH_ELTYPE must be Float32 or Float64" >&2; exit 2; }
 export LEGATE_AUTO_CONFIG=1
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
-
-# Dagger must see exactly the GPUs assigned to this case. Respect a scheduler's
-# existing device list, then select its first G entries for each Julia process.
-visible_pool=${CUDA_VISIBLE_DEVICES-}
-gpu_mask_for_count() {
-    local count=$1 i mask
-    local -a devices=()
-    if [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
-        [[ -n $visible_pool ]] || { echo "CUDA_VISIBLE_DEVICES is empty" >&2; return 2; }
-        IFS=, read -r -a devices <<< "$visible_pool"
-        (( ${#devices[@]} >= count )) || {
-            echo "CUDA_VISIBLE_DEVICES has fewer than $count devices" >&2
-            return 2
-        }
-    else
-        for ((i=0; i<count; i++)); do devices+=("$i"); done
-    fi
-    printf -v mask '%s,' "${devices[@]:0:count}"
-    printf '%s\n' "${mask%,}"
-}
 
 usage() {
     echo "Usage: $0 single N [N ...] | weak BASE_N GPU_COUNT [GPU_COUNT ...]" >&2
@@ -62,10 +43,10 @@ echo 'backend,solver,mode,gpus,n,legate_config,cuda_visible_devices' > "$output/
     printf 'cunumeric_commit=%s\n' "$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     "$julia_bin" --version
     nvidia-smi
+    printf 'sample_isolation=process\nwarmups_per_sample=1\n'
     printf 'CUBLAS_WORKSPACE_CONFIG=%s\nBENCH_ELTYPE=%s\nBENCH_SOLVERS=%s\nBENCH_LOCAL=%s\nBENCH_SAMPLES=%s\nBENCH_CPUS=%s\nBENCH_TIMEOUT=%s\nLEGATE_AUTO_CONFIG=%s\n' \
         "${CUBLAS_WORKSPACE_CONFIG:-<default>}" "$BENCH_ELTYPE" "$BENCH_SOLVERS" "$BENCH_LOCAL" "$BENCH_SAMPLES" "${BENCH_CPUS:-2}" \
         "${BENCH_TIMEOUT:-15m}" "$LEGATE_AUTO_CONFIG"
-    "$julia_bin" --startup-file=no --project="$project" -e 'using Pkg; Pkg.status(; mode=Pkg.PKGMODE_MANIFEST)'
 } > "$output/environment.txt" 2>&1
 cp "$project/Manifest.toml" "$output/Manifest.toml"
 [[ ! -f "$project/LocalPreferences.toml" ]] || cp "$project/LocalPreferences.toml" "$output/LocalPreferences.toml"
@@ -73,8 +54,6 @@ cp "$project/Manifest.toml" "$output/Manifest.toml"
 failed=0
 run_case() {
     local backend=$1 solver=$2 mode=$3 n=$4 gpus=$5
-    local -a time_limit=()
-    time_limit=(timeout --signal=TERM --kill-after=30s "${BENCH_TIMEOUT:-15m}")
     local log="$output/$BENCH_ELTYPE-$backend-$solver-$mode-$gpus-$n.log"
     local gpu_mask
     gpu_mask=$(gpu_mask_for_count "$gpus")
@@ -84,31 +63,19 @@ run_case() {
     echo "Running $backend $solver $mode: G=$gpus N=$n"
     [[ ${BENCH_DRY_RUN:-0} != 1 ]] || return 0
     local memory_log="$output/gpu-memory-$BENCH_ELTYPE-$backend-$solver-$mode-$gpus-$n.log"
-    nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
-    local monitor_pid=$!
-    local result_line=""
-    if CUDA_VISIBLE_DEVICES="$gpu_mask" "${time_limit[@]}" "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
-        "$script_dir/krylov.jl" "$backend" "$solver" "$mode" "$n" > "$log" 2>&1; then
-        if [[ $(grep -c '^RESULT,' "$log") == 1 ]]; then
-            result_line=$(sed -n "s/^RESULT,/$experiment,${base_n:-},/p" "$log")
-        else
-            echo "Missing or duplicate RESULT: $log" >&2
-            failed=1
-            size_failed=1
-        fi
+    local result peak
+    if result=$(CUDA_VISIBLE_DEVICES="$gpu_mask" run_logged_case "$log" "$memory_log" \
+        timeout --signal=TERM --kill-after=30s "${BENCH_TIMEOUT:-15m}" \
+        "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
+        "$script_dir/run_samples.jl" "$log" "$backend" "$solver" "$mode" "$n"); then
+        printf '%s,%s,%s\n' "$experiment" "${base_n:-}" "$result" >> "$csv"
     else
         echo "Failed: $backend $solver $mode, G=$gpus N=$n ($log)" >&2
         failed=1
         size_failed=1
     fi
-    kill "$monitor_pid" 2>/dev/null || true
-    wait "$monitor_pid" 2>/dev/null || true
-    local peak
-    peak=$(awk '$1 ~ /^[0-9]+$/ && $1 > peak { peak=$1 } END { print peak+0 }' "$memory_log")
+    peak=$(read_peak_memory "$memory_log") || failed=1
     printf '%s,%s,%s,%s,%s\n' "$backend-$mode" "$solver" "$gpus" "$n" "$peak" >> "$output/memory.csv"
-    if [[ -n $result_line ]]; then
-        printf '%s\n' "$result_line" >> "$csv"
-    fi
 }
 
 for value in "$@"; do
