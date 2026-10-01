@@ -45,12 +45,23 @@ end
     @test cli_options(["--solvers=bicgstab"]).solvers == ["bicgstab"]
     @test cli_options(["--solvers=cg, bicgstab"]).solvers == ["cg", "bicgstab"]
     @test cli_options(["--mode=multi"]).gpus == ["1", "2", "4", "8"]
+    @test cli_options(String[]).models == ["cuda", "dagger", "cunumeric"]
+    @test cli_options(["--models=CUNUMERIC, cuda"]).models == ["cunumeric", "cuda"]
+    let backends(args) = [Dict(p.overrides)["$(p.workload == "krylov" ? "BENCH" : "ODE")_BACKENDS"]
+                          for p in launch_plan(cli_options(args))]
+        both = ["--only=krylov,ordinarydiffeq", "--mode=both"]
+        @test backends(both) == ["CuArray Dagger cuNumeric", "CuArray Dagger cuNumeric",
+                                 "Dagger cuNumeric", "Dagger cuNumeric"]
+        @test backends(vcat(both, "--models=cuda,cunumeric")) ==
+              ["CuArray cuNumeric", "CuArray cuNumeric", "cuNumeric", "cuNumeric"]
+    end
     for args in (["--only="], ["--only=missing"], ["--only=krylov,krylov"],
         ["--mode=weak"], ["--gpus=2"], ["--mode=multi", "--gpus=3"],
         ["--mode=multi", "--gpus=1,1"], ["--gpus="], ["--output="], ["--config="], ["--unknown"],
         ["--solvers="], ["--solvers=gmres"], ["--solvers=cg,cg"], ["--solvers=cg,"],
         ["--only=ordinarydiffeq", "--solvers=bicgstab"],
-        ["--only=ordinarydiffeq", "--local"], ["--local=false"])
+        ["--only=ordinarydiffeq", "--local"], ["--local=false"],
+        ["--models="], ["--models=jacc"], ["--models=dagger,dagger"], ["--mode=multi", "--models=cuda"])
         @test_throws ArgumentError cli_options(args)
     end
 

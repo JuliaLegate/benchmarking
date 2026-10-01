@@ -1,5 +1,6 @@
 #!/bin/bash
-# Run every benchmark config: main weak scaling, variants, NAS strong scaling.
+# Run every benchmark config: main weak scaling, variants, NAS strong scaling,
+# then composability weak scaling (COMPOSABILITY_CONFIG picks the size file).
 #   ./run_all.sh [run.jl args...]   e.g. ./run_all.sh --verbose
 # Failed runs are listed at the end; the script keeps going.
 
@@ -34,6 +35,16 @@ run --config=$MULTI/montecarlo_forms.toml
 run --config=$MULTI/nas_ep_strong.toml
 run --config=$MULTI/nas_ft_strong.toml
 run --config=$MULTI/nas_mg_strong.toml
+
+# Composability weak scaling: OrdinaryDiffEq heat and Krylov CG.
+# COMPOSABILITY_MODELS picks models (default cuda,cunumeric: no Dagger).
+COMPOSABILITY=(--only=ordinarydiffeq,krylov --solvers=cg --mode=multi --gpus=1,2,4,8
+    --models=${COMPOSABILITY_MODELS:-cuda,cunumeric}
+    --config=${COMPOSABILITY_CONFIG:-composability/sizes_141GB.toml}
+    --output=results/composability-multi-$(date +%Y%m%d-%H%M%S))
+echo
+echo "==> $JULIA --project=. run_composability.jl ${COMPOSABILITY[*]}"
+"$JULIA" --project=. run_composability.jl "${COMPOSABILITY[@]}" || FAILED+=("composability ${COMPOSABILITY[*]}")
 
 echo
 if [[ ${#FAILED[@]} -eq 0 ]]; then

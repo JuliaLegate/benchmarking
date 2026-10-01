@@ -61,13 +61,11 @@ this setting through `--local`, regardless of an inherited `BENCH_LOCAL`.
 For weak scaling, set the **one-GPU** dimension followed by GPU counts. The
 runner chooses `N(G) = round(N(1) × sqrt(G))`, keeping dense matrix elements per
 GPU approximately constant. Use the largest dimension that passed all enabled
-single-GPU variants as `N(1)` for each solver; the single-GPU sweep writes it
-to `base_n-cg.txt` or `base_n-bicgstab.txt`. A single selected solver also
-writes the compatibility file `base_n.txt`; a run selecting both does not.
+single-GPU variants in `results.csv` as `N(1)` for each solver.
 A backend failure retains the other backends' successful results and the sweep
 continues to larger sizes. Failed cases retain logs, and the launcher returns
 a nonzero exit status after collecting and plotting the remaining results.
-The unified runner uses the config's `weak_base`, not `base_n.txt`.
+The unified runner uses the config's `weak_base`.
 Every backend gets the same `N(G)` at each count:
 
 ```sh
