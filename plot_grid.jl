@@ -173,9 +173,11 @@ end
 
 # `slot_h` set: the legend fills an empty grid slot, rows hanging from the top.
 # `shift` moves the rows up by that fraction of the legend's height.
-function grid_legend(rows, width, st; slot_h=nothing, shift=0.0)
+# `center` centers the columns horizontally.
+function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false)
     d = legend_dims(st)
     col_x = cumsum([0.0; legend_col_widths(reduce(vcat, rows), length(first(rows)), d)])
+    center && (col_x .+= max(0, (width - LEGEND_INSET_PX - col_x[end]) / 2))
     pl = plot(; framestyle=:none, grid=false, ticks=false, legend=false,
         xlims=(0, width - LEGEND_INSET_PX), ylims=(0, 1), widen=false,
         # Cancel GR's 2mm padding; at the canvas bottom, stop short so rounding
@@ -278,6 +280,20 @@ function speedup_summary(panels)
     return join(lines, "\n")
 end
 
+# Panel size and text style from a plot config's style keys.
+function grid_dimensions(raw, columns)
+    panel_w, panel_h = get(raw, "panel_size", [400, 300])
+    font_size = get(raw, "font_size", 11)
+    # `width_in`: canvas units are points, drawn at 2x (GR lays out small
+    # canvases poorly), so scaled to width_in, text prints at font_size pt.
+    if haskey(raw, "width_in")
+        w = 144raw["width_in"] / columns
+        panel_w, panel_h = w, panel_h * w / panel_w
+        font_size *= 2
+    end
+    return panel_w, panel_h, grid_style(font_size; legend_scale=get(raw, "legend_scale", 1.0))
+end
+
 function grid_main(args=ARGS)
     cfg = parse_grid_args(args)
     isfile(cfg.config) || error("grid config not found: $(cfg.config); " *
@@ -288,16 +304,7 @@ function grid_main(args=ARGS)
         haskey(METRICS, m) || error("unknown metric $m; use $(join(keys(METRICS), ", "))")
     end
     columns = min(get(raw, "columns", 2), length(get(raw, "panel", [])))
-    panel_w, panel_h = get(raw, "panel_size", [400, 300])
-    font_size = get(raw, "font_size", 11)
-    # `width_in`: canvas units are points, drawn at 2x (GR lays out small
-    # canvases poorly), so scaled to width_in, text prints at font_size pt.
-    if haskey(raw, "width_in")
-        w = 144raw["width_in"] / columns
-        panel_w, panel_h = w, panel_h * w / panel_w
-        font_size *= 2
-    end
-    st = grid_style(font_size; legend_scale=get(raw, "legend_scale", 1.0))
+    panel_w, panel_h, st = grid_dimensions(raw, columns)
     format = get(raw, "format", "png")
     panels = map(get(raw, "panel", [])) do p
         (series=panel_series(p),

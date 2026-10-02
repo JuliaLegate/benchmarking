@@ -1,0 +1,10 @@
+import cupynumeric as np
+
+def init(T, N, M):
+    A = np.random.rand(N, M).astype(T)
+    B = np.random.rand(M, N).astype(T)
+    C = np.zeros((N, N), dtype=T)
+    return C, A, B
+
+def run(C, A, B):
+    np.matmul(A, B, out=C)

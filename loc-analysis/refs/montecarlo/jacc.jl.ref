@@ -1,0 +1,13 @@
+using JACC: JACC
+JACC.@init_backend
+
+init(T, n) = JACC.Multi.array(T(10) .* rand(T, n))
+
+@inline function integrand(i, samples)
+    x = @inbounds samples[i]
+    return exp(-(x * x))
+end
+
+function run(samples, T, n)
+    return (T(10) / n) * JACC.Multi.parallel_reduce(n, integrand, samples)
+end

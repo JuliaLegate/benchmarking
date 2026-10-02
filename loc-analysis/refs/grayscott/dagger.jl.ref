@@ -1,0 +1,55 @@
+using CUDA: CUDA
+using Dagger: Dagger
+import Dagger: @stencil, Wrap
+
+params(T) = (; dt=T(1 / 5), dx2=T(1), cu=T(1.0), cv=T(0.3), f=T(0.03), k=T(0.06))
+
+wait_for_darray(array) = (foreach(wait, array.chunks); array)
+
+function init(T, N, gpus)
+    scope = Dagger.scope(; cuda_gpus=collect(1:gpus))
+    procs = sort!(collect(Dagger.compatible_processors(scope)); by=string)
+    block = cld(N, gpus)
+    nb = cld(N, block)
+    blocks = Dagger.Blocks(block, block)
+    assignment = [procs[cld(j * gpus, nb)] for _ in 1:nb, j in 1:nb]
+    seed = min(150, N)
+    seed_blocks = Dagger.Blocks(seed, seed)
+    seed_assignment = reshape(procs[1:1], 1, 1)
+    return Dagger.with_options(; scope) do
+        U = ones(blocks, T, N, N; assignment)
+        V = zeros(blocks, T, N, N; assignment)
+        Un = zeros(blocks, T, N, N; assignment)
+        Vn = zeros(blocks, T, N, N; assignment)
+        U[1:seed, 1:seed] = rand(seed_blocks, T, seed, seed; assignment=seed_assignment)
+        V[1:seed, 1:seed] = rand(seed_blocks, T, seed, seed; assignment=seed_assignment)
+        foreach(wait_for_darray, (U, V, Un, Vn))
+        return (; scope, U, V, Un, Vn)
+    end
+end
+
+function run!(s, p)
+    dt, dx2, cu, cv, f, k = p.dt, p.dx2, p.cu, p.cv, p.f, p.k
+    U, V, Un, Vn = s.U, s.V, s.Un, s.Vn
+    Dagger.with_options(; scope=s.scope) do
+        @stencil begin
+            Un[idx] = begin
+                nu = @neighbors(U[idx], 1, Wrap())
+                up = nu[2, 2]
+                vp = V[idx]
+                lu = (nu[1, 2] + nu[3, 2] + nu[2, 1] + nu[2, 3] - 4up) / dx2
+                up + dt * (cu * lu - up * vp * vp + f * (one(up) - up))
+            end
+            Vn[idx] = begin
+                nv = @neighbors(V[idx], 1, Wrap())
+                vp = nv[2, 2]
+                up = U[idx]
+                lv = (nv[1, 2] + nv[3, 2] + nv[2, 1] + nv[2, 3] - 4vp) / dx2
+                vp + dt * (cv * lv + up * vp * vp - (f + k) * vp)
+            end
+            U[idx] = Un[idx]
+            V[idx] = Vn[idx]
+        end
+    end
+    return s.U
+end

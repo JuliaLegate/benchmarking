@@ -1,0 +1,69 @@
+using cuNumeric
+
+params(T) = (; dx=T(1), dt=T(1 / 5), c_u=T(1.0), c_v=T(0.3), f=T(0.03), k=T(0.06))
+
+function init(T, N, M)
+    u = cuNumeric.ones(T, N, M)
+    v = cuNumeric.zeros(T, N, M)
+    u_new = cuNumeric.zeros(T, N, M)
+    v_new = cuNumeric.zeros(T, N, M)
+    seed = min(150, N, M)
+    u[1:seed, 1:seed] = cuNumeric.rand(T, seed, seed)
+    v[1:seed, 1:seed] = cuNumeric.rand(T, seed, seed)
+    return [u, v, u_new, v_new]
+end
+
+@accelerate function gs_step!(u, v, u_new, v_new, args)
+    F_u = (
+        (
+            .-u[2:(end - 1), 2:(end - 1)] .*
+            (v[2:(end - 1), 2:(end - 1)] .* v[2:(end - 1), 2:(end - 1)])
+        ) .+ args.f .* (1.0f0 .- u[2:(end - 1), 2:(end - 1)])
+    )
+    F_v = (
+        (
+            u[2:(end - 1), 2:(end - 1)] .*
+            (v[2:(end - 1), 2:(end - 1)] .* v[2:(end - 1), 2:(end - 1)])
+        ) .- (args.f + args.k) .* v[2:(end - 1), 2:(end - 1)]
+    )
+    u_lap = (
+        (
+            u[3:end, 2:(end - 1)] .- 2 .* u[2:(end - 1), 2:(end - 1)] .+
+            u[1:(end - 2), 2:(end - 1)]
+        ) ./ args.dx^2 .+
+        (
+            u[2:(end - 1), 3:end] .- 2 .* u[2:(end - 1), 2:(end - 1)] .+
+            u[2:(end - 1), 1:(end - 2)]
+        ) ./ args.dx^2
+    )
+    v_lap = (
+        (
+            v[3:end, 2:(end - 1)] .- 2 .* v[2:(end - 1), 2:(end - 1)] .+
+            v[1:(end - 2), 2:(end - 1)]
+        ) ./ args.dx^2 .+
+        (
+            v[2:(end - 1), 3:end] .- 2 .* v[2:(end - 1), 2:(end - 1)] .+
+            v[2:(end - 1), 1:(end - 2)]
+        ) ./ args.dx^2
+    )
+    u_new[2:(end - 1), 2:(end - 1)] =
+        ((args.c_u .* u_lap) .+ F_u) .* args.dt .+ u[2:(end - 1), 2:(end - 1)]
+    v_new[2:(end - 1), 2:(end - 1)] =
+        ((args.c_v .* v_lap) .+ F_v) .* args.dt .+ v[2:(end - 1), 2:(end - 1)]
+    u_new[:, 1] = u[:, end - 1]
+    u_new[:, end] = u[:, 2]
+    u_new[1, :] = u[end - 1, :]
+    u_new[end, :] = u[2, :]
+    v_new[:, 1] = v[:, end - 1]
+    v_new[:, end] = v[:, 2]
+    v_new[1, :] = v[end - 1, :]
+    v_new[end, :] = v[2, :]
+end
+
+function run!(s, args)
+    u, v, u_new, v_new = s
+    gs_step!(u, v, u_new, v_new, args)
+    s[1], s[3] = u_new, u
+    s[2], s[4] = v_new, v
+    return nothing
+end

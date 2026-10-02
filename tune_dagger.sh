@@ -27,10 +27,10 @@ tune() {
 
 GPUS=(1 2 4 8)
 
-# Weak scaling. gemm/montecarlo are auto-sized in all.toml; these are its paper sizes.
-N=(20000 25200 31752 40000)
+# Weak scaling, matching configs/multi_gpu/*.toml.
+N=(43408 54688 68904 86816)
 for i in "${!GPUS[@]}"; do tune "${GPUS[i]}" gemm Float32 "${N[i]}" "${N[i]}"; done
-N=(1000000 2000000 4000000 8000000)
+N=(7537741000 15075482000 30150964000 60301928000)
 for i in "${!GPUS[@]}"; do tune "${GPUS[i]}" montecarlo Float32 "${N[i]}" 1; done
 N=(28000 39600 56000 79200)
 for i in "${!GPUS[@]}"; do tune "${GPUS[i]}" grayscott Float32 "${N[i]}" "${N[i]}"; done

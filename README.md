@@ -100,6 +100,10 @@ Krylov defaults to CG; `--solvers=bicgstab` selects BiCGStab, and
 Krylov uses stock implementations by default. Add `--local` to also run
 cuNumeric local implementations alongside cuNumeric stock.
 
+## LOC analysis
+
+See [loc-analysis/README.md](loc-analysis/README.md).
+
 ## Run the benchmark suite
 
 The standalone [ImplicitGlobalGrid Gray–Scott benchmark](other/implicitglobalgrid/README.md)
@@ -132,6 +136,19 @@ julia --project=. run.jl --only=montecarlo --dry-run
 
 `--only` and `--models` accept comma-separated values. `--fusion` accepts
 `on`, `off`, or `both`. Use `--verbose` for backend details.
+
+Run only CUDA.jl Gray-Scott on one GPU (with automatic sizing) from this
+repository's root:
+
+```bash
+julia --project=. run.jl --config=configs/single_gpu/smoke.toml --only=grayscott --models=cudajl
+```
+
+Add `--dry-run` to inspect the plan without launching the benchmark. CUDA.jl
+uses `src/cuda/benchmarks/grayscott.jl`, with preallocated reaction and Laplacian
+buffers, `@views`, and in-place broadcasts. Use a single-GPU config for a
+CUDA-only run: the multi-GPU configs also request GPU counts CUDA.jl does not
+support.
 
 Run the focused cuNumeric, cuPyNumeric, and Dagger Gray-Scott weak-scaling
 check on 1, 2, 4, and 8 GPUs with:

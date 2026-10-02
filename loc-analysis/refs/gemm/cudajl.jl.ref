@@ -1,0 +1,11 @@
+using CUDA
+using LinearAlgebra
+
+function init(T, N, M)
+    A = CUDA.rand(T, N, M)
+    B = CUDA.rand(T, M, N)
+    C = CUDA.zeros(T, N, N)
+    return C, A, B
+end
+
+run!(C, A, B) = mul!(C, A, B)

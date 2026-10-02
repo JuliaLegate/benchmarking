@@ -1,0 +1,26 @@
+using CUDA: CUDA
+using Dagger: Dagger
+
+integrand(x) = exp(-(x * x))
+chunk_sum(samples) = mapreduce(integrand, +, samples; init=zero(eltype(samples)))
+
+function init(T, n, gpus)
+    scope = Dagger.scope(; cuda_gpus=collect(1:gpus))
+    procs = sort!(collect(Dagger.compatible_processors(scope)); by=string)
+    block = cld(n, gpus)
+    nchunks = cld(n, block)
+    assignment = [procs[cld(i * gpus, nchunks)] for i in 1:nchunks]
+    return Dagger.with_options(; scope) do
+        samples = T(10) .* rand(Dagger.Blocks(block), T, n; assignment)
+        foreach(wait, samples.chunks)
+        chunks = map(task -> fetch(task; raw=true), samples.chunks)
+        return (; samples, chunks, scopes=Dagger.ExactScope.(Dagger.processor.(chunks)))
+    end
+end
+
+function run(s, T, n)
+    partials = map(zip(s.chunks, s.scopes)) do (chunk, scope)
+        Dagger.@spawn scope=scope chunk_sum(chunk)
+    end
+    return (T(10) / n) * mapreduce(fetch, +, partials; init=zero(T))
+end

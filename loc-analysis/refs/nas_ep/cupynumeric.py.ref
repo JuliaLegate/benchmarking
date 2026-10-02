@@ -1,0 +1,49 @@
+import cupynumeric as np
+import numpy as host_np
+from legate.core import TaskTarget, get_legate_runtime
+
+MK, NQ = 8, 10
+SEED, MULTIPLIER = 271828183.0, 1220703125.0
+
+def init(m):
+    batches = 1 << (m-MK)
+    values = [np.zeros(batches, dtype=np.float64) for _ in range(13)]
+    indices = np.arange(batches, dtype=np.uint64)
+    masks = [((indices >> bit) & 1).astype(np.float64) for bit in range(m-MK)]
+    return {"batches": batches, "values": values, "masks": masks}
+
+def reset(state):
+    state["values"][0].fill(SEED)
+    for value in state["values"][1:]:
+        value.fill(0.0)
+
+def run(state):
+    values = state["values"]
+    seed, power = values[0], ipow46(MULTIPLIER, 2*(1 << MK))
+    for mask in state["masks"]:
+        candidate = mul_mod46(seed, power)
+        seed = seed + mask*(candidate-seed)
+        power, _ = randlc_scalar(power, power)
+
+    powers = pair_powers()
+    q, sx, sy = values[1:11], values[11], values[12]
+    # Cap each slab at 2^25 pairs per GPU.
+    gpus = max(1, get_legate_runtime().get_machine().count(TaskTarget.GPU))
+    chunk = min(1 << MK, max(1, (gpus << 25)//state["batches"]))
+    for lo in range(0, 1 << MK, chunk):
+        hi = min(lo + chunk, 1 << MK)
+        seed1 = mul_mod46_powers(seed[None, :], powers[lo:hi, None])
+        seed2 = mul_mod46(seed1, MULTIPLIER)
+        u1, u2 = (2.0**-46)*seed1, (2.0**-46)*seed2
+        x1, x2 = 2.0*u1-1.0, 2.0*u2-1.0
+        radius = x1*x1 + x2*x2
+        accepted = np.minimum(np.floor(1.0/radius), 1.0)
+        safe = np.minimum(radius, 1.0)
+        scale = np.sqrt(-2.0*np.log(safe)/safe)
+        g1, g2 = x1*scale, x2*scale
+        bins = np.where(accepted > 0, np.floor(np.maximum(np.abs(g1), np.abs(g2))), -1.0)
+        for bin in range(NQ):
+            q[bin] += np.sum(bins == float(bin), axis=0)
+        sx += np.sum(accepted*g1, axis=0)
+        sy += np.sum(accepted*g2, axis=0)
+    return values

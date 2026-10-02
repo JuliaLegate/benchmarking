@@ -102,10 +102,19 @@ function memory_estimate(b::AbstractGrayScott{T}, c::MemoryContext) where {T}
     grid = (slab(b.N, b.M, c.gpus) + halo) * sizeof(T)
     interior = slab(max(b.N-2, 0), max(b.M-2, 0), c.gpus) * sizeof(T)
     init = 4grid + random_peak(big(min(150, b.N, b.M))^2, T, c.model)
+    # CUDA.jl fuses dotted broadcasts regardless of cuNumeric's fusion setting.
+    fused = c.model == :cudajl || (c.model == :cunumeric && c.fusion)
+    if c.model == :cudajl
+        # Each fused broadcast writes directly into a preallocated destination.
+        persistent = 4grid + 4interior
+        return MemoryEstimate(
+            init + 4interior, persistent, 0,
+            "$(name(b)): four persistent grids + four preallocated interior buffers; CUDA.jl views and in-place broadcasts; fusion=$fused",
+        )
+    end
     # Four named RHS results plus an assignment output. Hard-scope acceleration
     # may eliminate these, but this remains a valid upper bound for every form.
     # Do not assume a lower peak solely from the @accelerate spelling.
-    fused = c.model == :cudajl || (c.model == :cunumeric && c.fusion)
     # Unfused Laplacian: first branch survives evaluation of second branch;
     # include outer destination and intermediate binary operands.
     temps = fused ? 5 : 8

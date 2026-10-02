@@ -1,0 +1,18 @@
+# Monte Carlo weak scaling at the sizes cuNumeric auto-sized to in results-brev
+# (20261001-025503-B66XYH), pinned so every model runs the same n_samples.
+# N = 7537741000 * P.
+[Global]
+models = ["dagger"]
+n_warmup = 2
+n_iter = 50
+n_trial = 5
+check_correctness = true
+n_correctness_iter = 5
+auto_size = false
+
+[[montecarlo]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+N = [7537741000, 15075482000, 30150964000, 60301928000]
+M = 1

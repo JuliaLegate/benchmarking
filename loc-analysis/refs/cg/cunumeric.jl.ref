@@ -1,0 +1,45 @@
+using cuNumeric
+using LinearAlgebra: dot
+
+# Solve tridiag(1,4,1)*x = 1/2 from zero.
+function init(T, N)
+    lower = cuNumeric.ones(T, N)
+    diagonal = cuNumeric.ones(T, N)
+    diagonal .*= T(4)
+    upper = cuNumeric.ones(T, N)
+    x = cuNumeric.zeros(T, N)
+    r = cuNumeric.zeros(T, N)
+    p = cuNumeric.zeros(T, N)
+    Ap = cuNumeric.zeros(T, N)
+    return (; A=(lower, diagonal, upper), x, work=(r, p, Ap))
+end
+
+@accelerate function cg_step!(x, r, p, Ap, lower, diagonal, upper, rho::T) where {T}
+    Ap .= diagonal .* p
+    @views Ap[2:end] .+= lower[2:end] .* p[1:(end - 1)]
+    @views Ap[1:(end - 1)] .+= upper[1:(end - 1)] .* p[2:end]
+    alpha = rho ./ max.(dot(p, Ap), floatmin(T))
+    x .+= alpha .* p
+    r .-= alpha .* Ap
+    next = sum(abs2, r)
+    p .= r .+ (next ./ max.(rho, floatmin(T))) .* p
+    return next
+end
+
+function run!(s, ::Type{T}, N; check_every=10, max_iter=1000) where {T}
+    x = s.x
+    r, p, Ap = s.work
+    lower, diagonal, upper = s.A
+    x .= zero(T)
+    r .= T(0.5)
+    p .= r
+    rho = sum(r .* r)
+    target = (T == Float32 ? 1e-5 : 1e-8)^2 * N / 4
+    for k in 1:max_iter
+        rho = cg_step!(x, r, p, Ap, lower, diagonal, upper, rho)
+        if k % check_every == 0 || k == max_iter
+            only(rho) <= target && return k
+        end
+    end
+    return max_iter
+end

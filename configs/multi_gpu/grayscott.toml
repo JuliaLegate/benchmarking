@@ -1,6 +1,6 @@
-# Focused cuNumeric/cuPyNumeric/Dagger Gray-Scott correctness and weak-scaling run.
+# Gray-Scott weak scaling with a single-GPU CUDA.jl baseline.
 [Global]
-models = ["cunumeric", "cupynumeric"]
+models = ["dagger", "cudajl"]
 n_warmup = 2
 n_iter = 50
 n_trial = 5

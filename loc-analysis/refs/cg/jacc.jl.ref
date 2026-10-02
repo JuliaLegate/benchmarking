@@ -1,0 +1,65 @@
+using JACC: JACC
+JACC.@init_backend
+
+# Solve tridiag(1,4,1)*x = 1/2 from zero.
+function init(T, N)
+    lower = JACC.Multi.array(ones(T, N))
+    diagonal = JACC.Multi.array(fill(T(4), N))
+    upper = JACC.Multi.array(ones(T, N))
+    x = JACC.Multi.array(zeros(T, N))
+    r = JACC.Multi.array(zeros(T, N))
+    # Only the search direction needs neighboring values for the stencil.
+    p = JACC.Multi.array(zeros(T, N); ghost_dims=1)
+    Ap = JACC.Multi.array(zeros(T, N))
+    return (; A=(lower, diagonal, upper), x, work=(r, p, Ap))
+end
+
+function cg_matvec(i, lower, diagonal, upper, p, Ap)
+    j = JACC.Multi.ghost_shift(i, p)
+    @inbounds Ap[i] =
+        diagonal[i]*p[j] + (j > 1 ? lower[i]*p[j - 1] : zero(diagonal[i])) +
+        (j < length(p) ? upper[i]*p[j + 1] : zero(diagonal[i]))
+end
+cg_product(i, x, y) = @inbounds x[JACC.Multi.ghost_shift(i, x)]*y[JACC.Multi.ghost_shift(i, y)]
+cg_axpy(i, x, a, p) = (@inbounds x[i] += a*p[JACC.Multi.ghost_shift(i, p)])
+function cg_direction(i, p, r, beta)
+    j = JACC.Multi.ghost_shift(i, p)
+    @inbounds p[j] = r[i] + beta*p[j]
+end
+function cg_reset(i, x, r, p, value)
+    @inbounds x[i] = zero(value)
+    @inbounds r[i] = p[JACC.Multi.ghost_shift(i, p)] = value
+end
+
+# Exchange only the two values adjacent to every partition boundary.
+function cg_sync_halos!(p)
+    length(p.a2) == 1 && return nothing
+    for i in 1:(length(p.a2) - 1)
+        left, right = p.a2[i], p.a2[i + 1]
+        copyto!(right, 1, left, length(left) - 1, 1)
+        copyto!(left, length(left), right, 2, 1)
+    end
+    JACC.Async.synchronize()
+    return nothing
+end
+
+function run!(s, ::Type{T}, N; check_every=10, max_iter=1000) where {T}
+    x = s.x
+    r, p, Ap = s.work
+    dot(x, y) = only(JACC.Multi.parallel_reduce(N, cg_product, x, y))
+    JACC.Multi.parallel_for(N, cg_reset, x, r, p, T(0.5))
+    rho = dot(r, r)
+    target = (T == Float32 ? 1e-5 : 1e-8)^2 * N / 4
+    for k in 1:max_iter
+        cg_sync_halos!(p)
+        JACC.Multi.parallel_for(N, cg_matvec, s.A..., p, Ap)
+        alpha = rho / max(dot(p, Ap), floatmin(T))
+        JACC.Multi.parallel_for(N, cg_axpy, x, alpha, p)
+        JACC.Multi.parallel_for(N, cg_axpy, r, -alpha, Ap)
+        next = dot(r, r)
+        JACC.Multi.parallel_for(N, cg_direction, p, r, next / max(rho, floatmin(T)))
+        rho = next
+        (k % check_every == 0 || k == max_iter) && rho <= target && return k
+    end
+    return max_iter
+end

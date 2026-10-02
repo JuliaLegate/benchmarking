@@ -1,0 +1,192 @@
+using JACC: JACC
+JACC.@init_backend
+using CUDA
+using AbstractFFTs
+
+const NAS_FT_ALPHA = 1.0e-6
+const NAS_FT_CHECKSUM_SAMPLES = 1024
+
+# JACC.Multi only copies within one GPU; cross-GPU copies need CUDA.jl.
+function multi_copy!(dst, dd, doff, src, ds, soff, n)
+    CUDA.device!(ds - 1)
+    copyto!(dst, doff, src, soff, n)
+    CUDA.synchronize()
+    CUDA.device!(0)
+    return dst
+end
+
+function multi_upload!(part, d, host, n)
+    CUDA.device!(d - 1)
+    copyto!(part, 1, host, 1, n)
+    CUDA.synchronize()
+    CUDA.device!(0)
+    return part
+end
+
+# In-place cuFFT over `dims` of each part viewed as `shape` (JACC has no FFT).
+function multi_fft!(a, shape, dims, inverse)
+    for (d, part) in enumerate(a.a2)
+        CUDA.device!(d - 1)
+        v = reshape(part, shape)
+        inverse ? bfft!(v, dims) : fft!(v, dims)
+    end
+    for d in eachindex(a.a2)
+        CUDA.device!(d - 1)
+        CUDA.synchronize()
+    end
+    CUDA.device!(0)
+    return a
+end
+
+# Local sizes: Pz planes per GPU in U, Py columns per GPU in W, B elements per
+# (source, destination) block of the transpose.
+struct FTLayout
+    nx::Int
+    ny::Int
+    nz::Int
+    Pz::Int
+    Py::Int
+    B::Int
+end
+
+function FTLayout(p, nd)
+    Pz, Py = p.nz ÷ nd, p.ny ÷ nd
+    return FTLayout(p.nx, p.ny, p.nz, Pz, Py, p.nx*Py*Pz)
+end
+
+@inline function ftm_flat(i, f, m, args...)
+    return f((i - 1) % m + 1, (i - 1) ÷ m + 1, args...)
+end
+
+ftm_launch(m, cols, f, args...) = JACC.Multi.parallel_for(m*cols, ftm_flat, f, m, args...)
+
+@inline function ftm_twiddle(q, jl, tw, L, ap)
+    z, x = (q - 1) % L.nz, (q - 1) ÷ L.nz
+    y = (tw.dev_id - 1)*L.Py + jl - 1
+    ii = (x + L.nx ÷ 2) % L.nx - L.nx ÷ 2
+    jj = (y + L.ny ÷ 2) % L.ny - L.ny ÷ 2
+    kk = (z + L.nz ÷ 2) % L.nz - L.nz ÷ 2
+    @inbounds tw[q + L.nx*L.nz*(jl - 1)] = exp(ap*(ii*ii + jj*jj + kk*kk))
+    return nothing
+end
+
+@inline function ftm_evolve(q, jl, w0, w1, tw, L)
+    index = q + L.nx*L.nz*(jl - 1)
+    @inbounds w0[index] *= tw[index]
+    @inbounds w1[index] = w0[index]
+    return nothing
+end
+
+# z->y blocks are x-fastest (matching U); y->z blocks are z-fastest (matching
+# W). Each pack is then contiguous and only its unpack reads with a stride.
+@inline ftm_block(L, x, yl, zl) = x + L.nx*(yl - 1) + L.nx*L.Py*(zl - 1)
+@inline ftm_block_z(L, x, yl, zl) = zl + L.Pz*(x - 1) + L.Pz*L.nx*(yl - 1)
+
+@inline function ftm_pack_z2y(q, zl, send, u, L)
+    x, y = (q - 1) % L.nx + 1, (q - 1) ÷ L.nx + 1
+    dst, yl = (y - 1) ÷ L.Py + 1, (y - 1) % L.Py + 1
+    @inbounds send[(dst - 1)*L.B + ftm_block(L, x, yl, zl)] = u[q + L.nx*L.ny*(zl - 1)]
+    return nothing
+end
+
+@inline function ftm_unpack_y(q, yl, w, recv, L)
+    z, x = (q - 1) % L.nz + 1, (q - 1) ÷ L.nz + 1
+    src, zl = (z - 1) ÷ L.Pz + 1, (z - 1) % L.Pz + 1
+    @inbounds w[q + L.nx*L.nz*(yl - 1)] = recv[(src - 1)*L.B + ftm_block(L, x, yl, zl)]
+    return nothing
+end
+
+@inline function ftm_pack_y2z(q, yl, send, w, L)
+    z, x = (q - 1) % L.nz + 1, (q - 1) ÷ L.nz + 1
+    dst, zl = (z - 1) ÷ L.Pz + 1, (z - 1) % L.Pz + 1
+    @inbounds send[(dst - 1)*L.B + ftm_block_z(L, x, yl, zl)] = w[q + L.nx*L.nz*(yl - 1)]
+    return nothing
+end
+
+@inline function ftm_unpack_z(q, zl, u, recv, L)
+    x, y = (q - 1) % L.nx + 1, (q - 1) ÷ L.nx + 1
+    src, yl = (y - 1) ÷ L.Py + 1, (y - 1) % L.Py + 1
+    @inbounds u[q + L.nx*L.ny*(zl - 1)] = recv[(src - 1)*L.B + ftm_block_z(L, x, yl, zl)]
+    return nothing
+end
+
+# Block `dst` of every GPU's send buffer becomes block `src` of GPU dst's recv.
+function ftm_exchange!(recv, send, L)
+    rp, sp = recv.a2, send.a2
+    for src in eachindex(sp), dst in eachindex(rp)
+        multi_copy!(rp[dst], dst, (src - 1)*L.B + 1, sp[src], src, (dst - 1)*L.B + 1, L.B)
+    end
+    return recv
+end
+
+function ftm_z_to_y!(w, u, s)
+    L = s.L
+    ftm_launch(L.nx*L.ny, L.nz, ftm_pack_z2y, s.send, u, L)
+    ftm_exchange!(s.recv, s.send, L)
+    ftm_launch(L.nx*L.nz, L.ny, ftm_unpack_y, w, s.recv, L)
+    return w
+end
+
+function ftm_y_to_z!(u, w, s)
+    L = s.L
+    ftm_launch(L.nx*L.nz, L.ny, ftm_pack_y2z, s.send, w, L)
+    ftm_exchange!(s.recv, s.send, L)
+    ftm_launch(L.nx*L.ny, L.nz, ftm_unpack_z, u, s.recv, L)
+    return u
+end
+
+@inline function ftm_sample(j, L)
+    x, y, z = j % L.nx, (3j) % L.ny, (5j) % L.nz
+    return x, y, z
+end
+
+@inline function ftm_checksum(j, _, u, L, imagpart)
+    x, y, z = ftm_sample(j, L)
+    owner = z ÷ L.Pz + 1
+    owner == u.dev_id || return 0.0
+    v = @inbounds u[x + y*L.nx + (z - (owner - 1)*L.Pz)*L.nx*L.ny + 1]
+    v /= L.nx*L.ny*L.nz
+    return imagpart ? imag(v) : real(v)
+end
+
+# p = (; nx, ny, nz, niter)
+function init(p)
+    nd = JACC.Multi.ndev()
+    L = FTLayout(p, nd)
+    arr(T, m, cols) = JACC.Multi.array(zeros(T, m, cols); ghost_dims=0)
+    return (;
+        L,
+        u=arr(ComplexF64, p.nx*p.ny, p.nz),
+        w0=arr(ComplexF64, p.nx*p.nz, p.ny), w1=arr(ComplexF64, p.nx*p.nz, p.ny),
+        tw=arr(Float64, p.nx*p.nz, p.ny),
+        send=arr(ComplexF64, p.nx*p.ny*L.Pz, nd), recv=arr(ComplexF64, p.nx*p.ny*L.Pz, nd),
+        starts=JACC.Multi.array(zeros(Float64, p.nz); ghost_dims=0),
+        host_starts=Vector{Float64}(undef, p.nz), checksums=ComplexF64[],
+    )
+end
+
+function run!(s, p)
+    L = s.L
+    nas_ft_plane_starts!(s.host_starts, L.nx, L.ny)
+    for (d, part) in enumerate(s.starts.a2)
+        multi_upload!(part, d, s.host_starts[((d - 1)*L.Pz + 1):(d*L.Pz)], L.Pz)
+    end
+    JACC.Multi.parallel_for(L.nz, ftm_initial, s.u, s.starts, L.nx*L.ny)
+    ftm_launch(L.nx*L.nz, L.ny, ftm_twiddle, s.tw, L, -4.0*NAS_FT_ALPHA*pi^2)
+    multi_fft!(s.u, (L.nx, L.ny, L.Pz), (1, 2), false)
+    ftm_z_to_y!(s.w0, s.u, s)
+    multi_fft!(s.w0, (L.nz, L.nx, L.Py), 1, false)
+    empty!(s.checksums)
+    nd = JACC.Multi.ndev()
+    for _ in 1:p.niter
+        ftm_launch(L.nx*L.nz, L.ny, ftm_evolve, s.w0, s.w1, s.tw, L)
+        multi_fft!(s.w1, (L.nz, L.nx, L.Py), 1, true)
+        ftm_y_to_z!(s.u, s.w1, s)
+        multi_fft!(s.u, (L.nx, L.ny, L.Pz), (1, 2), true)
+        n = NAS_FT_CHECKSUM_SAMPLES
+        re = JACC.Multi.parallel_reduce(n*nd, ftm_flat, ftm_checksum, n, s.u, L, false)
+        im = JACC.Multi.parallel_reduce(n*nd, ftm_flat, ftm_checksum, n, s.u, L, true)
+        push!(s.checksums, ComplexF64(re, im))
+    end
+    return s.checksums
+end
