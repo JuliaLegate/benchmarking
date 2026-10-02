@@ -44,14 +44,14 @@ chmod +x "$JULIA"
 
 bash "$root/composability/tune_dagger.sh" --dry-run > "$tmp/dry.log"
 [[ ! -e $DAGGER_TUNE_OUTPUT ]]
-[[ $(grep -c '^==>' "$tmp/dry.log") == 112 ]]
+[[ $(grep -c '^==>' "$tmp/dry.log") == 84 ]]
 bash "$root/composability/tune_dagger.sh" > "$tmp/run.log"
-[[ $(wc -l < "$DAGGER_TUNE_OUTPUT/results.csv") == 49 ]]
-[[ $(wc -l < "$DAGGER_TUNE_OUTPUT/best.csv") == 17 ]]
+[[ $(wc -l < "$DAGGER_TUNE_OUTPUT/results.csv") == 37 ]]
+[[ $(wc -l < "$DAGGER_TUNE_OUTPUT/best.csv") == 13 ]]
 awk -F, 'NR > 1 && ($4 != 2 || $5 != 5) { exit 1 }' "$DAGGER_TUNE_OUTPUT/best.csv"
 # A second run must leave the original files intact.
 if bash "$root/composability/tune_dagger.sh" > "$tmp/repeat.log" 2>&1; then exit 1; fi
-[[ $(wc -l < "$DAGGER_TUNE_OUTPUT/results.csv") == 49 ]]
+[[ $(wc -l < "$DAGGER_TUNE_OUTPUT/results.csv") == 37 ]]
 
 # Failure and malformed/duplicate results cannot win; later candidates still run.
 for fault in MOCK_FAIL MOCK_BAD MOCK_DUPLICATE; do

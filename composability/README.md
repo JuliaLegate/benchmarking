@@ -56,7 +56,8 @@ bash composability/tune_dagger.sh krylov ordinarydiffeq
 
 The script lists its GPU counts, block factors, and small Float32 problem sizes
 directly: N=4096 for Krylov (CG and BiCGSTAB), N=1024 for heat, and N=512 for
-plume. N stays constant across GPU counts. Edit those lines to change the sweep.
+plume. The plume call is commented out; uncomment its `tune` line to include it.
+N stays constant across GPU counts. Edit those lines to change the sweep.
 
 Each candidate runs in a fresh Julia process with `COMPOSABILITY_TUNE=1`:
 one untimed warmup followed by two timed runs. Both warmup and timed runs use

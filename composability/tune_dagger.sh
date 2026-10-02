@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ./composability/tune_dagger.sh [--dry-run] [workload ...]
-# Workloads: krylov, ordinarydiffeq, integrals_optimization (default: all).
+# Workloads: krylov, ordinarydiffeq (default: both). Uncomment plume below to enable it.
 # Small Float32 problems; each candidate gets one warmup + two timed runs,
 # each capped at five iterations/steps by COMPOSABILITY_TUNE=1.
 set -uo pipefail
@@ -68,7 +68,7 @@ for g in "${GPUS[@]}"; do
     tune "$g" krylov krylov-cg 4096 BENCH krylov/krylov.jl 8 cg stock
     tune "$g" krylov krylov-bicgstab 4096 BENCH krylov/krylov.jl 8 bicgstab stock
     tune "$g" ordinarydiffeq heat 1024 ODE ordinarydiffeq/benchmark_heat.jl 6
-    tune "$g" integrals_optimization plume 512 INTOPT integrals_optimization/benchmark.jl 9
+    # tune "$g" integrals_optimization plume 512 INTOPT integrals_optimization/benchmark.jl 9
 done
 if (( ${#FAILED[@]} )); then
     echo 'Failed tunes:'; printf '  %s\n' "${FAILED[@]}"; exit 1
