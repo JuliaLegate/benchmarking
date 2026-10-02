@@ -6,8 +6,6 @@ using Printf
 using Statistics
 
 @views  inn(A) = A[2:end-1, 2:end-1]
-@views lap1(A) = A[3:end, 2:end-1] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[1:end-2, 2:end-1]
-@views lap2(A) = A[2:end-1, 3:end] .- (2.0f0 .* A[2:end-1, 2:end-1]) .+ A[2:end-1, 1:end-2]
 
 # One trial: N_WARMUP untimed steps followed by N_ITER measured steps.
 @views function grayscott(nx, ny, n_iter, n_warmup, comm)
@@ -41,14 +39,18 @@ using Statistics
             start = MPI.Wtime()
         end
 
-        F_u .= (-inn(u) .* (inn(v) .^ 2)) .+ f .* (1.0f0 .- inn(u))
-        F_v .= (inn(u) .* (inn(v) .^ 2)) .- (f + k) .* inn(v)
+        @. F_u = (-$inn(u) * ($inn(v)^2)) + f * (1.0f0 - $inn(u))
+        @. F_v = ($inn(u) * ($inn(v)^2)) - (f + k) * $inn(v)
 
-        lap_u .= (lap1(u) ./ (dx * dx)) .+ (lap2(u) ./ (dy * dy))
-        lap_v .= (lap1(v) ./ (dx * dx)) .+ (lap2(v) ./ (dy * dy))
+        # Keep both directions in one broadcast; array-returning helpers
+        # would allocate a full-grid temporary for each direction.
+        @. lap_u = ((u[3:end, 2:end-1] - 2.0f0 * $inn(u) + u[1:end-2, 2:end-1]) / (dx * dx)) +
+                   ((u[2:end-1, 3:end] - 2.0f0 * $inn(u) + u[2:end-1, 1:end-2]) / (dy * dy))
+        @. lap_v = ((v[3:end, 2:end-1] - 2.0f0 * $inn(v) + v[1:end-2, 2:end-1]) / (dx * dx)) +
+                   ((v[2:end-1, 3:end] - 2.0f0 * $inn(v) + v[2:end-1, 1:end-2]) / (dy * dy))
 
-        u[2:end-1, 2:end-1] .+= dt .* ((c_u .* lap_u) .+ F_u)
-        v[2:end-1, 2:end-1] .+= dt .* ((c_v .* lap_v) .+ F_v)
+        @. u[2:end-1, 2:end-1] += dt * ((c_u * lap_u) + F_u)
+        @. v[2:end-1, 2:end-1] += dt * ((c_v * lap_v) + F_v)
 
         CUDA.synchronize()
         update_halo!(u, v)
