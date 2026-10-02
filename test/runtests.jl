@@ -1,7 +1,7 @@
 using Test, Statistics, TOML, LinearAlgebra
 include("../src/core.jl")
 include_benchmarks()
-include("../src/cunumeric/benchmarks/grayscott_accelerate_forms.jl")
+
 include("../src/models.jl")
 include("../src/parse_benchmarks.jl")
 include("../src/memory.jl")
@@ -458,3 +458,4 @@ end
 
 include("cg.jl")
 include("jacc_multi.jl")
+include("array_backends.jl")

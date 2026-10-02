@@ -2,7 +2,8 @@ using Test
 
 # Run with julia --project=benchmark benchmark/test/autosize.jl; no GPU needed.
 include("../src/core.jl")
-include("../src/benchmarks/montecarlo.jl")
+include("../src/common/benchmarks/montecarlo.jl")
+include("../src/cunumeric/benchmarks/montecarlo.jl")
 
 @testset "Monte Carlo autosizing reserves reduction workspace" begin
     budget = 113_066_115_072 # Budget from the reported initialization OOM.

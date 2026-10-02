@@ -80,3 +80,5 @@ register_benchmark("grayscott_function_accelerated", GrayScottFunctionAccelerate
 register_benchmark("grayscott_begin_accelerated", GrayScottBeginAccelerated)
 register_benchmark("grayscott_let_accelerated", GrayScottLetAccelerated)
 register_benchmark("grayscott_expression_accelerated", GrayScottExpressionAccelerated)
+
+benchmark_array_module(::Type{<:AbstractGrayScottAccelerateForm}) = cuNumeric

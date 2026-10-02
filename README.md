@@ -11,6 +11,27 @@ CUDA.jl, JACC.jl, and Dagger.jl. Each model runs in an isolated process and
 environment. Runs include correctness checks, trial progress, mean time, and
 mean throughput with trial standard deviations.
 
+## Source layout
+
+- `src/common/benchmarks/` contains abstract benchmark families, shared sizing
+  and correctness helpers, and identical array algorithms such as the CG solver
+  and Gray–Scott timestep driver.
+- `src/cunumeric/benchmarks/` owns the cuNumeric concrete types, registrations,
+  and specialized implementations, including the `@accelerate` variants.
+- `src/cuda/benchmarks/` owns distinct CUDA types such as `CUDACG` and
+  `CUDAGrayScott`, plus CUDA-specific implementations. It does not load files
+  from the cuNumeric backend.
+- `src/jacc/benchmarks/`, `src/dagger/benchmarks/`, and
+  `src/cupynumeric/benchmarks/` contain those backends' implementations.
+- `src/nas/` contains shared NAS parameters and reference utilities. The shared
+  harness, planning, timing, and result handling remain directly under `src/`.
+
+Each array backend's `benchmarks.jl` explicitly loads its catalog after the
+common definitions. The CPU orchestrator uses the cuNumeric catalog for planning
+without importing the cuNumeric runtime. Workers select their own concrete types
+using the existing configuration names (`cg`, `grayscott`, etc.); commands and
+result paths are unchanged.
+
 ## Setup
 
 Instantiate the Julia environments once, including the shared environment for
@@ -291,7 +312,7 @@ standalone figures such as the Gray-Scott forms, fused and unfused (`plots/figur
 `cg` is the default variant and runs on every model; on cuNumeric it applies
 `@accelerate` to each update. `cg_plain` uses the same step body without the
 macro, so this comparison isolates `@accelerate`. The shared array-worker body
-(`src/benchmarks/cg.jl`) uses `dot(p, Ap)` and `sum(abs2, r)` to avoid product
+(`src/common/benchmarks/cg.jl`) uses `dot(p, Ap)` and `sum(abs2, r)` to avoid product
 temporaries.
 JACC and Dagger have native versions.
 

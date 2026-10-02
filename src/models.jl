@@ -75,9 +75,9 @@ function prepare_model(::CuNumericModel, run, verbose; prepare_cunumeric)
     return prepare_cunumeric(run.spec.fusion, verbose)
 end
 
-# Model-specific benchmark code is opt-in.  cuNumeric owns the accelerated
-# variants; the other array baselines share the same generic kernels. JACC and
-# Dagger have native Monte Carlo, GEMM, Gray-Scott, and CG workers.
+# Each backend owns its concrete benchmark types and specialized methods.
+# cuNumeric and CUDA share identical algorithms through common abstract families.
+# JACC and Dagger have native Monte Carlo, GEMM, Gray-Scott, and CG workers.
 supports_benchmark(::CuNumericModel, ::AbstractString) = true
 # The CUDA.jl array worker runs every generic kernel, including "cg"/"cg_plain";
 # only cuNumeric owns the naive Monte Carlo and `@accelerate` grayscott forms.

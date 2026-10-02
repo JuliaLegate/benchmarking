@@ -1,6 +1,6 @@
 # Shared protocol for the cuNumeric and CUDA.jl array workers. Before including
 # this file, the model entrypoint imports its packages, loads `core.jl` and the
-# shared benchmarks, loads any model-specific benchmark methods, and defines
+# common algorithms and backend-owned benchmark types/methods, and defines
 # `array_backend_entry`.
 
 length(ARGS) in (11, 12) || error(
