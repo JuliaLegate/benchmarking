@@ -132,17 +132,11 @@ end
 
 # One row of panels with the legend centered underneath.
 function complexity_figure(points, metrics; show_mean, ideal, panel_w, panel_h, st)
-    width = panel_w * length(metrics)
-    rows_legend = legend_rows(unique(s -> s.label, [pt.series for pt in points]), width, st)
-    legend_h = legend_dims(st).row * length(rows_legend) + 4
-    height = panel_h + legend_h
-    fix = gr_margin_fix(width, height, st)
-    panels = [complexity_panel(points, m; show_mean, ideal, first_col=i == 1, fix, st)
-              for (i, m) in enumerate(metrics)]
-    return plot(plot(panels...; layout=grid(1, length(metrics))),
-        grid_legend(rows_legend, width, st; center=true);
-        layout=grid(2, 1; heights=[panel_h, legend_h] ./ height),
-        size=(width, height), dpi=200, background_color=:white)
+    draw(i; first_col, fix, _...) =
+        complexity_panel(points, metrics[i]; show_mean, ideal, first_col, fix, st)
+    legend_series = unique(s -> s.label, [pt.series for pt in points])
+    return grid_layout(draw, length(metrics), legend_series, length(metrics);
+        panel_w, panel_h, st, center=true)
 end
 
 function write_points_csv(path, points, gpus)

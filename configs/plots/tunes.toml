@@ -1,0 +1,15 @@
+# Dagger blocks_per_gpu sensitivity from the tune sweep.
+#   julia --project=. plot_tunes.jl [--config=...] [--out=plots/tunes]
+# Style keys match grid.toml.
+
+tunes = "results-brev/tunes"
+# benchmarks = ["gemm", "montecarlo", "grayscott", "cg", "nas_ep", "nas_ft", "nas_mg"]
+benchmarks = ["cg", "nas_ep"]
+
+
+columns = 2
+panel_size = [400, 300]
+legend_scale = 1.0
+format = "pdf"
+width_in = 3.5   # one IEEE column
+font_size = 6

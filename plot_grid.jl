@@ -200,24 +200,22 @@ function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false)
     return pl
 end
 
-function grid_figure(panels, metric, columns; panel_w, panel_h, st)
-    rows = cld(length(panels), columns)
-    # Same label always has the same style, so one shared legend covers all panels.
-    legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
+# `n` panels in `columns` columns plus a shared legend. `make_panel(i; first_col,
+# last_row, bottom_row, fix)` draws panel i. `center` centers a legend row.
+function grid_layout(make_panel, n, legend_series, columns; panel_w, panel_h, st, center=false)
+    rows = cld(n, columns)
     width = panel_w * columns
     # An empty grid slot holds the legend; otherwise it gets a row underneath.
-    in_slot = rows * columns > length(panels)
+    in_slot = rows * columns > n
     rows_legend = legend_rows(legend_series, in_slot ? panel_w : width, st)
     # No figure title: the y-axis label already names the metric.
     legend_h = in_slot ? 0 : legend_dims(st).row * length(rows_legend) + 4
     height = rows * panel_h + legend_h
     fix = gr_margin_fix(width, height, st)
 
-    plots = Any[panel_plot(p.series, metric; title=p.title, log_values=p.log,
-                    first_col=(i - 1) % columns == 0,
-                    last_row=i > length(panels) - columns,
-                    bottom_row=i > (rows - 1) * columns, fix, st)
-                for (i, p) in enumerate(panels)]
+    plots = Any[make_panel(i; first_col=(i - 1) % columns == 0, last_row=i > n - columns,
+                    bottom_row=i > (rows - 1) * columns, fix)
+                for i in 1:n]
     in_slot && push!(plots, grid_legend(rows_legend, panel_w, st; slot_h=panel_h))
     for _ in (length(plots) + 1):(rows * columns)
         push!(plots, plot(; framestyle=:none))
@@ -226,8 +224,16 @@ function grid_figure(panels, metric, columns; panel_w, panel_h, st)
     fig_kw = (size=(width, height), dpi=200, background_color=:white)
     in_slot && return plot(plots...; layout=grid(rows, columns), fig_kw...)
     body = plot(plots...; layout=grid(rows, columns))
-    return plot(body, grid_legend(rows_legend, width, st);
+    return plot(body, grid_legend(rows_legend, width, st; center);
         layout=grid(2, 1; heights=[rows * panel_h, legend_h] ./ height), fig_kw...)
+end
+
+function grid_figure(panels, metric, columns; panel_w, panel_h, st)
+    # Same label always has the same style, so one shared legend covers all panels.
+    legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
+    draw(i; kw...) = panel_plot(panels[i].series, metric;
+        title=panels[i].title, log_values=panels[i].log, st, kw...)
+    return grid_layout(draw, length(panels), legend_series, columns; panel_w, panel_h, st)
 end
 
 # cuNumeric.jl speedups for the paper text: (label, GPU counts compared).
