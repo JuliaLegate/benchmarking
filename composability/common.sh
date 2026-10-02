@@ -20,13 +20,9 @@ gpu_mask_for_count() {
 # Run one case, save its output, and return its single RESULT payload on stdout.
 # Call this in an if/else so a failed case does not stop the sweep.
 run_logged_case() {
-    local log=$1 memory_log=$2 exit_code=0 row
-    shift 2
-    nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits --loop-ms=250 > "$memory_log" 2>&1 &
-    local monitor_pid=$!
+    local log=$1 exit_code=0 row
+    shift
     "$@" > "$log" 2>&1 || exit_code=$?
-    kill "$monitor_pid" 2>/dev/null || true
-    wait "$monitor_pid" 2>/dev/null || true
 
     if [[ $exit_code == 0 ]]; then
         if row=$(awk '/^RESULT,/ { row=$0; count++ } END { if (count != 1) exit 1; print row }' "$log" 2>/dev/null); then
@@ -41,17 +37,5 @@ run_logged_case() {
         echo "Last 20 lines of $log:" >&2
         tail -n 20 "$log" >&2 || true
     fi
-    return 1
-}
-
-# Missing telemetry must never discard a valid timing row. Return no value and
-# a failure status so callers can record a blank peak and continue the sweep.
-read_peak_memory() {
-    local log=$1 peak
-    if peak=$(awk '$1 ~ /^[0-9]+$/ { seen=1; if ($1 > peak) peak=$1 } END { if (seen) print peak+0 }' "$log" 2>/dev/null) && [[ -n $peak ]]; then
-        printf '%s\n' "$peak"
-        return 0
-    fi
-    echo "Memory samples unavailable: $log; keeping timing results and continuing" >&2
     return 1
 }

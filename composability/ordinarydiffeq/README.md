@@ -105,8 +105,7 @@ For the one-H100 run, the selected dimensions at 1, 2, 4, and 8 GPUs are
 `N=16384, 23170, 32768, 46341`. The weak run includes Dagger and cuNumeric.
 
 On the one-GPU H100, set `ODE_DRY_RUN=1` to write `planned-cases.csv` for all
-GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records sampled
-GPU memory as a diagnostic; the reading includes Legate's reserved pool.
+GPU counts, then run `weak "$BASE_N" 1` normally.
 On the eight-GPU host, each Julia case sees exactly its requested GPU count:
 devices `0` through `G-1` by default, or the first `G` entries of an existing
 `CUDA_VISIBLE_DEVICES` list. `planned-cases.csv` records the selected mask;
@@ -145,7 +144,7 @@ the backends in each comparison.
 
 Start with the `128` correctness case before large allocations. Any solver
 failure or host storage fallback exits nonzero; retain the error and package
-versions. The launcher saves the Manifest, sampled GPU-memory peak, and metadata with the results and
+versions. The launcher saves the Manifest and metadata with the results and
 has no time limit. `ODE_TIMEOUT` is no longer used. A case runs until it
 completes, fails, or is cancelled.
 
@@ -159,10 +158,9 @@ is published, and the sweep continues with the next case.
 
 Failed cases print their backend, size, GPU count, exit status,
 and the last 20 log lines directly in the terminal. Missing result logs mark
-only that case as failed. Missing memory samples leave the peak field empty;
-successful timing rows are retained and later cases still run. Either condition
-produces a nonzero final exit status. Full logs remain in the result directory
-when available.
+only that case as failed; successful timing rows are retained and later cases
+still run. Failed cases produce a nonzero final exit status. Full logs remain
+in the result directory when available.
 
 ## Changing the time integrator
 

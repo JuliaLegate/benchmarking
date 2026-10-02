@@ -60,7 +60,7 @@ pool for the available GPU. The setting is recorded in `metadata.txt`.
 The shell arguments are image dimensions `N`; each case has `N × N` pixels.
 Start with `32` for correctness. The launcher writes `results.csv`,
 `timings.png`, `metadata.txt`, and per-case logs under a timestamped results
-directory, along with the package manifest and sampled GPU-memory peak. Set `INTOPT_OUTPUT=/path/to/results` to choose one. It exits nonzero
+directory, along with the package manifest. Set `INTOPT_OUTPUT=/path/to/results` to choose one. It exits nonzero
 when a requested case fails and retains the failure log. The plot compares
 mean complete `Optimization.solve` time against `N`, with standard-error bars.
 
@@ -79,8 +79,7 @@ INTOPT_OUTPUT=/opt/bench-results/intopt-weak bash composability/integrals_optimi
 ```
 
 On the one-GPU H100, set `INTOPT_DRY_RUN=1` to write `planned-cases.csv` for
-all GPU counts, then run `weak "$BASE_N" 1` normally. The launcher records
-sampled GPU memory as a diagnostic; the reading includes Legate's reserved pool.
+all GPU counts, then run `weak "$BASE_N" 1` normally.
 On an eight-GPU host, each Julia case sees exactly its requested GPU count:
 devices `0` through `G-1` by default, or the first `G` entries of an existing
 `CUDA_VISIBLE_DEVICES` list. The selected mask is recorded in
@@ -121,9 +120,9 @@ The `N=8192` point is the largest common passing size and the weak-scaling
 baseline. Its exact planned dimensions for 1, 2, 4, and 8 GPUs are `8192`,
 `11585`, `16384`, and `23170`. The cuNumeric slowdown above `N=4096` is
 real in the measured samples; these data do not support a claim that its
-large-size curve converges with CUDA.jl. Sampled `nvidia-smi` memory reflects
-Legate's automatically reserved pool and is retained as a diagnostic, not
-used as a live-allocation threshold.
+large-size curve converges with CUDA.jl. In that run, sampled `nvidia-smi`
+memory reflected Legate's automatically reserved pool and was retained as a
+diagnostic, not used as a live-allocation threshold.
 
 An instrumented `N=8192` run using Julia's `@timed` around two complete
 cuNumeric solves measured 40.237 and 40.489 seconds per solve, of which

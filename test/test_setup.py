@@ -20,8 +20,15 @@ def shell_path(path):
     return str(path)
 
 
+def write_launcher_shims(directory, commands):
+    for name, body in commands.items():
+        shim = directory / name
+        shim.write_text("#!/bin/bash\n" + body, newline="\n")
+        shim.chmod(0o755)
+
+
 class SetupTests(unittest.TestCase):
-    def test_krylov_solver_selection_and_isolation(self):
+    def test_krylov_solver_and_backend_selection(self):
         script = Path(__file__).resolve().parents[1] / "composability/krylov/run.sh"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -32,7 +39,7 @@ class SetupTests(unittest.TestCase):
             shims.mkdir()
             commands = {
                 "git": 'echo test-commit\n',
-                "nvidia-smi": 'echo 123\n',
+                "nvidia-smi": ':\n',
                 "timeout": 'shift 3\nexec "$@"\n',
                 "julia": '''for arg in "$@"; do
     case "$arg" in
@@ -60,10 +67,7 @@ label=$backend
 echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1"
 ''',
             }
-            for name, body in commands.items():
-                shim = shims / name
-                shim.write_text("#!/bin/bash\n" + body, newline="\n")
-                shim.chmod(0o755)
+            write_launcher_shims(shims, commands)
             env = os.environ.copy()
             env.update(BENCH_PROJECT=shell_path(project), JULIA=shell_path(shims / "julia"),
                        BENCH_DRY_RUN="0", BENCH_ELTYPE="Float32")
@@ -103,12 +107,10 @@ echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1
                         rows = list(csv.DictReader(stream))
                     self.assertEqual(len(rows), len(expected))
                     self.assertEqual({(r["backend"], r["solver"], r["gpus"], r["n"]) for r in rows}, expected)
-                    for name in ("planned-cases.csv", "memory.csv"):
-                        with (output / name).open() as stream:
-                            records = list(csv.DictReader(stream))
-                        self.assertEqual(len(records), len(cases))
-                        self.assertEqual({r["solver"] for r in records}, set(solvers))
-                    self.assertEqual(len(list(output.glob("gpu-memory-*.log"))), len(cases))
+                    with (output / "planned-cases.csv").open() as stream:
+                        records = list(csv.DictReader(stream))
+                    self.assertEqual(len(records), len(cases))
+                    self.assertEqual({r["solver"] for r in records}, set(solvers))
                     plotted = [solver for solver in solvers if any(r["solver"] == solver for r in rows)]
                     self.assertEqual((output / "plots-called.txt").read_text().splitlines(), plotted)
                     for solver in solvers:
@@ -150,7 +152,7 @@ echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1
             shims.mkdir()
             commands = {
                 "git": 'echo test-commit\n',
-                "nvidia-smi": 'echo 123\n',
+                "nvidia-smi": ':\n',
                 "timeout": 'shift 3\nexec "$@"\n',
                 "julia": '''for arg in "$@"; do
     case "$arg" in
@@ -184,10 +186,7 @@ case "$BENCH_TEST_WORKLOAD" in
 esac
 ''',
             }
-            for name, body in commands.items():
-                shim = shims / name
-                shim.write_text("#!/bin/bash\n" + body, newline="\n")
-                shim.chmod(0o755)
+            write_launcher_shims(shims, commands)
             env = os.environ.copy()
             env.update(JULIA=shell_path(shims / "julia"), BENCH_SOLVERS="cg", BENCH_LOCAL="1")
             env.pop("CUDA_VISIBLE_DEVICES", None)
@@ -232,8 +231,8 @@ esac
                             else:
                                 self.assertFalse((output / "base_n.txt").exists())
                             self.assertEqual((output / "plot-called").is_file(), bool(expected))
-                            for name in ("planned-cases.csv", "memory.csv"):
-                                self.assertEqual(len((output / name).read_text().splitlines()), 1 + 4 * len(labels))
+                            self.assertEqual(len((output / "planned-cases.csv").read_text().splitlines()),
+                                             1 + 4 * len(labels))
                             backend = ("CuArray" if failed_backend in ("CUDA", "all", "all_sizes")
                                        else failed_backend.split()[0])
                             mode = "local" if failed_backend == "cuNumeric local" else "stock"
@@ -253,7 +252,7 @@ esac
             shims.mkdir()
             commands = {
                 "git": 'echo test-commit\n',
-                "nvidia-smi": 'echo 123\n',
+                "nvidia-smi": ':\n',
                 "timeout": 'shift 3\nexec "$@"\n',
                 "julia": '''for arg in "$@"; do
     case "$arg" in *plot_results.jl) echo 'simulated plotting error' >&2; exit 1 ;; esac
@@ -265,10 +264,7 @@ case "$1" in
 esac
 ''',
             }
-            for name, body in commands.items():
-                shim = shims / name
-                shim.write_text("#!/bin/bash\n" + body, newline="\n")
-                shim.chmod(0o755)
+            write_launcher_shims(shims, commands)
             env = os.environ.copy()
             env.update(BENCH_PROJECT=shell_path(project), JULIA=shell_path(shims / "julia"),
                        BENCH_DRY_RUN="0", BENCH_ELTYPE="Float32", BENCH_SOLVERS="cg", BENCH_LOCAL="0")
