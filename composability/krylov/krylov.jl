@@ -1,16 +1,4 @@
-const WORKER_START_NS = time_ns()
-
-function log_phase(message)
-    wall_s = round((time_ns() - WORKER_START_NS) / 1e9; digits=3)
-    println("[worker_wall_s=$wall_s] $message")
-    flush(stdout)
-end
-
-# Print before package loading and before compiling the benchmark body so a
-# slow first call cannot hide the worker's startup progress.
-log_phase("Worker PID=$(getpid()): loading LinearAlgebra, Statistics, and Krylov")
 using LinearAlgebra, Statistics, Krylov
-log_phase("Core packages loaded")
 
 length(ARGS) == 4 || error("Usage: julia krylov.jl {CuArray|Dagger|cuNumeric} {cg|bicgstab} {stock|local} N")
 const BACKEND, SOLVER, MODE = ARGS[1:3]
@@ -38,7 +26,6 @@ function dense_operator_buffer(reference::Tridiagonal; row_major=false)
 end
 
 make_operator(a) = make_array(a)
-log_phase("Loading $BACKEND backend")
 if BACKEND == "cuNumeric"
     @eval using cuNumeric
     cuNumeric.allowscalar(false)
@@ -122,41 +109,35 @@ function checked_solve!(w, A, b, reference, bh; solution=nothing)
 end
 
 function benchmark()
-    log_phase("Entered benchmark: $BACKEND $SOLVER $MODE, G=$GPUS N=$N; constructing dense host inputs")
+    println("Worker PID=$(getpid()): $BACKEND $SOLVER $MODE, G=$GPUS N=$N")
+    flush(stdout)
     lower = fill(T(SOLVER == "cg" ? -0.5 : -0.3), N - 1)
     upper = fill(T(SOLVER == "cg" ? -0.5 : -0.8), N - 1)
     diagonal = T.(range(2.0, 4.0; length=N))
     reference = Tridiagonal(lower, diagonal, upper)
     Ah = dense_operator_buffer(reference; row_major=BACKEND == "cuNumeric")
     bh = T[sin(i) + 1 for i in 1:N]
-    log_phase("Host inputs ready; creating backend arrays")
     A, b = make_operator(Ah), make_array(bh)
-    log_phase("Backend arrays created; constructing solver workspace")
     w = MODE == "stock" ?
         (SOLVER == "cg" ? Krylov.CgWorkspace(A, b) : Krylov.BicgstabWorkspace(A, b)) :
         local_workspace(b)
     Ah = nothing
-    log_phase("Workspace ready; running setup GC")
     GC.gc()
 
-    log_phase("Starting untimed warmup and validation")
     checked_solve!(w, A, b, reference, bh)
-    log_phase("Warmup complete; preparing $SAMPLES timed solve(s)")
+    println("Warmup complete; starting $SAMPLES timed solve(s)")
+    flush(stdout)
     samples = Float64[]
     solution = nothing
-    for sample_index in 1:SAMPLES
+    for _ in 1:SAMPLES
         GC.gc(); sync(w)
-        log_phase("Starting timed solve $sample_index/$SAMPLES after GC and synchronization")
         start = time_ns()
         solution = permitted_solve!(w, A, b)
         sync(w)
         push!(samples, (time_ns() - start) / 1e6)
-        log_phase("Timed solve $sample_index/$SAMPLES complete: $(last(samples)) ms")
     end
     # Validate the actual timed solution without running an additional solve.
-    log_phase("Validating timed solution")
     iterations, residual = checked_solve!(w, A, b, reference, bh; solution)
-    log_phase("Validation passed: relative_error=$residual")
     label = BACKEND == "CuArray" ? "CUDA" :
             BACKEND == "cuNumeric" && MODE != "stock" ? "cuNumeric $(MODE)" : BACKEND
     stderr = length(samples) > 1 ? std(samples) / sqrt(length(samples)) : NaN
@@ -164,7 +145,6 @@ function benchmark()
     flush(stdout)
 end
 
-log_phase("Backend loaded; calling benchmark (the first call may compile)")
 if BACKEND == "Dagger"
     available_gpus = length(collect(CUDA.devices()))
     available_gpus >= GPUS || error("Requested $GPUS GPUs, found $available_gpus")
@@ -174,4 +154,3 @@ if BACKEND == "Dagger"
 else
     benchmark()
 end
-log_phase("Benchmark complete; exiting worker")

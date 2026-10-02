@@ -139,14 +139,8 @@ timed solve, then exits before the next process starts. Both CG and BiCGStab,
 single- and multi-GPU runs, and the optional local loops use this isolation.
 [`run_samples.jl`](run_samples.jl) aggregates only after all samples pass;
 each `*-sample-N.log` contains the worker PID and its individual result.
-Worker logs flush elapsed wall times at package loading, benchmark entry,
-host input construction, backend array and workspace creation, warmup, timed
-solve, validation, and exit. The coordinator also reports each worker's total
-wall time, including process startup and shutdown. These diagnostic messages
-are outside the solve timer; array creation may enqueue GPU work that finishes
-during the synchronized warmup. A case appears in `results.csv` only after all
-requested samples pass; interrupted cases retain individual results in their
-sample logs.
+A case appears in `results.csv` only after all requested samples pass;
+interrupted cases retain individual results in their sample logs.
 
 For cuNumeric, setup constructs the dense operator directly in row-major host
 storage and calls the same `cuNumeric.nda_attach_external` helper used by its

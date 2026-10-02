@@ -5,13 +5,10 @@ module ProcessSamples
 using Statistics: mean, median, std
 
 function collect_samples(read_sample, log, cmd, count)
-    case_start = time_ns()
     return map(1:count) do sample_index
         sample_log = "$(splitext(log)[1])-sample-$sample_index.log"
-        case_wall_s = round((time_ns() - case_start) / 1e9; digits=3)
-        println("Starting sample $sample_index/$count in a fresh Julia process; case_wall_s=$case_wall_s; log=$sample_log")
+        println("Starting sample $sample_index/$count in a fresh Julia process; log=$sample_log")
         flush(stdout)
-        worker_start = time_ns()
         try
             open(sample_log, "w") do io
                 process = run(pipeline(cmd; stdout=io, stderr=io); wait=false)
@@ -25,9 +22,8 @@ function collect_samples(read_sample, log, cmd, count)
                     end
                 end
             end
-            worker_wall_s = round((time_ns() - worker_start) / 1e9; digits=3)
             result = read_sample(sample_log)
-            println("Completed sample $sample_index/$count: $(result.elapsed) ms, relative_error=$(result.relative_error), worker_wall_s=$worker_wall_s")
+            println("Completed sample $sample_index/$count: $(result.elapsed) ms, relative_error=$(result.relative_error)")
             flush(stdout)
             return result
         catch
