@@ -1,0 +1,75 @@
+using CUDA
+using AbstractFFTs
+
+const NAS_FT_ALPHA = 1.0e-6
+const NAS_FT_CHECKSUM_SAMPLES = 1024
+
+function nas_ft_checksum_indices(p)
+    linear = LinearIndices((p.nx, p.ny, p.nz))
+    return [
+        linear[mod(j, p.nx) + 1, mod(3j, p.ny) + 1, mod(5j, p.nz) + 1]
+        for j in 1:NAS_FT_CHECKSUM_SAMPLES
+    ]
+end
+
+# p = (; nx, ny, nz, niter). Plane-start seeds come from the host; one GPU
+# thread generates each plane's RNG sequence.
+function init(p)
+    shape = (p.nx, p.ny, p.nz)
+    u0 = CUDA.zeros(ComplexF64, shape)
+    return (;
+        u0, u1=similar(u0),
+        twiddle=CUDA.zeros(Float64, shape),
+        starts=CUDA.zeros(Float64, p.nz),
+        host_starts=Vector{Float64}(undef, p.nz),
+        indices=CUDA.CuArray(Int64.(nas_ft_checksum_indices(p))),
+        samples=CUDA.zeros(ComplexF64, NAS_FT_CHECKSUM_SAMPLES),
+        checksums=[CUDA.zeros(ComplexF64, 1) for _ in 1:p.niter],
+    )
+end
+
+function twiddle_kernel!(twiddle, nx, ny, nz, ap)
+    index = (CUDA.blockIdx().x - 1)*CUDA.blockDim().x + CUDA.threadIdx().x
+    if index <= length(twiddle)
+        zero_index = index - 1
+        i = zero_index % nx
+        j = (zero_index ÷ nx) % ny
+        k = zero_index ÷ (nx*ny)
+        ii = (i + nx÷2) % nx - nx÷2
+        jj = (j + ny÷2) % ny - ny÷2
+        kk = (k + nz÷2) % nz - nz÷2
+        @inbounds twiddle[index] = exp(ap*(ii*ii + jj*jj + kk*kk))
+    end
+    return nothing
+end
+
+function gather_kernel!(samples, values, indices)
+    j = (CUDA.blockIdx().x - 1)*CUDA.blockDim().x + CUDA.threadIdx().x
+    if j <= length(samples)
+        @inbounds samples[j] = values[indices[j]]
+    end
+    return nothing
+end
+
+function run!(s, p)
+    nas_ft_plane_starts!(s.host_starts, p.nx, p.ny)
+    copyto!(s.starts, s.host_starts)
+    threads = 256
+    CUDA.@cuda threads=threads blocks=cld(p.nz, threads) initial_kernel!(
+        s.u0, s.starts, p.nx*p.ny
+    )
+    CUDA.@cuda threads=threads blocks=cld(length(s.twiddle), threads) twiddle_kernel!(
+        s.twiddle, p.nx, p.ny, p.nz, -4.0*NAS_FT_ALPHA*pi^2
+    )
+    fft!(s.u0)
+    for iter in 1:p.niter
+        s.u0 .*= s.twiddle
+        copyto!(s.u1, s.u0)
+        ifft!(s.u1)
+        CUDA.@cuda threads=threads blocks=cld(length(s.samples), threads) gather_kernel!(
+            s.samples, s.u1, s.indices
+        )
+        Base.mapreducedim!(identity, +, s.checksums[iter], s.samples)
+    end
+    return s.checksums
+end

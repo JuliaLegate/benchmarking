@@ -1,0 +1,76 @@
+using cuNumeric
+
+# NPB EP per-batch kernel (shared by every Julia model).
+const NAS_EP_MK = 8
+
+nas_ep_batches(m) = Int(1) << (m - NAS_EP_MK)
+nas_ep_pairs_per_batch() = Int(1) << NAS_EP_MK
+
+struct NASEPPartial
+    q0::Float64
+    q1::Float64
+    q2::Float64
+    q3::Float64
+    q4::Float64
+    q5::Float64
+    q6::Float64
+    q7::Float64
+    q8::Float64
+    q9::Float64
+    sx::Float64
+    sy::Float64
+end
+
+@inline function nas_ep_batch(batch::Integer, jump::Float64=nas_ep_batch_jump())
+    seed = nas_ep_start_seed(batch, jump)
+    q0 = q1 = q2 = q3 = q4 = q5 = q6 = q7 = q8 = q9 = 0.0
+    sx = sy = 0.0
+    for _ in 1:nas_ep_pairs_per_batch()
+        seed, u1 = nas_ep_randlc(seed)
+        seed, u2 = nas_ep_randlc(seed)
+        x1, x2 = 2u1 - 1.0, 2u2 - 1.0
+        radius = x1*x1 + x2*x2
+        if radius <= 1.0
+            scale = sqrt(-2.0*log(radius)/radius)
+            g1, g2 = x1*scale, x2*scale
+            bin = floor(Int, max(abs(g1), abs(g2)))
+            if bin == 0
+                q0 += 1
+            elseif bin == 1
+                q1 += 1
+            elseif bin == 2
+                q2 += 1
+            elseif bin == 3
+                q3 += 1
+            elseif bin == 4
+                q4 += 1
+            elseif bin == 5
+                q5 += 1
+            elseif bin == 6
+                q6 += 1
+            elseif bin == 7
+                q7 += 1
+            elseif bin == 8
+                q8 += 1
+            elseif bin == 9
+                q9 += 1
+            end
+            sx += g1
+            sy += g2
+        end
+    end
+    return NASEPPartial(q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, sx, sy)
+end
+
+# One Legate store holds the batch partials as fixed-size struct elements.
+function init(m)
+    n = nas_ep_batches(m)
+    indices = cuNumeric.NDArray(reshape(collect(Int64, 0:(n - 1)), n, 1))
+    partials = similar(indices, NASEPPartial, size(indices))
+    return (; indices, partials)
+end
+
+function run!(s)
+    s.partials .= nas_ep_batch.(s.indices, Ref(nas_ep_batch_jump()))
+    return s.partials
+end

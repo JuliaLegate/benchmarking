@@ -1,0 +1,244 @@
+using CUDA: CUDA
+using Dagger: Dagger
+import Dagger: @stencil, Wrap
+
+const NAS_MG_A = (-8.0/3.0, 0.0, 1.0/6.0, 1.0/12.0)
+
+# p = (; dims=(nx, ny, nz), niter, c); c is the class smoother.
+
+function nas_mg_level_shapes(p)
+    d = p.dims
+    lt = round(Int, log2(minimum(d)))
+    return [d .÷ 2^(lt - level) .+ 2 for level in 1:lt]
+end
+
+# Unghosted (nx, ny, nz) per level; Dagger stencils wrap periodically instead.
+level_dims(p) = [shape .- 2 for shape in nas_mg_level_shapes(p)]
+
+function mg_array(host, procs)
+    nx, ny, nz = size(host)
+    block = cld(nz, length(procs))
+    nchunks = cld(nz, block)
+    assignment = reshape([procs[cld(i * length(procs), nchunks)] for i in 1:nchunks], 1, 1, nchunks)
+    return Dagger.DArray(host, Dagger.Blocks(nx, ny, block), assignment)
+end
+
+function init(p, gpus)
+    scope = Dagger.scope(; cuda_gpus=collect(1:gpus))
+    procs = sort!(collect(Dagger.compatible_processors(scope)); by=string)
+    return Dagger.with_options(; scope) do
+        dims = level_dims(p)
+        u = [mg_array(zeros(Float64, d), procs) for d in dims]
+        r = [mg_array(zeros(Float64, d), procs) for d in dims]
+        ghosted_rhs = nas_mg_rhs(p)
+        rhs = mg_array(copy(@view ghosted_rhs[2:(end - 1), 2:(end - 1), 2:(end - 1)]), procs)
+        foreach(a -> foreach(wait, a.chunks), (u..., r..., rhs))
+        return (; scope, procs, u, r, rhs)
+    end
+end
+
+@inline function dagger_mg_resid_value(v, n)
+    edges =
+        n[2, 1, 1] + n[2, 3, 1] + n[2, 1, 3] + n[2, 3, 3] +
+        n[1, 2, 1] + n[3, 2, 1] + n[1, 2, 3] + n[3, 2, 3] +
+        n[1, 1, 2] + n[3, 1, 2] + n[1, 3, 2] + n[3, 3, 2]
+    corners =
+        n[1, 1, 1] + n[3, 1, 1] + n[1, 3, 1] + n[3, 3, 1] +
+        n[1, 1, 3] + n[3, 1, 3] + n[1, 3, 3] + n[3, 3, 3]
+    return v - NAS_MG_A[1]*n[2, 2, 2] - NAS_MG_A[3]*edges - NAS_MG_A[4]*corners
+end
+
+function dagger_mg_resid!(r, u, v)
+    @stencil r[idx] = dagger_mg_resid_value(v[idx], @neighbors(u[idx], 1, Wrap()))
+    return r
+end
+
+@inline function dagger_mg_psinv_value(n, c)
+    faces = n[1, 2, 2] + n[3, 2, 2] + n[2, 1, 2] + n[2, 3, 2] +
+            n[2, 2, 1] + n[2, 2, 3]
+    edges =
+        n[2, 1, 1] + n[2, 3, 1] + n[2, 1, 3] + n[2, 3, 3] +
+        n[1, 2, 1] + n[3, 2, 1] + n[1, 2, 3] + n[3, 2, 3] +
+        n[1, 1, 2] + n[3, 1, 2] + n[1, 3, 2] + n[3, 3, 2]
+    return c[1]*n[2, 2, 2] + c[2]*faces + c[3]*edges
+end
+
+function dagger_mg_psinv!(u, r, c)
+    @stencil u[idx] = u[idx] + dagger_mg_psinv_value(@neighbors(r[idx], 1, Wrap()), c)
+    return u
+end
+
+@inline function dagger_mg_restrict_value(n)
+    faces = n[1, 2, 2] + n[3, 2, 2] + n[2, 1, 2] + n[2, 3, 2] +
+            n[2, 2, 1] + n[2, 2, 3]
+    edges =
+        n[2, 1, 1] + n[2, 3, 1] + n[2, 1, 3] + n[2, 3, 3] +
+        n[1, 2, 1] + n[3, 2, 1] + n[1, 2, 3] + n[3, 2, 3] +
+        n[1, 1, 2] + n[3, 1, 2] + n[1, 3, 2] + n[3, 3, 2]
+    corners =
+        n[1, 1, 1] + n[3, 1, 1] + n[1, 3, 1] + n[3, 3, 1] +
+        n[1, 1, 3] + n[3, 1, 3] + n[1, 3, 3] + n[3, 3, 3]
+    return 0.5*n[2, 2, 2] + 0.25*faces + 0.125*edges + 0.0625*corners
+end
+
+function dagger_mg_covering_chunk(array, first_z, last_z)
+    for index in CartesianIndices(array.chunks)
+        zrange = array.subdomains[index].indexes[3]
+        first_z >= first(zrange) && last_z <= last(zrange) && return index, zrange
+    end
+end
+
+function dagger_mg_downsample_chunk!(coarse, fine, first_local_z)
+    stop_local_z = first_local_z + 2*(size(coarse, 3) - 1)
+    coarse .= @view fine[
+        2:2:size(fine, 1), 2:2:size(fine, 2), first_local_z:2:stop_local_z
+    ]
+    return nothing
+end
+
+function dagger_mg_downsample!(coarse, filtered)
+    Dagger.spawn_datadeps() do
+        for index in CartesianIndices(coarse.chunks)
+            target_z = coarse.subdomains[index].indexes[3]
+            first_z, last_z = 2first(target_z), 2last(target_z)
+            source_index, source_z = dagger_mg_covering_chunk(filtered, first_z, last_z)
+            local_z = first_z - first(source_z) + 1
+            Dagger.@spawn dagger_mg_downsample_chunk!(
+                Dagger.Out(coarse.chunks[index]),
+                Dagger.In(filtered.chunks[source_index]),
+                local_z,
+            )
+        end
+    end
+    return coarse
+end
+
+function dagger_mg_restrict!(coarse, fine)
+    filtered = @stencil dagger_mg_restrict_value(@neighbors(fine[idx], 1, Wrap()))
+    return dagger_mg_downsample!(coarse, filtered)
+end
+
+@inline dagger_mg_interp_100(n) = 0.5*(n[1, 2, 2] + n[2, 2, 2])
+@inline dagger_mg_interp_010(n) = 0.5*(n[2, 1, 2] + n[2, 2, 2])
+@inline dagger_mg_interp_001(n) = 0.5*(n[2, 2, 1] + n[2, 2, 2])
+@inline dagger_mg_interp_110(n) =
+    0.25*(n[1, 1, 2] + n[2, 1, 2] + n[1, 2, 2] + n[2, 2, 2])
+@inline dagger_mg_interp_101(n) =
+    0.25*(n[1, 2, 1] + n[2, 2, 1] + n[1, 2, 2] + n[2, 2, 2])
+@inline dagger_mg_interp_011(n) =
+    0.25*(n[2, 1, 1] + n[2, 2, 1] + n[2, 1, 2] + n[2, 2, 2])
+@inline dagger_mg_interp_111(n) =
+    0.125*(
+        n[1, 1, 1] + n[2, 1, 1] + n[1, 2, 1] + n[2, 2, 1] +
+        n[1, 1, 2] + n[2, 1, 2] + n[1, 2, 2] + n[2, 2, 2]
+    )
+
+@inline function dagger_mg_interp_values(n)
+    return (
+        n[2, 2, 2], dagger_mg_interp_100(n), dagger_mg_interp_010(n),
+        dagger_mg_interp_110(n), dagger_mg_interp_001(n),
+        dagger_mg_interp_101(n), dagger_mg_interp_011(n), dagger_mg_interp_111(n),
+    )
+end
+
+function dagger_mg_interp_components(coarse)
+    components = similar(coarse, NTuple{8,Float64}, size(coarse))
+    @stencil components[idx] = dagger_mg_interp_values(@neighbors(coarse[idx], 1, Wrap()))
+    return components
+end
+
+function dagger_mg_upsample_chunk!(fine, global_z, coarse_z, components)
+    nx, ny, nz = size(fine)
+    for odd_z in (false, true)
+        local_z = isodd(global_z) == odd_z ? 1 : 2
+        local_z > nz && continue
+        output_z = local_z:2:nz
+        first_global_z = global_z + local_z - 1
+        first_coarse_z = cld(first_global_z, 2) - coarse_z + 1
+        input_z = first_coarse_z:(first_coarse_z + length(output_z) - 1)
+        zbit = odd_z ? 4 : 0
+        for odd_y in (false, true), odd_x in (false, true)
+            output_x = odd_x ? (1:2:nx) : (2:2:nx)
+            output_y = odd_y ? (1:2:ny) : (2:2:ny)
+            component_index = 1 + (odd_x ? 1 : 0) + (odd_y ? 2 : 0) + zbit
+            @views fine[output_x, output_y, output_z] .+=
+                getindex.(components[:, :, input_z], Ref(component_index))
+        end
+    end
+    return nothing
+end
+
+function dagger_mg_upsample!(fine, components)
+    Dagger.spawn_datadeps() do
+        for index in CartesianIndices(fine.chunks)
+            target_z = fine.subdomains[index].indexes[3]
+            first_coarse_z = cld(first(target_z), 2)
+            last_coarse_z = cld(last(target_z), 2)
+            source_index, source_z = dagger_mg_covering_chunk(
+                components, first_coarse_z, last_coarse_z
+            )
+            Dagger.@spawn dagger_mg_upsample_chunk!(
+                Dagger.Out(fine.chunks[index]),
+                first(target_z),
+                first(source_z),
+                Dagger.In(components.chunks[source_index]),
+            )
+        end
+    end
+    return fine
+end
+
+dagger_mg_interp!(fine, coarse) =
+    dagger_mg_upsample!(fine, dagger_mg_interp_components(coarse))
+
+function dagger_mg_cycle!(s, c)
+    finest = length(s.u)
+    for level in finest:-1:2
+        dagger_mg_restrict!(s.r[level - 1], s.r[level])
+    end
+    fill!(s.u[1], 0.0)
+    dagger_mg_psinv!(s.u[1], s.r[1], c)
+    for level in 2:(finest - 1)
+        fill!(s.u[level], 0.0)
+        dagger_mg_interp!(s.u[level], s.u[level - 1])
+        dagger_mg_resid!(s.r[level], s.u[level], s.r[level])
+        dagger_mg_psinv!(s.u[level], s.r[level], c)
+    end
+    dagger_mg_interp!(s.u[end], s.u[end - 1])
+    dagger_mg_resid!(s.r[end], s.u[end], s.rhs)
+    dagger_mg_psinv!(s.u[end], s.r[end], c)
+    return nothing
+end
+
+function dagger_mg_norm_chunk(values)
+    dims = ntuple(identity, ndims(values))
+    return mapreduce(abs2, +, values; dims, init=zero(eltype(values)))
+end
+
+function norm_tasks(s, residual)
+    nchunks = length(residual.chunks)
+    tasks = Vector{Dagger.DTask}(undef, nchunks)
+    Dagger.spawn_datadeps() do
+        for i in eachindex(tasks)
+            owner = s.procs[cld(i * length(s.procs), nchunks)]
+            tasks[i] = Dagger.@spawn scope=Dagger.ExactScope(owner) dagger_mg_norm_chunk(
+                Dagger.In(residual.chunks[i])
+            )
+        end
+    end
+    return tasks
+end
+
+function run!(s, p)
+    return Dagger.with_options(; scope=s.scope) do
+        foreach(x -> fill!(x, 0.0), s.u)
+        dagger_mg_resid!(s.r[end], s.u[end], s.rhs)
+        norm_tasks(s, s.r[end])
+        for _ in 1:p.niter
+            dagger_mg_cycle!(s, p.c)
+            dagger_mg_resid!(s.r[end], s.u[end], s.rhs)
+        end
+        foreach(wait, s.r[end].chunks)
+        return norm_tasks(s, s.r[end])
+    end
+end

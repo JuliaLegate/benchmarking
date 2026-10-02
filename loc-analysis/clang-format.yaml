@@ -1,0 +1,15 @@
+BasedOnStyle: LLVM
+Language: Cpp
+ColumnLimit: 10000
+IndentWidth: 4
+SortIncludes: Never
+ReflowComments: false
+SkipMacroDefinitionBody: true
+AlignEscapedNewlines: Left
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+BinPackArguments: true
+BinPackParameters: true

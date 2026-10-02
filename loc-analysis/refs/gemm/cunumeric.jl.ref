@@ -1,0 +1,11 @@
+using cuNumeric
+using LinearAlgebra
+
+function init(T, N, M)
+    A = cuNumeric.rand(T, N, M)
+    B = cuNumeric.rand(T, M, N)
+    C = cuNumeric.zeros(T, N, N)
+    return C, A, B
+end
+
+run!(C, A, B) = mul!(C, A, B)

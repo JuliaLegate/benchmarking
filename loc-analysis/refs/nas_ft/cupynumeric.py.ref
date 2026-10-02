@@ -1,0 +1,39 @@
+import math
+import cupynumeric as np
+import numpy as host_np
+
+ALPHA = 1.0e-6
+CHECKSUM_SAMPLES = 1024
+RNG_SCRATCH_STATES = 1 << 20
+
+def frequency_squares(n):
+    return host_np.asarray([((i+n//2) % n-n//2)**2 for i in range(n)])
+
+def init(nx, ny, nz):
+    shape = (nz, ny, nx)
+    j = host_np.arange(1, CHECKSUM_SAMPLES+1, dtype=host_np.int64)
+    indices = ((5*j) % nz * ny + (3*j) % ny) * nx + j % nx
+    return {
+        "indices": np.asarray(indices),
+        "ix2": np.asarray(frequency_squares(nx)).reshape(1, 1, nx),
+        "iy2": np.asarray(frequency_squares(ny)).reshape(1, ny, 1),
+        "iz2": np.asarray(frequency_squares(nz)).reshape(nz, 1, 1),
+        "host_initial": host_np.empty(shape, dtype=host_np.complex128),
+        "rng_scratch": host_np.empty(
+            min(2*host_np.prod(shape), RNG_SCRATCH_STATES), dtype=host_np.uint64,
+        ),
+    }
+
+def run(state, niter):
+    initial_conditions(state["host_initial"], state["rng_scratch"])
+    u0 = np.asarray(state["host_initial"])
+    twiddle = np.exp((-4.0*ALPHA*math.pi**2) *
+        (state["ix2"]+state["iy2"]+state["iz2"]))
+    # Two slab passes (axes 1-2, then 0) so each FFT task partitions.
+    u0, checksums = np.fft.fft(np.fft.fftn(u0, axes=(1, 2)), axis=0), []
+    for _ in range(niter):
+        u0 *= twiddle
+        u1 = np.fft.ifft(np.fft.ifftn(u0, axes=(1, 2)), axis=0)
+        samples = np.take(u1, state["indices"], mode="clip")
+        checksums.append(np.sum(samples))
+    return checksums

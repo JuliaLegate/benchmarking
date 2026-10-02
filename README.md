@@ -100,6 +100,10 @@ Krylov defaults to CG; `--solvers=bicgstab` selects BiCGStab, and
 Krylov uses stock implementations by default. Add `--local` to also run
 cuNumeric local implementations alongside cuNumeric stock.
 
+## LOC analysis
+
+See [loc-analysis/README.md](loc-analysis/README.md).
+
 ## Run the benchmark suite
 
 The standalone [ImplicitGlobalGrid Gray–Scott benchmark](other/implicitglobalgrid/README.md)
