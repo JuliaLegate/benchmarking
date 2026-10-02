@@ -8,7 +8,7 @@
 [krylov]
 # Match the measured H200 sweep, which omits 98304.
 single = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 81920, 114688, 131072]
-weak_base = 131072
+weak_base = 130000
 
 [ordinarydiffeq]
 single = [128, 512, 1024, 2048, 4096, 8192, 16384, 32768]

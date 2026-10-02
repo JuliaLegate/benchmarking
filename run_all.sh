@@ -37,9 +37,8 @@ run --config=$MULTI/nas_ft_strong.toml
 run --config=$MULTI/nas_mg_strong.toml
 
 # Composability weak scaling: OrdinaryDiffEq heat and Krylov CG.
-# COMPOSABILITY_MODELS picks models (default cuda,cunumeric: no Dagger).
 COMPOSABILITY=(--only=ordinarydiffeq,krylov --solvers=cg --mode=multi --gpus=1,2,4,8
-    --models=${COMPOSABILITY_MODELS:-cuda,cunumeric}
+    --models=${COMPOSABILITY_MODELS:-dagger,cunumeric}
     --config=${COMPOSABILITY_CONFIG:-composability/sizes_141GB.toml}
     --output=results/composability-multi-$(date +%Y%m%d-%H%M%S))
 echo
