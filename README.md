@@ -140,6 +140,33 @@ check on 1, 2, 4, and 8 GPUs with:
 julia --project=. run.jl --config=configs/multi_gpu/grayscott.toml --verbose
 ```
 
+## Setup tests and CI
+
+[Environment setup tests](.github/workflows/setup-tests.yml) run on every pull
+request update and pushes to `main`, using **Julia 1.13.1** on a hosted Ubuntu
+runner. The job checks out `JuliaLegate/cuNumeric.jl` at `develop` (cuNumeric 0.3
+and CNPreferences 0.1.4), runs the setup
+path and composability CLI tests, then runs the real `instantiate_projects.sh`
+in fresh copies of all project directories. It verifies the generated
+manifests, local cuNumeric/CNPreferences paths, and each environment's Dagger version and source.
+
+The job disables automatic precompilation and GPU runtime startup. It tests
+installation rather than GPU execution; it does not need a GPU or build the
+benchmark container. Downloaded packages may be cached, but project manifests
+are always created afresh. Logs, tested commit IDs, and resolved project files
+are uploaded as `setup-julia-1.13.1`, including on failure.
+
+Run the same integration test locally on Linux with Julia 1.13.1:
+
+```bash
+CUNUMERIC_SOURCE=/path/to/cuNumeric.jl \
+  julia --startup-file=no --project=. test/instantiate_projects.jl
+```
+
+It leaves your benchmark environments unchanged and saves diagnostics under
+`results/instantiate-tests/`. The cuNumeric checkout should be clean, without
+stale local manifests or machine-specific preferences.
+
 ## Configure
 
 Benchmarks are declared in TOML configs under `configs/`: `single_gpu/` holds
