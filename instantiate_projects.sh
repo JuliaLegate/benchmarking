@@ -20,7 +20,7 @@ echo "Checking Julia package registry"
 echo "Instantiating the benchmark orchestrator"
 "$julia_bin" --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
 
-for environment in cuda jacc dagger implicitglobalgrid; do
+for environment in cuda jacc dagger; do
     echo "Instantiating environments/$environment"
     "$julia_bin" --project="environments/$environment" -e '
         using Pkg
@@ -36,6 +36,9 @@ for environment in cuda jacc dagger implicitglobalgrid; do
         Pkg.instantiate()
     '
 done
+
+echo "Installing ImplicitGlobalGrid's Conda MPI environment and Julia packages"
+JULIA="$julia_bin" bash "$benchmark_dir/other/implicitglobalgrid/setup_igg.sh"
 
 echo "Setting JACC backend to cuda"
 "$julia_bin" --project="environments/jacc" \

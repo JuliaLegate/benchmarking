@@ -24,7 +24,7 @@ conda_bin=${CUNUMERIC_BENCH_CONDA:-${CONDA_EXE:-conda}}
 conda_base=$("$conda_bin" info --base)
 mpi_prefix=${IGG_MPI_PREFIX:-$conda_base/envs/igg-mpi}
 if [[ ! -d "$mpi_prefix/conda-meta" ]]; then
-    echo "Run $script_dir/setup_mpi.sh first to install and configure MPI." >&2
+    echo "Run $script_dir/setup_igg.sh first to install and configure IGG." >&2
     exit 1
 fi
 source "$conda_base/etc/profile.d/conda.sh"
@@ -44,7 +44,7 @@ fi
     using MPIPreferences
     MPIPreferences.binary == "system" &&
         MPIPreferences.System.libmpi == joinpath(ENV["CONDA_PREFIX"], "lib", "libmpi.so") ||
-        error("Run setup_mpi.sh to configure Julia for the active Conda MPI environment")
+        error("Run setup_igg.sh to configure Julia for the active Conda MPI environment")
     using MPI
     project = dirname(Base.active_project())
     worker = ARGS[1]

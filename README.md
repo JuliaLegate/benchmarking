@@ -28,6 +28,11 @@ CUNUMERIC_SOURCE=/path/to/cuNumeric.jl ./instantiate_projects.sh
 ```
 
 Set `CUNUMERIC_BENCH_JULIA` to select a different Julia executable.
+Setup also creates or updates IGG's Conda `igg-mpi` environment and configures
+Julia to use its CUDA-aware Open MPI. Conda must be on `PATH`, or selected with
+`CUNUMERIC_BENCH_CONDA=/path/to/conda`. See the
+[IGG setup guide](other/implicitglobalgrid/README.md) for MPI and CUDA overrides.
+
 Use Julia 1.13 for the composability workloads. All three share the versioned
 [`environments/composability/Project.toml`](environments/composability/Project.toml).
 Setup and launchers use this directory directly, including inside the container.
@@ -99,8 +104,10 @@ cuNumeric local implementations alongside cuNumeric stock.
 
 The standalone [ImplicitGlobalGrid Gray–Scott benchmark](other/implicitglobalgrid/README.md)
 lives under `other/` and uses `environments/implicitglobalgrid`, installed by the
-same setup script. Run a square local grid on each of four GPUs with
+same setup script. Run a global 14000-by-14000 grid on four GPUs with
 `bash other/implicitglobalgrid/run_benchmark.sh 4 14000 10 5`.
+Run the full 1/2/4/8-GPU sweep, including CUDA-aware MPI configuration and logs,
+with `bash other/implicitglobalgrid/run_weak_scaling.sh`.
 
 Use the smoke test for a quick end-to-end check:
 
@@ -132,33 +139,6 @@ check on 1, 2, 4, and 8 GPUs with:
 ```bash
 julia --project=. run.jl --config=configs/multi_gpu/grayscott.toml --verbose
 ```
-
-## Setup tests and CI
-
-[Environment setup tests](.github/workflows/setup-tests.yml) run on every pull
-request update and pushes to `main`, using **Julia 1.13.1** on a hosted Ubuntu
-runner. The job checks out `JuliaLegate/cuNumeric.jl` at `develop` (cuNumeric 0.3
-and CNPreferences 0.1.4), runs the setup
-path and composability CLI tests, then runs the real `instantiate_projects.sh`
-in fresh copies of all project directories. It verifies the generated
-manifests, local cuNumeric/CNPreferences paths, and each environment's Dagger version and source.
-
-The job disables automatic precompilation and GPU runtime startup. It tests
-installation rather than GPU execution; it does not need a GPU or build the
-benchmark container. Downloaded packages may be cached, but project manifests
-are always created afresh. Logs, tested commit IDs, and resolved project files
-are uploaded as `setup-julia-1.13.1`, including on failure.
-
-Run the same integration test locally on Linux with Julia 1.13.1:
-
-```bash
-CUNUMERIC_SOURCE=/path/to/cuNumeric.jl \
-  julia --startup-file=no --project=. test/instantiate_projects.jl
-```
-
-It leaves your benchmark environments unchanged and saves diagnostics under
-`results/instantiate-tests/`. The cuNumeric checkout should be clean, without
-stale local manifests or machine-specific preferences.
 
 ## Configure
 
