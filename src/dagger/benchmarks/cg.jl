@@ -8,6 +8,7 @@ struct DaggerCG{T,S,P}
     max_iter::Int
     scope::S
     processors::P
+    scheduler::Dagger.DataDepsScheduler
 end
 
 # Distributed vectors share one partitioning across the selected GPUs.
@@ -19,10 +20,10 @@ struct DaggerCGState{A}
 end
 
 function dagger_cg(
-    ::Type{T}, N, gpus, blocks_per_gpu, check_every, max_iter, scope, processors
+    ::Type{T}, N, gpus, blocks_per_gpu, check_every, max_iter, scope, processors, scheduler
 ) where {T}
     return DaggerCG{T,typeof(scope),typeof(processors)}(
-        N, gpus, blocks_per_gpu, check_every, max_iter, scope, processors
+        N, gpus, blocks_per_gpu, check_every, max_iter, scope, processors, scheduler
     )
 end
 
@@ -43,7 +44,7 @@ function model_build_cg(config::ModelWorkerConfig)
     max_iter = Int(get(config.kwargs, :max_iter, 1000))
     return dagger_cg(
         config.T, config.N, config.gpus, dagger_blocks_per_gpu(config),
-        check_every, max_iter, scope, processors,
+        check_every, max_iter, scope, processors, dagger_datadeps_scheduler(config),
     )
 end
 
@@ -84,7 +85,7 @@ end
 function model_run!(b::DaggerCG{T}, s::DaggerCGState) where {T}
     x, r, p, Ap = s.x, s.r, s.p, s.Ap
     # `return` in the do-block only exits the closure.
-    iterations = Dagger.with_options(; scope=b.scope) do
+    iterations = with_dagger_scheduler(b.scheduler) do; Dagger.with_options(; scope=b.scope) do
         x .= zero(T)
         r .= T(0.5)
         p .= r
@@ -107,7 +108,7 @@ function model_run!(b::DaggerCG{T}, s::DaggerCGState) where {T}
             end
         end
         return nothing
-    end
+    end; end
     iterations === nothing && error("CG did not converge within max_iter")
     return iterations
 end
@@ -122,7 +123,8 @@ end
 function model_check_correctness(b::DaggerCG{T}, config) where {T}
     n = min(b.N, max(b.gpus, fld(32, b.gpus) * b.gpus))
     small = dagger_cg(
-        T, n, b.gpus, b.blocks_per_gpu, b.check_every, b.max_iter, b.scope, b.processors
+        T, n, b.gpus, b.blocks_per_gpu, b.check_every, b.max_iter, b.scope, b.processors,
+        b.scheduler,
     )
     s = dagger_cg_state(small)
     model_run!(small, s)

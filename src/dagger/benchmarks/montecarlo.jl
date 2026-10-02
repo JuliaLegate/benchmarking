@@ -61,16 +61,22 @@ function dagger_montecarlo_chunk_sum(samples)
     )
 end
 
+dagger_montecarlo_scale!(x, s) = (x .*= s; nothing)
+
 function model_initialize(benchmark::DaggerMonteCarlo{T}) where {T}
     n = benchmark.n_samples
     return Dagger.with_options(; scope=benchmark.scope) do
-        samples =
-            T(10) .* rand(
-                Dagger.Blocks(dagger_montecarlo_block(benchmark, n)), T, n;
-                assignment=dagger_montecarlo_assignment(benchmark, n),
-            )
+        samples = rand(
+            Dagger.Blocks(dagger_montecarlo_block(benchmark, n)), T, n;
+            assignment=dagger_montecarlo_assignment(benchmark, n),
+        )
         wait_for_darray(samples)
-        return dagger_montecarlo_state(samples, benchmark.gpus)
+        state = dagger_montecarlo_state(samples, benchmark.gpus)
+        # Scale to [0, 10) in place on each chunk's GPU to avoid extra copies.
+        foreach(wait, map(zip(state.chunks, state.scopes)) do (chunk, scope)
+            Dagger.@spawn scope=scope dagger_montecarlo_scale!(chunk, T(10))
+        end)
+        return state
     end
 end
 

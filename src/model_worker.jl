@@ -124,8 +124,11 @@ function grayscott_correctness_status(gu, gv, cu, cv, ::Type{T}) where {T}
     return ok ? "pass" : "fail"
 end
 
+# Free the previous trial's data before the next allocates.
+model_release_memory(benchmark) = GC.gc(true)
+
 function model_trial(benchmark, config; clock=time_ns)
-    GC.gc(true)
+    model_release_memory(benchmark)
     state = model_initialize(benchmark)
     fence_each = model_fence_each_iteration(benchmark)
 

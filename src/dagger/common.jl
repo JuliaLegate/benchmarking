@@ -18,3 +18,31 @@ end
 
 # Owner of chunk i of n: consecutive chunks share a GPU, in processor order.
 dagger_owner(processors, i, n) = processors[cld(i * length(processors), n)]
+
+# Datadeps scheduler (kwarg `scheduler`). Greedy keeps tasks on their data; RoundRobin doesn't.
+const DAGGER_DATADEPS_SCHEDULERS = Dict(
+    "greedy" => Dagger.GreedyScheduler,
+    "roundrobin" => Dagger.RoundRobinScheduler,
+)
+function dagger_datadeps_scheduler(config)
+    name = string(get(config.kwargs, :scheduler, "greedy"))
+    haskey(DAGGER_DATADEPS_SCHEDULERS, name) || error(
+        "Unknown Dagger Datadeps scheduler '$name'; known: " *
+        join(sort!(collect(keys(DAGGER_DATADEPS_SCHEDULERS))), ", "),
+    )
+    return DAGGER_DATADEPS_SCHEDULERS[name]()
+end
+with_dagger_scheduler(f, scheduler) = Dagger.with(f, Dagger.DATADEPS_SCHEDULER => scheduler)
+
+# DArray finalizers only queue releases on MemPool; GC until that queue drains.
+function dagger_release_memory()
+    queue = Dagger.MemPool.SEND_QUEUE
+    for _ in 1:4
+        GC.gc(true)
+        deadline = time() + 10
+        while (isready(queue.queue) || queue.processing) && time() < deadline
+            sleep(0.01)
+        end
+    end
+    return
+end

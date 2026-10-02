@@ -5,6 +5,7 @@ struct DaggerGrayScott{T,S,P}
     blocks_per_gpu::Int
     scope::S
     processors::P
+    scheduler::Dagger.DataDepsScheduler
     dt::T
     dx2::T
     cu::T
@@ -13,7 +14,7 @@ struct DaggerGrayScott{T,S,P}
     k::T
 end
 
-struct DaggerGrayScottState{A}
+mutable struct DaggerGrayScottState{A}
     U::A
     V::A
     Un::A
@@ -21,20 +22,22 @@ struct DaggerGrayScottState{A}
 end
 
 function dagger_grayscott(
-    ::Type{T}, N, M, gpus, scope, processors; blocks_per_gpu=1
+    ::Type{T}, N, M, gpus, scope, processors;
+    blocks_per_gpu=1, scheduler=Dagger.GreedyScheduler(),
 ) where {T}
     p = grayscott_gs_params(T)
     return DaggerGrayScott{T,typeof(scope),typeof(processors)}(
-        N, M, gpus, blocks_per_gpu, scope, processors, p.dt, p.dx2, p.cu, p.cv, p.f, p.k
+        N, M, gpus, blocks_per_gpu, scope, processors, scheduler,
+        p.dt, p.dx2, p.cu, p.cv, p.f, p.k,
     )
 end
 
-# Symbolic assignments only target CPU threads; pin GPUs by block column.
+# Column strips (contiguous halos); symbolic assignments only target CPU threads, so pin GPUs.
 function dagger_gs_layout(b::DaggerGrayScott, N)
     block = cld(N, b.gpus * b.blocks_per_gpu)
     nb = cld(N, block)
     owner(j) = dagger_owner(b.processors, j, nb)
-    return Dagger.Blocks(block, block), [owner(j) for _ in 1:nb, j in 1:nb]
+    return Dagger.Blocks(N, block), [owner(j) for _ in 1:1, j in 1:nb]
 end
 
 function model_build_grayscott(config::ModelWorkerConfig)
@@ -51,6 +54,7 @@ function model_build_grayscott(config::ModelWorkerConfig)
     return dagger_grayscott(
         config.T, config.N, config.M, config.gpus, scope, processors;
         blocks_per_gpu=dagger_blocks_per_gpu(config),
+        scheduler=dagger_datadeps_scheduler(config),
     )
 end
 
@@ -88,11 +92,11 @@ function model_initialize(b::DaggerGrayScott{T}) where {T}
     end
 end
 
-# @stencil handles cross-block halos; Wrap gives periodic BC. Double-buffered.
+# @stencil handles cross-block halos; Wrap gives periodic BC. Double-buffered, swapped each step.
 function model_run!(b::DaggerGrayScott, s::DaggerGrayScottState)
     dt, dx2, cu, cv, f, k = b.dt, b.dx2, b.cu, b.cv, b.f, b.k
     U, V, Un, Vn = s.U, s.V, s.Un, s.Vn
-    Dagger.with_options(; scope=b.scope) do
+    with_dagger_scheduler(b.scheduler) do; Dagger.with_options(; scope=b.scope) do
         @stencil begin
             Un[idx] = begin
                 nu = @neighbors(U[idx], 1, Wrap())
@@ -108,10 +112,10 @@ function model_run!(b::DaggerGrayScott, s::DaggerGrayScottState)
                 lv = (nv[1, 2] + nv[3, 2] + nv[2, 1] + nv[2, 3] - 4vp) / dx2
                 vp + dt * (cv * lv + up * vp * vp - (f + k) * vp)
             end
-            U[idx] = Un[idx]
-            V[idx] = Vn[idx]
         end
-    end
+    end; end
+    s.U, s.Un = Un, U
+    s.V, s.Vn = Vn, V
     return s.U
 end
 
@@ -130,7 +134,8 @@ function model_check_correctness(b::DaggerGrayScott{T}, config) where {T}
     u0, v0 = grayscott_host_init(T, n, n; deterministic=true)
     # Several blocks per GPU so the check always crosses block halos.
     check = dagger_grayscott(
-        T, n, n, b.gpus, b.scope, b.processors; blocks_per_gpu=max(2, b.blocks_per_gpu)
+        T, n, n, b.gpus, b.scope, b.processors;
+        blocks_per_gpu=max(2, b.blocks_per_gpu), scheduler=b.scheduler,
     )
     s = dagger_grayscott_state(check, copy(u0), copy(v0))
     for _ in 1:steps

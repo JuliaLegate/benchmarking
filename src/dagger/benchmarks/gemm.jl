@@ -5,6 +5,7 @@ struct DaggerGEMM{T,S,P}
     blocks_per_gpu::Int
     scope::S
     processors::P
+    scheduler::Dagger.DataDepsScheduler
 end
 
 struct DaggerGEMMState{C,A,B}
@@ -28,7 +29,8 @@ function model_build_gemm(config::ModelWorkerConfig)
         "expected $(config.gpus)",
     )
     return DaggerGEMM{config.T,typeof(scope),typeof(processors)}(
-        config.N, config.M, config.gpus, dagger_blocks_per_gpu(config), scope, processors
+        config.N, config.M, config.gpus, dagger_blocks_per_gpu(config), scope, processors,
+        dagger_datadeps_scheduler(config),
     )
 end
 
@@ -74,8 +76,10 @@ function model_initialize(benchmark::DaggerGEMM)
 end
 
 function model_run!(benchmark::DaggerGEMM, state::DaggerGEMMState)
-    Dagger.with_options(; scope=benchmark.scope) do
-        return mul!(state.C, state.A, state.B)
+    with_dagger_scheduler(benchmark.scheduler) do
+        Dagger.with_options(; scope=benchmark.scope) do
+            return mul!(state.C, state.A, state.B)
+        end
     end
     wait_for_darray(state.C)
     return state.C
@@ -106,7 +110,8 @@ function model_check_correctness(benchmark::DaggerGEMM{T}, config) where {T}
     check_benchmark = DaggerGEMM{
         T,typeof(benchmark.scope),typeof(benchmark.processors)
     }(
-        n, m, benchmark.gpus, benchmark.blocks_per_gpu, benchmark.scope, benchmark.processors
+        n, m, benchmark.gpus, benchmark.blocks_per_gpu, benchmark.scope, benchmark.processors,
+        benchmark.scheduler,
     )
     A = reshape(T.(1:(n * m)), n, m) ./ T(n*m)
     B = reshape(T.(1:(m * n)), m, n) ./ T(m*n)
