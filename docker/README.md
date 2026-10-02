@@ -17,6 +17,9 @@ environment is already initialized in `environments/composability` within the
 checkout. All composability launchers select it automatically; no external
 environment directory is needed. Build from a cuNumeric base image containing the Krylov
 extension and ODE scalar-broadcast support before running those workloads.
+The same setup also installs the `igg-mpi` Conda environment and configures
+IGG's Julia MPI preferences. Its weak-scaling sweep is ready to launch with
+`bash other/implicitglobalgrid/run_weak_scaling.sh` on a host with eight GPUs.
 
 The image also contains a clean Git checkout of the exact benchmark commit
 used for the build. From the image's default working directory,

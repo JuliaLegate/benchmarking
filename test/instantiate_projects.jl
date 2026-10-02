@@ -11,6 +11,9 @@ const PROJECTS = [".", "environments/cuda", "environments/jacc",
 
 function stage_projects(destination)
     cp(joinpath(ROOT, "instantiate_projects.sh"), joinpath(destination, "instantiate_projects.sh"))
+    igg_scripts = joinpath(destination, "other", "implicitglobalgrid")
+    mkpath(igg_scripts)
+    cp(joinpath(ROOT, "other", "implicitglobalgrid", "setup_igg.sh"), joinpath(igg_scripts, "setup_igg.sh"))
     for project in PROJECTS
         target = joinpath(destination, project)
         mkpath(target)
@@ -84,6 +87,8 @@ function main()
             cmd = addenv(`bash $(joinpath(workspace, "instantiate_projects.sh"))`,
                 "CUNUMERIC_SOURCE" => source,
                 "CUNUMERIC_BENCH_JULIA" => julia,
+                "IGG_MPI_PREFIX" => joinpath(workspace, "igg-mpi"),
+                "CONDA_OVERRIDE_CUDA" => get(ENV, "IGG_CUDA_VERSION", get(ENV, "CUDA_VERSION_MAJOR_MINOR", "13.0")),
                 # Exercise resolution, downloads, builds, and JACC backend setup
                 # on a CPU runner, without starting the GPU runtime or eager precompilation.
                 "LEGATE_SKIP_RUNTIME" => "true",

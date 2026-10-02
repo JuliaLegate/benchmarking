@@ -29,11 +29,12 @@ COPY environments/jacc/Project.toml environments/jacc/Project.toml
 COPY environments/implicitglobalgrid/Project.toml environments/implicitglobalgrid/Project.toml
 COPY environments/composability/Project.toml environments/composability/Project.toml
 COPY instantiate_projects.sh install_cupynumeric.sh ./
+COPY other/implicitglobalgrid/setup_igg.sh other/implicitglobalgrid/setup_igg.sh
 
 ARG DEPENDENCY_REFRESH=0
 RUN echo "Benchmark dependency refresh: ${DEPENDENCY_REFRESH}" \
     && julia -e 'using Pkg; Pkg.Registry.add("General")' \
-    && JULIA_PKG_PRECOMPILE_AUTO=0 ./instantiate_projects.sh \
+    && CONDA_OVERRIDE_CUDA="${CUDA_VERSION_MAJOR_MINOR}" JULIA_PKG_PRECOMPILE_AUTO=0 ./instantiate_projects.sh \
     && rm -rf /depot/registries /depot/scratchspaces /depot/logs
 
 # Docker builds do not expose the host NVIDIA driver, so Conda cannot discover

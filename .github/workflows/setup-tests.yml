@@ -47,6 +47,15 @@ jobs:
 
       - uses: julia-actions/cache@v2
 
+      - name: Install Conda for IGG MPI
+        shell: bash
+        run: |
+          wget --no-verbose \
+            https://github.com/conda-forge/miniforge/releases/download/25.3.1-0/Miniforge3-25.3.1-0-Linux-x86_64.sh \
+            -O "$RUNNER_TEMP/miniforge.sh"
+          bash "$RUNNER_TEMP/miniforge.sh" -b -p "$RUNNER_TEMP/igg-conda"
+          echo "CUNUMERIC_BENCH_CONDA=$RUNNER_TEMP/igg-conda/bin/conda" >> "$GITHUB_ENV"
+
       - name: Record tested versions
         shell: bash
         run: |

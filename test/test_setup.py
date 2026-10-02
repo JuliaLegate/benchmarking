@@ -300,6 +300,10 @@ esac
                 bench = root / "benchmarking" if standalone else source / "benchmark"
                 bench.mkdir()
                 (bench / script.name).write_text(script.read_text(), newline="\n")
+                # Keep this source-path test independent of Conda installation.
+                igg_setup = bench / "other/implicitglobalgrid/setup_igg.sh"
+                igg_setup.parent.mkdir(parents=True)
+                igg_setup.write_text('"$JULIA" --project=environments/implicitglobalgrid\n', newline="\n")
                 project = bench / "environments/composability/Project.toml"
                 project.parent.mkdir(parents=True)
                 project.write_text((script.parent / "environments/composability/Project.toml").read_text(), newline="\n")

@@ -5,15 +5,21 @@ to ImplicitGlobalGrid (IGG 0.17, CUDA 5), one MPI rank per GPU.
 
 ## Setup
 
-`./instantiate_projects.sh` installs `environments/implicitglobalgrid`. Then, once:
+`./instantiate_projects.sh` installs `environments/implicitglobalgrid`, creates
+or updates the Conda `igg-mpi` environment (Open MPI 5 + UCX), and points
+MPIPreferences at it. Conda must be on `PATH`, or selected with
+`CUNUMERIC_BENCH_CONDA=/path/to/conda`.
+
+To install or refresh only IGG's environment:
 
 ```bash
-bash other/implicitglobalgrid/setup_mpi.sh
+bash other/implicitglobalgrid/setup_igg.sh
 ```
 
-This creates the Conda `igg-mpi` environment (Open MPI 5 + UCX) and points
-MPIPreferences at it. `IGG_MPI_PREFIX` moves it, `IGG_CUDA_VERSION` picks its
-CUDA (default `13.0`), and `IGG_LOCAL_CUDA=1` uses a local CUDA toolkit.
+`IGG_MPI_PREFIX` selects the Conda environment's location, `IGG_CUDA_VERSION`
+picks its CUDA (default `CUDA_VERSION_MAJOR_MINOR`, or `13.0` when unset), and
+`IGG_LOCAL_CUDA=1` uses a local CUDA toolkit. These settings also apply when
+running `instantiate_projects.sh`.
 
 ## Run
 
@@ -28,17 +34,24 @@ harness-compatible rows to `<run dir>/Float32/grayscott_igg.csv` (throughput in
 G cell updates/s, the harness's Gray-Scott unit) for plotting with
 `configs/plots/figures.toml`.
 
-Weak-scaling sweep, matching the harness's Gray-Scott sizes:
+Run the weak-scaling sweep on 1, 2, 4, and 8 GPUs with global sizes 28000,
+39600, 56000, and 79200, matching the harness's Gray-Scott config:
 
 ```bash
-export IGG_OUTPUT=results/implicitglobalgrid JULIA_NUM_THREADS=8
-GPUS=(1 2 4 8); SIZES=(28000 39600 56000 79200)
-mkdir -p "$IGG_OUTPUT"
-for i in "${!GPUS[@]}"; do
-    bash other/implicitglobalgrid/run_benchmark.sh "${GPUS[$i]}" "${SIZES[$i]}" 50 2 5 \
-        2>&1 | tee "$IGG_OUTPUT/igg-${GPUS[$i]}gpu-N${SIZES[$i]}.log" || break
-done
+# [N_ITER=50] [N_WARMUP=2] [N_TRIALS=5]
+bash other/implicitglobalgrid/run_weak_scaling.sh
+
+# Choose another output directory or iteration counts.
+IGG_OUTPUT=results/igg-run2 bash other/implicitglobalgrid/run_weak_scaling.sh 50 2 5
 ```
+
+The script defaults to eight Julia threads and `IGG_CUDAAWARE_MPI=1`, unless
+those variables are already set. It unsets the MPI flag on exit, including
+failure; running it with `bash` leaves the caller's environment unchanged.
+It writes a log for each GPU count and appends trial rows to
+`$IGG_OUTPUT/Float32/grayscott_igg.csv`. The default output directory is
+`results/implicitglobalgrid`, relative to the repository root. A failed run
+stops the sweep and returns a nonzero exit status.
 
 ## Notes
 
