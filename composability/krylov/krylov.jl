@@ -16,10 +16,23 @@ const TOL = T === Float32 ? T(1e-5) : T(1e-8)
 const SAMPLES = parse(Int, get(ENV, "BENCH_SAMPLES", "5"))
 SAMPLES >= 1 || error("BENCH_SAMPLES must be positive")
 BLAS.set_num_threads(1)
+
+# The timed operator is dense for every backend. cuNumeric attaches row-major
+# host storage, so construct that layout directly from the three diagonals.
+# NDArray(Matrix(reference)) would transpose and then copy the entire matrix.
+function dense_operator_buffer(reference::Tridiagonal; row_major=false)
+    stored = row_major ? Tridiagonal(reference.du, reference.d, reference.dl) : reference
+    return Matrix(stored)
+end
+
+make_operator(a) = make_array(a)
 if BACKEND == "cuNumeric"
     @eval using cuNumeric
     cuNumeric.allowscalar(false)
     @eval make_array(a) = NDArray(a)
+    # Use the same attachment as NDArray's matrix constructor, with an already
+    # packed buffer. The returned NDArray retains the buffer as its parent.
+    @eval make_operator(a::Matrix) = cuNumeric.nda_attach_external(a; shape=reverse(size(a)))
     @eval sync(w) = cuNumeric.issue_execution_fence(; block=true)
     @eval host_array(x) = Array(x)
     @eval permitted_solve!(w, A, b) = @allowpromotion @allowautofetch solve!(w, A, b)
@@ -102,9 +115,9 @@ function benchmark()
     upper = fill(T(SOLVER == "cg" ? -0.5 : -0.8), N - 1)
     diagonal = T.(range(2.0, 4.0; length=N))
     reference = Tridiagonal(lower, diagonal, upper)
-    Ah = Matrix(reference) # All backends time the same dense operator.
+    Ah = dense_operator_buffer(reference; row_major=BACKEND == "cuNumeric")
     bh = T[sin(i) + 1 for i in 1:N]
-    A, b = make_array(Ah), make_array(bh)
+    A, b = make_operator(Ah), make_array(bh)
     w = MODE == "stock" ?
         (SOLVER == "cg" ? Krylov.CgWorkspace(A, b) : Krylov.BicgstabWorkspace(A, b)) :
         local_workspace(b)
@@ -129,6 +142,7 @@ function benchmark()
             BACKEND == "cuNumeric" && MODE != "stock" ? "cuNumeric $(MODE)" : BACKEND
     stderr = length(samples) > 1 ? std(samples) / sqrt(length(samples)) : NaN
     println("RESULT,$label,$SOLVER,$MODE,$T,$GPUS,$N,$iterations,$(mean(samples)),$stderr,$(median(samples)),$(minimum(samples)),$(maximum(samples)),$residual,$(join(samples, ';'))")
+    flush(stdout)
 end
 
 if BACKEND == "Dagger"
