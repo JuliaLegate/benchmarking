@@ -52,27 +52,31 @@ factor for each workload and GPU count:
 bash composability/tune_dagger.sh --dry-run
 bash composability/tune_dagger.sh
 bash composability/tune_dagger.sh krylov ordinarydiffeq
-DAGGER_TUNE_GPUS="1 2" DAGGER_TUNE_BLOCKS="1 2 4 8" bash composability/tune_dagger.sh
 ```
 
-Defaults are Float32, N=4096 for Krylov (both CG and BiCGSTAB), N=1024 for heat,
-and N=512 for plume. N stays constant across GPU counts. Each candidate runs
-in a fresh Julia process using the existing worker: one untimed warmup solve
-for Krylov/heat, two for plume, then three timed solves in that process.
-Input construction, compilation during warmup, and process startup are excluded;
-the workers retain their synchronization and numerical validation.
+The script lists its GPU counts, block factors, and small Float32 problem sizes
+directly: N=4096 for Krylov (CG and BiCGSTAB), N=1024 for heat, and N=512 for
+plume. N stays constant across GPU counts. Edit those lines to change the sweep.
+
+Each candidate runs in a fresh Julia process with `COMPOSABILITY_TUNE=1`:
+one untimed warmup followed by two timed runs. Both warmup and timed runs use
+at most **5 Krylov iterations**, **5 heat steps**, or **5 optimizer iterations**,
+instead of the regular limits of 200, 20, and 80. This mode overrides inherited
+sample/iteration settings so a benchmark environment cannot make tuning expensive.
+Heat uses the usual default timestep of 0.05 over a shorter trajectory.
+Krylov checks finite residual reduction and plume checks finite loss improvement;
+these short runs do not require full convergence or parameter recovery. Heat
+retains its analytical accuracy check. Normal benchmark validation is unchanged.
+Input construction, warmup, and process startup are excluded from timing.
 
 The sweep tries `blocks_per_gpu = 1, 2, 4, 8, 16, 32, 64`, stopping when a
 successful candidate is more than 4x slower than the best mean, as in the root
-tuner. It skips factors requesting more row partitions than rows. Failed
-candidates keep their logs and the sweep continues with a nonzero final status.
-`composability/tunes/<run-id>/results.csv` holds successful timings and raw
-samples; `best.csv` holds the lowest mean among tested successful candidates
-for each workload/solver/GPU count. An existing output directory is never reused.
-
-Use `--help` for size, sample, thread, output, and candidate overrides. Existing
-worker settings such as `ODE_STEPS` and `INTOPT_ITERS` still apply. A dry run
-prints commands without creating files or loading Julia/GPU packages.
+tuner. Failed candidates keep their logs and the sweep continues with a nonzero
+final status. `composability/tunes/<run-id>/results.csv` holds mean timings;
+`best.csv` holds the lowest mean for each workload/solver/GPU count. Raw samples
+remain in worker logs. Set `DAGGER_TUNE_OUTPUT` to choose a new output directory;
+existing directories are never reused. `--dry-run` prints commands without
+creating files or loading Julia/GPU packages.
 
 Apply a winner through `DAGGER_BLOCKS_PER_GPU`, which defaults to 1 in regular
 composability runs. Heat and plume use row slabs of height

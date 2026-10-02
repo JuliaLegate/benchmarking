@@ -19,8 +19,9 @@ PRECISION in ("Float32", "Float64") || error("INTOPT_ELTYPE must be Float32 or F
 const T = PRECISION == "Float64" ? Float64 : Float32
 const BANDS = parse(Int, get(ENV, "INTOPT_BANDS", "4"))
 const ORDER = parse(Int, get(ENV, "INTOPT_ORDER", "12"))
-const ITERS = parse(Int, get(ENV, "INTOPT_ITERS", "80"))
-const SAMPLES = parse(Int, get(ENV, "INTOPT_SAMPLES", "5"))
+const TUNING = get(ENV, "COMPOSABILITY_TUNE", "0") == "1"
+const ITERS = TUNING ? 5 : parse(Int, get(ENV, "INTOPT_ITERS", "80"))
+const SAMPLES = TUNING ? 2 : parse(Int, get(ENV, "INTOPT_SAMPLES", "5"))
 const GPUS = parse(Int, get(ENV, "INTOPT_GPUS", "1"))
 const NOISE = parse(T, get(ENV, "INTOPT_NOISE", "0.001"))
 ITERS > 0 && SAMPLES >= 2 && GPUS > 0 && NOISE >= 0 ||
@@ -113,7 +114,7 @@ function run_case(n)
                                     NelderMead(); maxiters=ITERS, progress=false)
 
     initial_loss = objective(initial)
-    for _ in 1:2
+    for _ in 1:(TUNING ? 1 : 2)
         warmup = do_solve()
         warmup.u isa Vector{Float64} || error("Unexpected optimizer parameter storage")
     end
@@ -128,10 +129,13 @@ function run_case(n)
     end
 
     final_loss = objective(solution.u)
-    final_loss < initial_loss || error("Optimization failed to reduce the loss")
+    isfinite(initial_loss) && isfinite(final_loss) && final_loss < initial_loss ||
+        error("Optimization failed to reduce the loss")
     estimated = exp.(solution.u)
     parameter_error = norm(estimated .- TRUTH) / norm(TRUTH)
-    parameter_error < 0.1 || error("Plume parameters were not recovered")
+    # Five tuning iterations check progress, not full parameter recovery.
+    isfinite(parameter_error) && (TUNING || parameter_error < 0.1) ||
+        error("Plume parameters were not recovered")
     println("parameters=$estimated objective_evals=$(solution.stats.fevals)")
     stderr = std(elapsed_ms) / sqrt(length(elapsed_ms))
     println("RESULT,$backend,$T,$GPUS,$n,$BANDS,$ORDER,$ITERS,$(solution.stats.fevals),$(mean(elapsed_ms)),$stderr,$(median(elapsed_ms)),$(minimum(elapsed_ms)),$(maximum(elapsed_ms)),$initial_loss,$final_loss,$parameter_error,$(join(elapsed_ms, ';'))")

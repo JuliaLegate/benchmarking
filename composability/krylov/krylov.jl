@@ -13,7 +13,9 @@ N > 1 || error("N must exceed 1")
 GPUS > 0 || error("BENCH_GPUS must be positive")
 const T = get(ENV, "BENCH_ELTYPE", "Float32") == "Float64" ? Float64 : Float32
 const TOL = T === Float32 ? T(1e-5) : T(1e-8)
-const SAMPLES = parse(Int, get(ENV, "BENCH_SAMPLES", "5"))
+const TUNING = get(ENV, "COMPOSABILITY_TUNE", "0") == "1"
+const MAXITERS = TUNING ? 5 : 200
+const SAMPLES = TUNING ? 2 : parse(Int, get(ENV, "BENCH_SAMPLES", "5"))
 SAMPLES >= 1 || error("BENCH_SAMPLES must be positive")
 BLAS.set_num_threads(1)
 
@@ -88,9 +90,9 @@ end
 function solve!(w, A, b)
     if MODE == "stock"
         if SOLVER == "cg"
-            Krylov.cg!(w, A, b; atol=zero(T), rtol=TOL, itmax=200)
+            Krylov.cg!(w, A, b; atol=zero(T), rtol=TOL, itmax=MAXITERS)
         else
-            Krylov.bicgstab!(w, A, b; atol=zero(T), rtol=TOL, itmax=200)
+            Krylov.bicgstab!(w, A, b; atol=zero(T), rtol=TOL, itmax=MAXITERS)
         end
         return w.x, w.stats.niter, w.stats.solved
     end
@@ -106,12 +108,14 @@ function checked_solve!(w, A, b, reference, bh; solution=nothing)
     xh isa AbstractVector && length(xh) == length(bh) ||
         error("Expected a solution vector of length $(length(bh)); got $(typeof(xh)) with size $(size(xh))")
     residual = norm(reference * xh - Float64.(bh)) / norm(Float64.(bh))
-    residual <= TOL || error("Relative residual $residual exceeds $TOL")
+    # A short tuning solve need not converge, but must reduce the residual.
+    valid = TUNING ? isfinite(residual) && residual < 1 : residual <= TOL
+    valid || error("Invalid relative residual $residual (tuning=$TUNING)")
     return iterations, residual
 end
 
 function benchmark()
-    println("Worker PID=$(getpid()): $BACKEND $SOLVER $MODE, G=$GPUS N=$N")
+    println("Worker PID=$(getpid()): $BACKEND $SOLVER $MODE, G=$GPUS N=$N tuning=$TUNING maxiters=$MAXITERS")
     flush(stdout)
     lower = fill(T(SOLVER == "cg" ? -0.5 : -0.3), N - 1)
     upper = fill(T(SOLVER == "cg" ? -0.5 : -0.8), N - 1)

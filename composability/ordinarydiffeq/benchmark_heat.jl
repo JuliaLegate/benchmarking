@@ -10,9 +10,11 @@ length(ARGS) >= 1 || error("Usage: julia benchmark_heat.jl {cpu|CuArray|cuNumeri
 backend = ARGS[1]
 const T = get(ENV, "ODE_ELTYPE", "Float32") == "Float64" ? Float64 : Float32
 const KAPPA = T(0.2)
-const T_END = T(1)
-const NSTEPS = parse(Int, get(ENV, "ODE_STEPS", "20"))
-const SAMPLES = parse(Int, get(ENV, "ODE_SAMPLES", "5"))
+const TUNING = get(ENV, "COMPOSABILITY_TUNE", "0") == "1"
+# Shorten the trajectory while preserving the normal default dt=0.05.
+const T_END = T(TUNING ? 0.25 : 1)
+const NSTEPS = TUNING ? 5 : parse(Int, get(ENV, "ODE_STEPS", "20"))
+const SAMPLES = TUNING ? 2 : parse(Int, get(ENV, "ODE_SAMPLES", "5"))
 const GPUS = parse(Int, get(ENV, "ODE_GPUS", "1"))
 NSTEPS > 0 || error("ODE_STEPS must be positive")
 SAMPLES >= 1 || error("ODE_SAMPLES must be positive")

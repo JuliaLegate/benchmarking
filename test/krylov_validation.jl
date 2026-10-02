@@ -33,6 +33,7 @@ Core.eval(@__MODULE__, buffer_constructor)
 end
 
 const TOL = 1e-5
+TUNING = false
 const SYNCHRONIZED = Ref(false)
 permitted_solve!(w, A, b) = (SYNCHRONIZED[] = false; (w.x, 12, w.solved))
 sync(w) = (SYNCHRONIZED[] = true)
@@ -65,6 +66,11 @@ correct_storage(x) = error("Final placement must not gate numerical validation")
         @test_throws ErrorException check(invalid)
     end
     for invalid in (1.0, x[1:7], reshape(x, :, 1))
+        @test_throws ErrorException check(invalid)
+    end
+    global TUNING = true
+    @test last(check(0.9 .* x)) ≈ 0.1
+    for invalid in (zero(x), 3 .* x, fill(NaN, length(x)), fill(Inf, length(x)))
         @test_throws ErrorException check(invalid)
     end
 end
