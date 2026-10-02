@@ -39,6 +39,8 @@ elseif backend == "cuNumeric"
     host_state(a) = Array(a)
 elseif backend == "Dagger"
     using Dagger, CUDA
+    const BLOCKS_PER_GPU = parse(Int, get(ENV, "DAGGER_BLOCKS_PER_GPU", "1"))
+    BLOCKS_PER_GPU > 0 || error("DAGGER_BLOCKS_PER_GPU must be positive")
     CUDA.allowscalar(false)
     Dagger.allowscalar!(false)
     heat_slice(u::Dagger.DArray, rows, cols) = u[rows, cols]
@@ -48,10 +50,10 @@ elseif backend == "Dagger"
         procs = sort(collect(filter(p -> p isa Dagger.CuArrayDeviceProc,
                                     Dagger.compatible_processors())); by=p -> p.device)
         length(procs) == GPUS || error("Dagger sees $(length(procs)) of $GPUS requested GPUs")
-        block = cld(size(a, 1), GPUS)
+        block = cld(size(a, 1), GPUS * BLOCKS_PER_GPU)
         grid = Array{Dagger.Processor}(undef, cld(size(a, 1), block), 1)
         for i in axes(grid, 1)
-            grid[i, 1] = procs[i]
+            grid[i, 1] = procs[mod1(i, GPUS)]
         end
         state = Dagger.distribute(a, Dagger.Blocks(block, size(a, 2)), grid)
         wait(state)

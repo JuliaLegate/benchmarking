@@ -49,6 +49,8 @@ elseif backend == "cuNumeric"
     run_with_scalar_fetch(f) = cuNumeric.allowautofetch(f)
 elseif backend == "Dagger"
     using Dagger, CUDA
+    const BLOCKS_PER_GPU = parse(Int, get(ENV, "DAGGER_BLOCKS_PER_GPU", "1"))
+    BLOCKS_PER_GPU > 0 || error("DAGGER_BLOCKS_PER_GPU must be positive")
     CUDA.allowscalar(false)
     length(collect(CUDA.devices())) >= GPUS || error("Requested $GPUS GPUs are unavailable")
     dagger_scope = Dagger.scope(; cuda_gpus=collect(1:GPUS))
@@ -56,10 +58,10 @@ elseif backend == "Dagger"
         procs = sort(collect(filter(p -> p isa Dagger.CuArrayDeviceProc,
                                     Dagger.compatible_processors())); by=p -> p.device)
         length(procs) == GPUS || error("Dagger sees $(length(procs)) of $GPUS requested GPUs")
-        block = cld(size(a, 1), GPUS)
+        block = cld(size(a, 1), GPUS * BLOCKS_PER_GPU)
         grid = Array{Dagger.Processor}(undef, cld(size(a, 1), block), 1)
         for i in axes(grid, 1)
-            grid[i, 1] = procs[i]
+            grid[i, 1] = procs[mod1(i, GPUS)]
         end
         result = Dagger.distribute(a, Dagger.Blocks(block, size(a, 2)), grid)
         wait(result)

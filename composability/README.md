@@ -43,6 +43,44 @@ julia --project=. run_composability.jl --help
 A failed case keeps its log; the remaining cases still run, and the exit code
 is nonzero. Existing results are never overwritten.
 
+## Dagger block tuning
+
+Run a small, fixed-size problem on 1, 2, 4, and 8 GPUs to select a partition
+factor for each workload and GPU count:
+
+```sh
+bash composability/tune_dagger.sh --dry-run
+bash composability/tune_dagger.sh
+bash composability/tune_dagger.sh krylov ordinarydiffeq
+DAGGER_TUNE_GPUS="1 2" DAGGER_TUNE_BLOCKS="1 2 4 8" bash composability/tune_dagger.sh
+```
+
+Defaults are Float32, N=4096 for Krylov (both CG and BiCGSTAB), N=1024 for heat,
+and N=512 for plume. N stays constant across GPU counts. Each candidate runs
+in a fresh Julia process using the existing worker: one untimed warmup solve
+for Krylov/heat, two for plume, then three timed solves in that process.
+Input construction, compilation during warmup, and process startup are excluded;
+the workers retain their synchronization and numerical validation.
+
+The sweep tries `blocks_per_gpu = 1, 2, 4, 8, 16, 32, 64`, stopping when a
+successful candidate is more than 4x slower than the best mean, as in the root
+tuner. It skips factors requesting more row partitions than rows. Failed
+candidates keep their logs and the sweep continues with a nonzero final status.
+`composability/tunes/<run-id>/results.csv` holds successful timings and raw
+samples; `best.csv` holds the lowest mean among tested successful candidates
+for each workload/solver/GPU count. An existing output directory is never reused.
+
+Use `--help` for size, sample, thread, output, and candidate overrides. Existing
+worker settings such as `ODE_STEPS` and `INTOPT_ITERS` still apply. A dry run
+prints commands without creating files or loading Julia/GPU packages.
+
+Apply a winner through `DAGGER_BLOCKS_PER_GPU`, which defaults to 1 in regular
+composability runs. Heat and plume use row slabs of height
+`cld(N, GPUs * blocks_per_gpu)`, assigned round-robin to GPUs. Krylov uses that
+same side length for square matrix tiles and matching vector blocks, so its
+matrix tile count grows quadratically with this factor. Small-problem winners
+are a starting point; retune at the intended production size when needed.
+
 ## Problem sizes
 
 Each config section sets the one-GPU sweep and the weak-scaling base, with

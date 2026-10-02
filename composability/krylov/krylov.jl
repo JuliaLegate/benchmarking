@@ -46,6 +46,8 @@ elseif BACKEND == "CuArray"
     @eval permitted_solve!(w, A, b) = solve!(w, A, b)
 else
     @eval using Dagger, CUDA
+    const BLOCKS_PER_GPU = parse(Int, get(ENV, "DAGGER_BLOCKS_PER_GPU", "1"))
+    BLOCKS_PER_GPU > 0 || error("DAGGER_BLOCKS_PER_GPU must be positive")
     CUDA.allowscalar(false)
     # Current Dagger tile GEMV calls CPU BLAS.gemv! on CuArrays. This
     # benchmark-only tile method keeps Krylov's solver unmodified.
@@ -54,7 +56,7 @@ else
         return mul!(y, opA, x, α, β)
     end
     @eval function make_array(a)
-        block = cld(N, GPUS) # Square tiles align solver input/output vectors.
+        block = cld(N, GPUS * BLOCKS_PER_GPU) # Square tiles align solver vectors.
         procs = sort(collect(filter(p -> p isa Dagger.CuArrayDeviceProc,
                                     Dagger.compatible_processors())); by=p -> p.device)
         length(procs) == GPUS || error("Dagger sees $(length(procs)) of $GPUS requested GPUs")
