@@ -20,6 +20,33 @@ def shell_path(path):
     return str(path)
 
 
+def write_launcher_shims(directory, commands):
+    # A mock solver can exit before the background sampler gets scheduled.
+    # Coordinate the mocks so the launcher tests do not depend on that race.
+    for name, body in commands.items():
+        if name == "nvidia-smi":
+            body += '''if [[ " $* " == *" --query-gpu=memory.used "* ]]; then
+    : > "${0%/*}/memory-ready"
+fi
+'''
+        elif name == "julia":
+            body = '''case " $* " in
+    *run_samples.jl*|*benchmark.jl*)
+        ready="${0%/*}/memory-ready"
+        for ((attempt=0; attempt<500; attempt++)); do
+            [[ -f $ready ]] && break
+            sleep 0.01
+        done
+        [[ -f $ready ]] || { echo 'Mock memory sampler did not become ready' >&2; exit 1; }
+        rm -- "$ready"
+        ;;
+esac
+''' + body
+        shim = directory / name
+        shim.write_text("#!/bin/bash\n" + body, newline="\n")
+        shim.chmod(0o755)
+
+
 class SetupTests(unittest.TestCase):
     def test_krylov_solver_selection_and_isolation(self):
         script = Path(__file__).resolve().parents[1] / "composability/krylov/run.sh"
@@ -60,10 +87,7 @@ label=$backend
 echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1"
 ''',
             }
-            for name, body in commands.items():
-                shim = shims / name
-                shim.write_text("#!/bin/bash\n" + body, newline="\n")
-                shim.chmod(0o755)
+            write_launcher_shims(shims, commands)
             env = os.environ.copy()
             env.update(BENCH_PROJECT=shell_path(project), JULIA=shell_path(shims / "julia"),
                        BENCH_DRY_RUN="0", BENCH_ELTYPE="Float32")
@@ -184,10 +208,7 @@ case "$BENCH_TEST_WORKLOAD" in
 esac
 ''',
             }
-            for name, body in commands.items():
-                shim = shims / name
-                shim.write_text("#!/bin/bash\n" + body, newline="\n")
-                shim.chmod(0o755)
+            write_launcher_shims(shims, commands)
             env = os.environ.copy()
             env.update(JULIA=shell_path(shims / "julia"), BENCH_SOLVERS="cg", BENCH_LOCAL="1")
             env.pop("CUDA_VISIBLE_DEVICES", None)
@@ -265,10 +286,7 @@ case "$1" in
 esac
 ''',
             }
-            for name, body in commands.items():
-                shim = shims / name
-                shim.write_text("#!/bin/bash\n" + body, newline="\n")
-                shim.chmod(0o755)
+            write_launcher_shims(shims, commands)
             env = os.environ.copy()
             env.update(BENCH_PROJECT=shell_path(project), JULIA=shell_path(shims / "julia"),
                        BENCH_DRY_RUN="0", BENCH_ELTYPE="Float32", BENCH_SOLVERS="cg", BENCH_LOCAL="0")

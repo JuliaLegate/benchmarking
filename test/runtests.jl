@@ -149,7 +149,7 @@ end
     runs_gray = plan_runs(
         specs_gray, gs_gray, TOML.parsefile(GRAYSCOTT_MULTIGPU_CONFIG), Dict(), 10^12
     )
-    @test Set(r.model for r in runs_gray) == Set((:cunumeric, :cupynumeric, :dagger))
+    @test Set(r.model for r in runs_gray) == Set(gs_gray.models)
     @test Set(r.spec.gpus for r in runs_gray) == Set((1, 2, 4, 8))
     gray_sizes = Dict(1=>28000, 2=>39600, 4=>56000, 8=>79200)
     @test all(

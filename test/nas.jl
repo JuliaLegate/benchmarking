@@ -39,8 +39,7 @@
     runs = plan_runs(
         specs, settings, TOML.parsefile(config), parse_plot_groups(config), 10^12
     )
-    @test Set(r.model for r in runs) ==
-        Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
+    @test Set(r.model for r in runs) == Set(settings.models)
     @test all(runs) do r
         p = nas_ep_parameters(get(r.spec.kwargs, :class, "S"))
         (r.N, r.M) == (nas_ep_random_numbers(p), 1) && r.spec.n_iter == 10
@@ -91,8 +90,7 @@ end
     runs = plan_runs(
         specs, settings, TOML.parsefile(config), parse_plot_groups(config), 10^12
     )
-    @test Set(r.model for r in runs) ==
-        Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
+    @test Set(r.model for r in runs) == Set(settings.models)
     @test all(runs) do r
         p = nas_ft_parameters(get(r.spec.kwargs, :class, "S"))
         (r.N, r.M) == (p.nx, p.ny) && r.spec.n_iter == 10
@@ -145,8 +143,7 @@ end
     runs = plan_runs(
         specs, settings, TOML.parsefile(config), parse_plot_groups(config), 10^12
     )
-    @test Set(r.model for r in runs) ==
-        Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
+    @test Set(r.model for r in runs) == Set(settings.models)
     @test all(runs) do r
         p = nas_mg_parameters(get(r.spec.kwargs, :class, "S"))
         (r.N, r.M) == nas_mg_dims(p)[1:2] && r.spec.n_iter == 10
@@ -164,8 +161,8 @@ end
         runs = plan_runs(
             specs, settings, TOML.parsefile(config), parse_plot_groups(config), 10^12
         )
-        @test Set(r.model for r in runs) ==
-            Set([:cunumeric, :cupynumeric, :cudajl, :jacc, :dagger])
+        # Weak-scaling presets intentionally select fewer backends than single-GPU presets.
+        @test Set(r.model for r in runs) == Set(settings.models)
         @test Set((r.spec.gpus, r.spec.kwargs[:class]) for r in runs) ==
             Set(zip([1, 2, 4, 8], classes))
     end
