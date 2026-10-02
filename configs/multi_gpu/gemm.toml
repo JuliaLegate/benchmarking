@@ -1,0 +1,19 @@
+# GEMM weak scaling at the sizes cuNumeric auto-sized to in results-brev
+# (20261001-023020-EgnbwV), pinned so every model runs the same N.
+# N = 43408 * P^(1/3), aligned to 8.
+[Global]
+models = ["dagger"]
+n_warmup = 2
+n_iter = 5
+n_trial = 5
+# CUDA.jl is still timed; its CSV correctness column is skipped.
+check_correctness = true
+n_correctness_iter = 5
+auto_size = false
+
+[[gemm]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+N = [43408, 54688, 68904, 86816]
+M = [43408, 54688, 68904, 86816]

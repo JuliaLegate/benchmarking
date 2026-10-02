@@ -19,8 +19,8 @@ run() {
 }
 
 # Weak scaling: the seven main benchmarks.
-run --config=$MULTI/all.toml --only=gemm
-run --config=$MULTI/all.toml --only=montecarlo
+run --config=$MULTI/gemm.toml
+run --config=$MULTI/montecarlo.toml
 run --config=$MULTI/grayscott.toml
 run --config=$MULTI/cg.toml
 run --config=$MULTI/nas_ep_weak.toml
