@@ -6,11 +6,11 @@ end
 using TOML
 
 # Tuned chunks per GPU, keyed by (benchmark, gpus, class), whatever N/M the run uses:
-# the fastest passing blocks_per_gpu in tunes/*.csv (written by tune_dagger.sh). When a
+# the fastest non-failing blocks_per_gpu in tunes/*.csv (written by tune_dagger.sh). When a
 # key was tuned at several sizes, the most recently tuned size wins; within a size, a
 # split's latest row wins. Points never tuned use 1.
 function load_dagger_tunes(dir=normpath(joinpath(@__DIR__, "..", "..", "tunes")))
-    row = r"^([^,\n]+),([^,]+),[^,]+,(\d+),(\d+),(\d+),(\"(?:[^\"]|\"\")*\"|[^,]*),(\d+),\d+,\d+,([\d.]+),pass$"m
+    row = r"^([^,\n]+),([^,]+),[^,]+,(\d+),(\d+),(\d+),(\"(?:[^\"]|\"\")*\"|[^,]*),(\d+),\d+,\d+,([\d.]+),(?:pass|skipped)$"m
     # key => (N, M) => (latest timestamp, split => ms)
     tunes = Dict{Tuple{String,Int,String},Dict{Tuple{Int,Int},Tuple{String,Dict{Int,Float64}}}}()
     isdir(dir) || return Dict{keytype(tunes),Int}()
