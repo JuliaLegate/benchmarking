@@ -1,0 +1,10 @@
+using cuNumeric
+
+integrand(x) = exp(-(x * x))
+
+init(T, n) = T(10) .* cuNumeric.rand(T, n)
+
+function run(x::NDArray{T}) where {T}
+    total = mapreduce(integrand, +, x; init=zero(T))
+    return (T(10) / length(x)) * total
+end

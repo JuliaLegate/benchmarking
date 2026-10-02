@@ -64,19 +64,35 @@ end
     end
 end
 
-@testset "Gray-Scott backend types share timesteps" begin
+@testset "CUDA Gray-Scott preallocation preserves timesteps" begin
     for (B, C) in ((GrayScottAccelerated, CUDAGrayScott),
                    (GrayScottBaseline, CUDAGrayScottPlain)), T in (Float32, Float64)
         b, c = B{T}(; N=17, M=13), C{T}(; N=17, M=13)
         bs = only(initialize(b; mod=Base, deterministic=true))
         cs = only(initialize(c; mod=Base, deterministic=true))
-        @test which(run!, (typeof(b), typeof(bs))) === which(run!, (typeof(c), typeof(cs)))
+        @test cs isa CUDAGrayScottState
+        @test bs isa GrayScottState
+        optimized = deepcopy(cs)
+        buffers = (optimized.F_u, optimized.F_v, optimized.u_lap, optimized.v_lap)
+        @test all(size(buffer) == (15, 11) for buffer in buffers)
         @test !fence_each_iteration(c)
         for _ in 1:5
             run!(b, bs)
+            # run! on host arrays remains the independent correctness reference.
             run!(c, cs)
             @test bs.u == cs.u
             @test bs.v == cs.v
+            # Exercise the actual optimized equations with CPU arrays too.
+            _cuda_gs_step!(
+                optimized.u, optimized.v, optimized.u_new, optimized.v_new,
+                optimized.F_u, optimized.F_v, optimized.u_lap, optimized.v_lap,
+                optimized.params,
+            )
+            optimized.u, optimized.u_new = optimized.u_new, optimized.u
+            optimized.v, optimized.v_new = optimized.v_new, optimized.v
+            @test optimized.u ≈ bs.u
+            @test optimized.v ≈ bs.v
+            @test buffers === (optimized.F_u, optimized.F_v, optimized.u_lap, optimized.v_lap)
         end
     end
 end

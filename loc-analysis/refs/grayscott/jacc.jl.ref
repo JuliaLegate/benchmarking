@@ -1,0 +1,86 @@
+using JACC: JACC
+JACC.@init_backend
+using CUDA
+
+# The periodic N×M grid is stored as N×(ndev*P) columns: a halo column, data
+# columns 1..M, a halo column, then padding. Device d owns columns (d-1)P+1:dP.
+struct GSLayout
+    N::Int
+    M::Int
+    P::Int
+end
+
+params(T) = (; dt=T(1 / 5), dx2=T(1), cu=T(1.0), cv=T(0.3), f=T(0.03), k=T(0.06))
+
+gsm_local(L::GSLayout, d, g) = g - (d - 1)*L.P + (d > 1 ? 1 : 0)
+gsm_owner(L::GSLayout, g) = cld(g, L.P)
+
+function gsm_alloc(L::GSLayout, host)
+    x = zeros(eltype(host), L.N, JACC.Multi.ndev()*L.P)
+    x[:, 2:(L.M + 1)] .= host
+    x[:, 1] .= host[:, L.M]
+    x[:, L.M + 2] .= host[:, 1]
+    return JACC.Multi.array(x; ghost_dims=1)
+end
+
+function init(T, N, M)
+    u = ones(T, N, M)
+    v = zeros(T, N, M)
+    seed = min(150, N, M)
+    u[1:seed, 1:seed] = rand(T, seed, seed)
+    v[1:seed, 1:seed] = rand(T, seed, seed)
+    L = GSLayout(N, M, cld(M + 2, JACC.Multi.ndev()))
+    return (; L, u=gsm_alloc(L, u), v=gsm_alloc(L, v),
+        u_new=gsm_alloc(L, zero(u)), v_new=gsm_alloc(L, zero(v)))
+end
+
+@inline function gsm_kernel(i, u, v, u_new, v_new, L, dt, dx2, cu, cv, f, k)
+    N = L.N
+    r, jl = (i - 1) % N + 1, (i - 1) ÷ N + 1
+    g = (u.dev_id - 1)*L.P + jl
+    (2 <= g <= L.M + 1) || return nothing
+    c = r + N*(jl + (u.dev_id > 1 ? 1 : 0) - 1)
+    im = r == 1 ? c + N - 1 : c - 1
+    ip = r == N ? c - N + 1 : c + 1
+    @inbounds begin
+        up, vp = u[c], v[c]
+        lu = (u[ip] - 2up + u[im]) / dx2 + (u[c + N] - 2up + u[c - N]) / dx2
+        lv = (v[ip] - 2vp + v[im]) / dx2 + (v[c + N] - 2vp + v[c - N]) / dx2
+        uvv = up * vp * vp
+        u_new[c] = up + dt * (cu * lu - uvv + f * (one(up) - up))
+        v_new[c] = vp + dt * (cv * lv + uvv - (f + k) * vp)
+    end
+    return nothing
+end
+
+# JACC.Multi only copies within one GPU; cross-GPU copies need CUDA.jl.
+function multi_copy!(dst, doff, src, ds, soff, n)
+    CUDA.device!(ds - 1)
+    copyto!(dst, doff, src, soff, n)
+    CUDA.synchronize()
+    CUDA.device!(0)
+    return dst
+end
+
+# Periodic wrap: halo 1 <- data column M, halo M+2 <- data column 1.
+function gsm_halo!(a, L::GSLayout)
+    ps = a.a2
+    for (dst, src) in ((1, L.M + 1), (L.M + 2, 2))
+        dd, ds = gsm_owner(L, dst), gsm_owner(L, src)
+        doff = (gsm_local(L, dd, dst) - 1)*L.N + 1
+        soff = (gsm_local(L, ds, src) - 1)*L.N + 1
+        multi_copy!(ps[dd], doff, ps[ds], ds, soff, L.N)
+    end
+    return JACC.Multi.sync_ghost_elems!(a)
+end
+
+function run!(s, p)
+    L = s.L
+    JACC.Multi.parallel_for(
+        L.N*JACC.Multi.ndev()*L.P, gsm_kernel,
+        s.u, s.v, s.u_new, s.v_new, L, p.dt, p.dx2, p.cu, p.cv, p.f, p.k,
+    )
+    gsm_halo!(s.u_new, L)
+    gsm_halo!(s.v_new, L)
+    return (; L, u=s.u_new, v=s.v_new, u_new=s.u, v_new=s.v)
+end

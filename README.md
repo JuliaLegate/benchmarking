@@ -15,11 +15,12 @@ mean throughput with trial standard deviations.
 
 - `src/common/benchmarks/` contains abstract benchmark families, shared sizing
   and correctness helpers, and identical array algorithms such as the CG solver
-  and Gray–Scott timestep driver.
+  and Gray–Scott reference step.
 - `src/cunumeric/benchmarks/` owns the cuNumeric concrete types, registrations,
   and specialized implementations, including the `@accelerate` variants.
 - `src/cuda/benchmarks/` owns distinct CUDA types such as `CUDACG` and
-  `CUDAGrayScott`, plus CUDA-specific implementations. It does not load files
+  `CUDAGrayScott`, plus CUDA-specific implementations such as the preallocated
+  Gray–Scott step. It does not load files
   from the cuNumeric backend.
 - `src/jacc/benchmarks/`, `src/dagger/benchmarks/`, and
   `src/cupynumeric/benchmarks/` contain those backends' implementations.
@@ -121,6 +122,10 @@ Krylov defaults to CG; `--solvers=bicgstab` selects BiCGStab, and
 Krylov uses stock implementations by default. Add `--local` to also run
 cuNumeric local implementations alongside cuNumeric stock.
 
+## LOC analysis
+
+See [loc-analysis/README.md](loc-analysis/README.md).
+
 ## Run the benchmark suite
 
 The standalone [ImplicitGlobalGrid Gray–Scott benchmark](other/implicitglobalgrid/README.md)
@@ -153,6 +158,19 @@ julia --project=. run.jl --only=montecarlo --dry-run
 
 `--only` and `--models` accept comma-separated values. `--fusion` accepts
 `on`, `off`, or `both`. Use `--verbose` for backend details.
+
+Run only CUDA.jl Gray-Scott on one GPU (with automatic sizing) from this
+repository's root:
+
+```bash
+julia --project=. run.jl --config=configs/single_gpu/smoke.toml --only=grayscott --models=cudajl
+```
+
+Add `--dry-run` to inspect the plan without launching the benchmark. CUDA.jl
+uses `src/cuda/benchmarks/grayscott.jl`, with preallocated reaction and Laplacian
+buffers, `@views`, and in-place broadcasts. Use a single-GPU config for a
+CUDA-only run: the multi-GPU configs also request GPU counts CUDA.jl does not
+support.
 
 Run the focused cuNumeric, cuPyNumeric, and Dagger Gray-Scott weak-scaling
 check on 1, 2, 4, and 8 GPUs with:

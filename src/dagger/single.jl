@@ -29,6 +29,16 @@ const DaggerBenchmark = Union{
 model_release_memory(::DaggerBenchmark) = dagger_release_memory()
 
 function model_build_benchmark(config::ModelWorkerConfig)
+    benchmark = dagger_build_benchmark(config)
+    # tune.jl prints its own sweep; only the benchmark worker reports the choice.
+    abspath(PROGRAM_FILE) == (@__FILE__) && println(
+        "  Dagger blocks_per_gpu=$(benchmark.blocks_per_gpu) " *
+        "($(dagger_blocks_per_gpu_source(config)))",
+    )
+    return benchmark
+end
+
+function dagger_build_benchmark(config::ModelWorkerConfig)
     config.name in SUPPORTED_BENCHMARKS || error(
         "Dagger benchmark '$(config.name)' is not implemented; known: " *
         join(SUPPORTED_BENCHMARKS, ", "),

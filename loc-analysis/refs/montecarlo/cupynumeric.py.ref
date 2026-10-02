@@ -1,0 +1,7 @@
+import cupynumeric as np
+
+def init(T, n):
+    return T(10) * np.random.rand(n).astype(T)
+
+def run(x, T):
+    return (T(10) / x.size) * np.sum(np.exp(-(x * x)))

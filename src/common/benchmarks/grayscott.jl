@@ -51,7 +51,9 @@ mutable struct GrayScottState{A,P}
     params::P
 end
 
-function initialize(b::AbstractGrayScott{T}; mod=benchmark_array_module(typeof(b)), deterministic::Bool=false) where {T}
+function initialize_grayscott_state(
+    b::AbstractGrayScott{T}; mod=benchmark_array_module(typeof(b)), deterministic::Bool=false,
+) where {T}
     u = ones_array(mod, T, b.N, b.M)
     v = zeros_array(mod, T, b.N, b.M)
     u_new = zeros_array(mod, T, b.N, b.M)
@@ -69,7 +71,13 @@ function initialize(b::AbstractGrayScott{T}; mod=benchmark_array_module(typeof(b
         v[1:seed, 1:seed] = rand_array(mod, T, seed, seed)
     end
 
-    return (GrayScottState(u, v, u_new, v_new, GSParams{T}()),)
+    return GrayScottState(u, v, u_new, v_new, GSParams{T}())
+end
+
+function initialize(
+    b::AbstractGrayScott; mod=benchmark_array_module(typeof(b)), deterministic::Bool=false,
+)
+    return (initialize_grayscott_state(b; mod, deterministic),)
 end
 
 function to_backend_state(mod, st::GrayScottState)
