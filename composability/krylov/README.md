@@ -96,9 +96,10 @@ the solver, and log filenames include it. A single selected solver writes
 `timings-bicgstab.png` for solvers with successful cases. `BENCH_PROJECT` can point to an
 already-instantiated equivalent environment.
 Set `JULIA`, `BENCH_THREADS`, or `BENCH_CPUS` for the machine.
-Set `BENCH_TIMEOUT` to a per-case duration accepted by GNU `timeout`
-(default `15m`, total for all sample processes, including startup and warmups).
-Failed or timed-out cases keep their logs; completed CSV
+Like ODE, the launcher has no time limit; `BENCH_TIMEOUT` is no longer used.
+Every sample repeats startup, dense matrix construction, transfer, and warmup,
+which are excluded from the timed solve.
+Failed cases keep their logs; completed CSV
 rows remain plottable without hiding other backends or sizes.
 Legate auto-sizes its memory pool. The sampled `nvidia-smi` memory peak is
 diagnostic; pool reservation can make it much larger than live array storage.
@@ -138,6 +139,23 @@ timed solve, then exits before the next process starts. Both CG and BiCGStab,
 single- and multi-GPU runs, and the optional local loops use this isolation.
 [`run_samples.jl`](run_samples.jl) aggregates only after all samples pass;
 each `*-sample-N.log` contains the worker PID and its individual result.
+Worker logs flush elapsed wall times at package loading, benchmark entry,
+host input construction, backend array and workspace creation, warmup, timed
+solve, validation, and exit. The coordinator also reports each worker's total
+wall time, including process startup and shutdown. These diagnostic messages
+are outside the solve timer; array creation may enqueue GPU work that finishes
+during the synchronized warmup. A case appears in `results.csv` only after all
+requested samples pass; interrupted cases retain individual results in their
+sample logs.
+
+For cuNumeric, setup constructs the dense operator directly in row-major host
+storage and calls the same `cuNumeric.nda_attach_external` helper used by its
+matrix constructor. This avoids a full dense `permutedims` and subsequent
+`collect` copy in `NDArray(Matrix(reference))`; the attachment retains its host
+buffer. Both CG and the nonsymmetric BiCGStab operator retain their original
+entries. Other backends keep their usual column-major host inputs. No sparse
+operator is used in the timed solve.
+
 Allocation, host-to-device transfer, startup, the warmup, explicit GC, and an
 independent Float64 residual check are outside the timer. Repeated startup and
 warmups add wall-clock time. The CSV records the maximum iteration count and

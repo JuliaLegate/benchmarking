@@ -31,7 +31,7 @@ echo 'backend,solver,mode,gpus,n,legate_config,cuda_visible_devices' > "$output/
     echo "cunumeric_commit=$(git -C "${CUNUMERIC_SOURCE:-/opt/cuNumeric.jl}" rev-parse HEAD)"
     "$julia_bin" --version
     nvidia-smi
-    echo "sample_isolation=process warmups_per_sample=1 timeout=${BENCH_TIMEOUT:-15m}"
+    echo "sample_isolation=process warmups_per_sample=1 timeout=none"
     env | grep -E '^(BENCH_|LEGATE_|CUBLAS_)' | sort
 } > "$output/environment.txt" 2>&1
 cp "$project/Manifest.toml" "$output/"
@@ -45,8 +45,9 @@ run_case() {  # backend solver mode n gpus
     echo "$1,$2,$3,$5,$4,$LEGATE_CONFIG,\"$mask\"" >> "$output/planned-cases.csv"
     echo "Running $1 $2 $3: G=$5 N=$4"
     [[ ${BENCH_DRY_RUN:-0} != 1 ]] || return 0
+    # Each fresh process rebuilds the dense input and warms up before timing.
+    # Like ODE, allow all samples to finish without a case-wide time limit.
     if result=$(CUDA_VISIBLE_DEVICES=$mask run_logged_case "$output/$name.log" "$output/gpu-memory-$name.log" \
-        timeout --signal=TERM --kill-after=30s "${BENCH_TIMEOUT:-15m}" \
         "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
         "$script_dir/run_samples.jl" "$output/$name.log" "$1" "$2" "$3" "$4"); then
         echo "$experiment,${base_n:-},$result" >> "$csv"

@@ -10,6 +10,28 @@ validation = only(expr for expr in source.args if
     expr.args[1].args[1] == :checked_solve!)
 Core.eval(@__MODULE__, validation)
 
+buffer_constructor = only(expr for expr in source.args if
+    expr isa Expr && expr.head == :function &&
+    expr.args[1] isa Expr && expr.args[1].head == :call &&
+    expr.args[1].args[1] == :dense_operator_buffer)
+Core.eval(@__MODULE__, buffer_constructor)
+
+@testset "Dense operator host layout" begin
+    for T in (Float32, Float64), n in (2, 7, 16), symmetric in (true, false)
+        lower = fill(T(-0.3), n - 1)
+        upper = fill(T(symmetric ? -0.3 : -0.8), n - 1)
+        reference = Tridiagonal(lower, T.(range(2, 4; length=n)), upper)
+        column_major = dense_operator_buffer(reference)
+        row_major = dense_operator_buffer(reference; row_major=true)
+        @test column_major == Matrix(reference)
+        @test eltype(row_major) == T
+        @test size(row_major) == size(reference)
+        # Read the packed buffer using the row-major index used by Legate.
+        reconstructed = [row_major[(i - 1) * n + j] for i in 1:n, j in 1:n]
+        @test reconstructed == Matrix(reference)
+    end
+end
+
 const TOL = 1e-5
 const SYNCHRONIZED = Ref(false)
 permitted_solve!(w, A, b) = (SYNCHRONIZED[] = false; (w.x, 12, w.solved))
