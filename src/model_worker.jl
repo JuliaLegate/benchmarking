@@ -124,8 +124,7 @@ function grayscott_correctness_status(gu, gv, cu, cv, ::Type{T}) where {T}
     return ok ? "pass" : "fail"
 end
 
-# Frees the previous trial's data before the next one allocates; models whose
-# release is deferred past a collection override this.
+# Free the previous trial's data before the next allocates.
 model_release_memory(benchmark) = GC.gc(true)
 
 function model_trial(benchmark, config; clock=time_ns)

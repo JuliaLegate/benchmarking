@@ -72,10 +72,7 @@ function model_initialize(benchmark::DaggerMonteCarlo{T}) where {T}
         )
         wait_for_darray(samples)
         state = dagger_montecarlo_state(samples, benchmark.gpus)
-        # Scale to [0, 10) in place, each chunk on its own GPU. `T(10) .* rand(...)`
-        # materialized a second full-size array, and its tasks were free to run on
-        # any GPU in scope, pulling a third copy of a chunk there: out of memory
-        # from 2 GPUs up at the auto-sized N.
+        # Scale to [0, 10) in place on each chunk's GPU to avoid extra copies.
         foreach(wait, map(zip(state.chunks, state.scopes)) do (chunk, scope)
             Dagger.@spawn scope=scope dagger_montecarlo_scale!(chunk, T(10))
         end)

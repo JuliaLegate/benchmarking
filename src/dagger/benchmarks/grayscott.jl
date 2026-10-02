@@ -32,12 +32,7 @@ function dagger_grayscott(
     )
 end
 
-# Column strips, `blocks_per_gpu` per GPU; symbolic assignments only target
-# CPU threads, so GPUs are pinned explicitly. Square tiles (an nb x nb grid)
-# gave each GPU a whole column of tiles at 4 GPUs: 4x the tasks of one strip,
-# plus strided row halos exchanged between a GPU's own tiles every step
-# (66 ms/step vs 46 ms on 1 GPU). A strip's halos are whole columns,
-# contiguous in memory.
+# Column strips (contiguous halos); symbolic assignments only target CPU threads, so pin GPUs.
 function dagger_gs_layout(b::DaggerGrayScott, N)
     block = cld(N, b.gpus * b.blocks_per_gpu)
     nb = cld(N, block)
@@ -97,9 +92,7 @@ function model_initialize(b::DaggerGrayScott{T}) where {T}
     end
 end
 
-# @stencil handles cross-block halos; Wrap gives periodic BC. Double-buffered:
-# the buffers are swapped after each step, as the array-backend workers do,
-# rather than copying the new state back (two extra full passes per step).
+# @stencil handles cross-block halos; Wrap gives periodic BC. Double-buffered, swapped each step.
 function model_run!(b::DaggerGrayScott, s::DaggerGrayScottState)
     dt, dx2, cu, cv, f, k = b.dt, b.dx2, b.cu, b.cv, b.f, b.k
     U, V, Un, Vn = s.U, s.V, s.Un, s.Vn
