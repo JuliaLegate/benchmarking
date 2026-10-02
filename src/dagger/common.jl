@@ -3,17 +3,37 @@ function wait_for_darray(array)
     return array
 end
 
-# Tuned chunks per GPU, keyed by (benchmark, gpus). Copy winners from the
-# tunes/*.csv files written by tune_dagger.sh; anything not listed uses 1.
-const DAGGER_BLOCKS_PER_GPU = Dict{Tuple{String,Int},Int}(
-    # ("grayscott", 2) => 2,
-)
+using TOML
+
+# Tuned chunks per GPU, keyed by (benchmark, gpus, N, M, class): the fastest passing
+# blocks_per_gpu in tunes/*.csv (written by tune_dagger.sh; a split's latest row wins).
+# Points never tuned use 1.
+function load_dagger_tunes(dir=normpath(joinpath(@__DIR__, "..", "..", "tunes")))
+    row = r"^[^,\n]+,([^,]+),[^,]+,(\d+),(\d+),(\d+),(\"(?:[^\"]|\"\")*\"|[^,]*),(\d+),\d+,\d+,([\d.]+),pass$"m
+    times = Dict{Tuple{String,Int,Int,Int,String},Dict{Int,Float64}}()
+    isdir(dir) || return Dict{keytype(times),Int}()
+    for file in filter(endswith(".csv"), readdir(dir; join=true)), m in eachmatch(row, read(file, String))
+        name, N, M, gpus, kwargs, split, ms = m.captures
+        kwargs = startswith(kwargs, '"') ? replace(kwargs[2:end-1], "\"\"" => "\"") : kwargs
+        class = string(get(TOML.parse(kwargs), "class", ""))
+        key = (name, parse(Int, gpus), parse(Int, N), parse(Int, M), class)
+        get!(times, key, Dict{Int,Float64}())[parse(Int, split)] = parse(Float64, ms)
+    end
+    return Dict(key => first(argmin(last, collect(splits))) for (key, splits) in times)
+end
+const DAGGER_BLOCKS_PER_GPU = load_dagger_tunes()
 
 # Chunks per GPU along each partitioned dimension: kwarg `blocks_per_gpu`
 # (tune.jl sweeps it), else the tuned table, else one contiguous chunk per GPU.
+dagger_tune_key(config) =
+    (config.name, config.gpus, config.N, config.M, string(get(config.kwargs, :class, "")))
 function dagger_blocks_per_gpu(config)
-    tuned = get(DAGGER_BLOCKS_PER_GPU, (config.name, config.gpus), 1)
+    tuned = get(DAGGER_BLOCKS_PER_GPU, dagger_tune_key(config), 1)
     return Int(get(config.kwargs, :blocks_per_gpu, tuned))
+end
+function dagger_blocks_per_gpu_source(config)
+    haskey(config.kwargs, :blocks_per_gpu) && return "kwarg"
+    return haskey(DAGGER_BLOCKS_PER_GPU, dagger_tune_key(config)) ? "tuned" : "default, not in tunes/"
 end
 
 # Owner of chunk i of n: consecutive chunks share a GPU, in processor order.
