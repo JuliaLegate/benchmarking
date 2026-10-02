@@ -10,7 +10,8 @@ from plot_model_loc import (
     plot_rows, read_rows,
 )
 
-LABELS = {"sloc": "SLOC", "uloc": "ULOC", "complexity": "Cyclomatic complexity"}
+LABELS = {"sloc": "Source Lines of Code", "uloc": "Unique Lines of Code",
+          "complexity": "Cyclomatic Complexity"}
 HATCHES = {"sloc": "", "uloc": "///", "complexity": "..."}
 
 
