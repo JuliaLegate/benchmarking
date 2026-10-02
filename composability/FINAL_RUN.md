@@ -48,8 +48,8 @@ julia --project=. run_composability.jl --only=krylov,ordinarydiffeq \
   --mode=multi --gpus=1,2,4,8 --output="$results"
 ```
 
-Keep the whole result root. Commits, manifests, GPU masks, and memory
-diagnostics are saved with each run.
+Keep the whole result root. Commits, manifests, GPU masks, and case logs
+are saved with each run.
 
 ## Vector figures
 

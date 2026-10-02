@@ -24,7 +24,6 @@ output=${BENCH_OUTPUT:-"$PWD/krylov-$experiment-$(date +%Y%m%d-%H%M%S)-$$"}
 mkdir -p "$output"
 csv=$output/results.csv
 echo 'experiment,base_n,backend,solver,mode,eltype,gpus,n,iterations,mean_ms,stderr_ms,median_ms,min_ms,max_ms,relative_residual,samples_ms' > "$csv"
-echo 'backend,solver,gpus,n,peak_gpu_memory_mib' > "$output/memory.csv"
 echo 'backend,solver,mode,gpus,n,legate_config,cuda_visible_devices' > "$output/planned-cases.csv"
 {
     echo "benchmark_commit=$(git -C "$script_dir" rev-parse HEAD)"
@@ -39,7 +38,7 @@ cp "$project/Manifest.toml" "$output/"
 
 failed=0
 run_case() {  # backend solver mode n gpus
-    local name=$BENCH_ELTYPE-$1-$2-$3-$5-$4 mask result peak
+    local name=$BENCH_ELTYPE-$1-$2-$3-$5-$4 mask result
     mask=$(gpu_mask_for_count "$5")
     export BENCH_GPUS=$5 LEGATE_CONFIG="--gpus $5 --cpus ${BENCH_CPUS:-2}"
     echo "$1,$2,$3,$5,$4,$LEGATE_CONFIG,\"$mask\"" >> "$output/planned-cases.csv"
@@ -47,7 +46,7 @@ run_case() {  # backend solver mode n gpus
     [[ ${BENCH_DRY_RUN:-0} != 1 ]] || return 0
     # Each fresh process rebuilds the dense input and warms up before timing.
     # Like ODE, allow all samples to finish without a case-wide time limit.
-    if result=$(CUDA_VISIBLE_DEVICES=$mask run_logged_case "$output/$name.log" "$output/gpu-memory-$name.log" \
+    if result=$(CUDA_VISIBLE_DEVICES=$mask run_logged_case "$output/$name.log" \
         "$julia_bin" -t"${BENCH_THREADS:-4}" --startup-file=no --project="$project" \
         "$script_dir/run_samples.jl" "$output/$name.log" "$1" "$2" "$3" "$4"); then
         echo "$experiment,${base_n:-},$result" >> "$csv"
@@ -55,8 +54,6 @@ run_case() {  # backend solver mode n gpus
         echo "Failed: $1 $2 $3 G=$5 N=$4; continuing the sweep" >&2
         failed=1
     fi
-    peak=$(read_peak_memory "$output/gpu-memory-$name.log") || failed=1
-    echo "$1-$3,$2,$5,$4,$peak" >> "$output/memory.csv"
 }
 
 for value in "$@"; do

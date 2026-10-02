@@ -30,7 +30,6 @@ output=${INTOPT_OUTPUT:-"$script_dir/results-$experiment-$(date +%Y%m%d-%H%M%S)-
 mkdir -p "$output"
 csv="$output/results.csv"
 echo 'experiment,base_n,backend,eltype,gpus,N,bands,order,maxiters,objective_evals,mean_ms,stderr_ms,median_ms,min_ms,max_ms,initial_loss,final_loss,parameter_error,samples_ms' > "$csv"
-echo 'backend,gpus,N,peak_gpu_memory_mib' > "$output/memory.csv"
 echo 'backend,gpus,N,legate_config,cuda_visible_devices' > "$output/planned-cases.csv"
 export INTOPT_SAMPLES=${INTOPT_SAMPLES:-5}
 export LEGATE_AUTO_CONFIG=1
@@ -90,8 +89,7 @@ for value in "$@"; do
         fi
         log="$output/$backend-$gpus-$n.log"
         echo "Running $backend G=$gpus N=$n"
-        memory_log="$output/gpu-memory-$backend-$gpus-$n.log"
-        if result=$(CUDA_VISIBLE_DEVICES="$gpu_mask" run_logged_case "$log" "$memory_log" \
+        if result=$(CUDA_VISIBLE_DEVICES="$gpu_mask" run_logged_case "$log" \
             timeout --signal=TERM --kill-after=30s "${INTOPT_TIMEOUT:-15m}" \
             "$julia_bin" --startup-file=no --project="$INTOPT_PROJECT" \
             "$script_dir/benchmark.jl" "$backend" "$n"); then
@@ -99,8 +97,6 @@ for value in "$@"; do
         else
             echo "$backend G=$gpus N=$n failed; see $log" >&2; status=1; size_failed=1
         fi
-        peak=$(read_peak_memory "$memory_log") || status=1
-        printf '%s,%s,%s,%s\n' "$backend" "$gpus" "$n" "$peak" >> "$output/memory.csv"
     done
     if [[ $experiment == single ]]; then
         if [[ $size_failed -ne 0 ]]; then

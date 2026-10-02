@@ -89,8 +89,7 @@ On a one-GPU machine, use `BENCH_DRY_RUN=1` with the weak command to write
 one-GPU point normally with `weak "$BASE_N" 1`.
 
 The runner writes one `results.csv` with a `solver` column, per-case and per-sample logs,
-the package manifest, sampled GPU-memory logs and peak summary, and
-`environment.txt` together. `memory.csv` and `planned-cases.csv` identify
+the package manifest, and `environment.txt` together. `planned-cases.csv` identifies
 the solver, and log filenames include it. A single selected solver writes
 `timings.png`; selecting both writes `timings-cg.png` and
 `timings-bicgstab.png` for solvers with successful cases. `BENCH_PROJECT` can point to an
@@ -101,8 +100,7 @@ Every sample repeats startup, dense matrix construction, transfer, and warmup,
 which are excluded from the timed solve.
 Failed cases keep their logs; completed CSV
 rows remain plottable without hiding other backends or sizes.
-Legate auto-sizes its memory pool. The sampled `nvidia-smi` memory peak is
-diagnostic; pool reservation can make it much larger than live array storage.
+Legate auto-sizes its memory pool.
 The runner sets `LEGATE_CONFIG` separately for every GPU count. Set
 `CUBLAS_WORKSPACE_CONFIG` externally, if desired, so every backend sees the same
 setting. `plot_results.jl` uses Plots.jl from `environments/composability`. Plotting runs after measurements:

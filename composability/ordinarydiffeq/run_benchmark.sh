@@ -16,7 +16,6 @@ output=${ODE_OUTPUT:-"$script_dir/results-$experiment-$(date +%Y%m%d-%H%M%S)-$$"
 mkdir -p "$output"
 csv=$output/results.csv
 echo 'experiment,base_n,backend,eltype,gpus,N,steps,mean_ms,stderr_ms,median_ms,min_ms,max_ms,relative_error,samples_ms' > "$csv"
-echo 'backend,gpus,N,peak_gpu_memory_mib' > "$output/memory.csv"
 echo 'backend,gpus,N,legate_config,cuda_visible_devices' > "$output/planned-cases.csv"
 {
     echo "benchmark_commit=$(git -C "$script_dir/../.." rev-parse HEAD)"
@@ -43,7 +42,7 @@ for value in "$@"; do
         [[ ${ODE_DRY_RUN:-0} != 1 ]] || continue
         name=$backend-$gpus-$n
         # One fresh Julia process per sample; no time limit.
-        if result=$(CUDA_VISIBLE_DEVICES=$mask run_logged_case "$output/$name.log" "$output/gpu-memory-$name.log" \
+        if result=$(CUDA_VISIBLE_DEVICES=$mask run_logged_case "$output/$name.log" \
             "$julia_bin" --startup-file=no --project="$project" \
             "$script_dir/run_samples.jl" "$output/$name.log" "$backend" "$n"); then
             echo "$experiment,${base_n:-},$result" >> "$csv"
@@ -51,8 +50,6 @@ for value in "$@"; do
             echo "Failed: $backend G=$gpus N=$n; continuing the sweep" >&2
             status=1
         fi
-        peak=$(read_peak_memory "$output/gpu-memory-$name.log") || status=1
-        echo "$backend,$gpus,$n,$peak" >> "$output/memory.csv"
     done
 done
 

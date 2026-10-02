@@ -21,34 +21,14 @@ def shell_path(path):
 
 
 def write_launcher_shims(directory, commands):
-    # A mock solver can exit before the background sampler gets scheduled.
-    # Coordinate the mocks so the launcher tests do not depend on that race.
     for name, body in commands.items():
-        if name == "nvidia-smi":
-            body += '''if [[ " $* " == *" --query-gpu=memory.used "* ]]; then
-    : > "${0%/*}/memory-ready"
-fi
-'''
-        elif name == "julia":
-            body = '''case " $* " in
-    *run_samples.jl*|*benchmark.jl*)
-        ready="${0%/*}/memory-ready"
-        for ((attempt=0; attempt<500; attempt++)); do
-            [[ -f $ready ]] && break
-            sleep 0.01
-        done
-        [[ -f $ready ]] || { echo 'Mock memory sampler did not become ready' >&2; exit 1; }
-        rm -- "$ready"
-        ;;
-esac
-''' + body
         shim = directory / name
         shim.write_text("#!/bin/bash\n" + body, newline="\n")
         shim.chmod(0o755)
 
 
 class SetupTests(unittest.TestCase):
-    def test_krylov_solver_selection_and_isolation(self):
+    def test_krylov_solver_and_backend_selection(self):
         script = Path(__file__).resolve().parents[1] / "composability/krylov/run.sh"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -59,7 +39,7 @@ class SetupTests(unittest.TestCase):
             shims.mkdir()
             commands = {
                 "git": 'echo test-commit\n',
-                "nvidia-smi": 'echo 123\n',
+                "nvidia-smi": ':\n',
                 "timeout": 'shift 3\nexec "$@"\n',
                 "julia": '''for arg in "$@"; do
     case "$arg" in
@@ -127,12 +107,10 @@ echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1
                         rows = list(csv.DictReader(stream))
                     self.assertEqual(len(rows), len(expected))
                     self.assertEqual({(r["backend"], r["solver"], r["gpus"], r["n"]) for r in rows}, expected)
-                    for name in ("planned-cases.csv", "memory.csv"):
-                        with (output / name).open() as stream:
-                            records = list(csv.DictReader(stream))
-                        self.assertEqual(len(records), len(cases))
-                        self.assertEqual({r["solver"] for r in records}, set(solvers))
-                    self.assertEqual(len(list(output.glob("gpu-memory-*.log"))), len(cases))
+                    with (output / "planned-cases.csv").open() as stream:
+                        records = list(csv.DictReader(stream))
+                    self.assertEqual(len(records), len(cases))
+                    self.assertEqual({r["solver"] for r in records}, set(solvers))
                     plotted = [solver for solver in solvers if any(r["solver"] == solver for r in rows)]
                     self.assertEqual((output / "plots-called.txt").read_text().splitlines(), plotted)
                     for solver in solvers:
@@ -174,7 +152,7 @@ echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1
             shims.mkdir()
             commands = {
                 "git": 'echo test-commit\n',
-                "nvidia-smi": 'echo 123\n',
+                "nvidia-smi": ':\n',
                 "timeout": 'shift 3\nexec "$@"\n',
                 "julia": '''for arg in "$@"; do
     case "$arg" in
@@ -253,8 +231,8 @@ esac
                             else:
                                 self.assertFalse((output / "base_n.txt").exists())
                             self.assertEqual((output / "plot-called").is_file(), bool(expected))
-                            for name in ("planned-cases.csv", "memory.csv"):
-                                self.assertEqual(len((output / name).read_text().splitlines()), 1 + 4 * len(labels))
+                            self.assertEqual(len((output / "planned-cases.csv").read_text().splitlines()),
+                                             1 + 4 * len(labels))
                             backend = ("CuArray" if failed_backend in ("CUDA", "all", "all_sizes")
                                        else failed_backend.split()[0])
                             mode = "local" if failed_backend == "cuNumeric local" else "stock"
@@ -274,7 +252,7 @@ esac
             shims.mkdir()
             commands = {
                 "git": 'echo test-commit\n',
-                "nvidia-smi": 'echo 123\n',
+                "nvidia-smi": ':\n',
                 "timeout": 'shift 3\nexec "$@"\n',
                 "julia": '''for arg in "$@"; do
     case "$arg" in *plot_results.jl) echo 'simulated plotting error' >&2; exit 1 ;; esac

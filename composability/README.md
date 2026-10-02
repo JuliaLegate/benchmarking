@@ -82,6 +82,6 @@ bash composability/integrals_optimization/run_benchmark.sh single 32 128
 
 Set `BENCH_DRY_RUN=1`, `ODE_DRY_RUN=1`, or `INTOPT_DRY_RUN=1` to write
 `planned-cases.csv` without running. Each result directory holds `results.csv`
-(raw samples plus the correctness metric), per-case logs, `memory.csv`, the
+(raw samples plus the correctness metric), per-case logs, the
 GPU mask, and a copy of the manifest; plots recompute means and standard errors
 from the samples.
