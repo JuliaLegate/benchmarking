@@ -59,6 +59,17 @@ stops the sweep and returns a nonzero exit status.
   slowest rank's elapsed time over `N_ITER` steps.
 - Halos travel through CUDA-aware MPI by default; `IGG_CUDAAWARE_MPI=0` stages
   them through the host.
-- Physics matches [`src/common/benchmarks/grayscott.jl`](../../src/common/benchmarks/grayscott.jl),
-  but initial conditions and boundaries follow the original script, so
-  trajectories differ from the harness's.
+- Both axes are periodic, matching the JACC/Dagger forward-Euler reference in
+  [`src/model_worker.jl`](../../src/model_worker.jl). Initialization uses
+  `u=1` and `v=0` with one random global `1:min(150,N)` square patch.
+  The patch is broadcast to all ranks and placed using global coordinates;
+  the initialization recipe matches JACC/Dagger, but random samples are not
+  shared across separate backend runs.
+- One CUDA kernel computes both species into separate output buffers. IGG
+  exchanges the new halos before the buffers are swapped. This eliminates
+  the four reaction/Laplacian intermediates and the six broadcast passes.
+  Halos are also exchanged before the first timestep.
+- The kernel synchronizes before halo exchange; this version does not overlap
+  communication and computation. Benchmark CSV correctness remains `skipped`.
+- CPU partition/reference checks: `julia --startup-file=no test/igg_grayscott.jl`.
+  These validate the update and initialization, not CUDA/MPI execution.

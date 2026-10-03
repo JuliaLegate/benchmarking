@@ -458,4 +458,5 @@ end
 
 include("cg.jl")
 include("jacc_multi.jl")
+include("igg_grayscott.jl")
 include("array_backends.jl")
