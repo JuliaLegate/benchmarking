@@ -49,21 +49,21 @@ chmod +x "$JULIA"
 bash "$root/composability/tune_dagger.sh" --dry-run > "$tmp/dry.log"
 [[ ! -e $DAGGER_TUNE_OUTPUT ]]
 [[ $(grep -c '^==>' "$tmp/dry.log") == 84 ]]
-for pair in '1 65536' '2 92682' '4 131072' '8 185364'; do
+for pair in '1 130000' '2 183848' '4 260000' '8 367696'; do
     read -r g n <<< "$pair"
     grep -q "^==> krylov-cg G=$g N=$n " "$tmp/dry.log"
 done
-for pair in '1 16384' '2 23170' '4 32768' '8 46341'; do
+for pair in '1 32768' '2 46341' '4 65536' '8 92682'; do
     read -r g n <<< "$pair"
     grep -q "^==> heat G=$g N=$n " "$tmp/dry.log"
 done
 # Config paths are relative to the caller, even though the tuner changes directory.
-(cd "$root"; DAGGER_TUNE_CONFIG=composability/sizes_141GB.toml \
-    bash composability/tune_dagger.sh --dry-run) > "$tmp/h200.log"
-grep -q '^==> krylov-cg G=8 N=367696 ' "$tmp/h200.log"
-grep -q '^==> heat G=8 N=92682 ' "$tmp/h200.log"
+(cd "$root"; DAGGER_TUNE_CONFIG=composability/sizes_80GB.toml \
+    bash composability/tune_dagger.sh --dry-run) > "$tmp/h100.log"
+grep -q '^==> krylov-cg G=8 N=185364 ' "$tmp/h100.log"
+grep -q '^==> heat G=8 N=46341 ' "$tmp/h100.log"
 bash "$root/composability/tune_dagger.sh" > "$tmp/run.log"
-cmp "$root/composability/sizes_80GB.toml" "$DAGGER_TUNE_OUTPUT/sizes.toml"
+cmp "$root/composability/sizes_141GB.toml" "$DAGGER_TUNE_OUTPUT/sizes.toml"
 [[ $(wc -l < "$DAGGER_TUNE_OUTPUT/results.csv") == 37 ]]
 [[ $(wc -l < "$DAGGER_TUNE_OUTPUT/best.csv") == 13 ]]
 awk -F, 'NR > 1 && ($4 != 2 || $5 != 5) { exit 1 }' "$DAGGER_TUNE_OUTPUT/best.csv"

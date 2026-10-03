@@ -5,7 +5,7 @@
 # Each candidate gets one warmup + two timed runs,
 # each capped at five iterations/steps by COMPOSABILITY_TUNE=1.
 set -uo pipefail
-CONFIG=$(realpath "${DAGGER_TUNE_CONFIG:-$(dirname "$0")/sizes_80GB.toml}") || exit 1
+CONFIG=$(realpath "${DAGGER_TUNE_CONFIG:-$(dirname "$0")/sizes_141GB.toml}") || exit 1
 cd "$(dirname "$0")" || exit 1
 source common.sh || exit 1
 JULIA=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}

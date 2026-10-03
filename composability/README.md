@@ -52,11 +52,12 @@ partition factor for each workload and GPU count:
 bash composability/tune_dagger.sh --dry-run
 bash composability/tune_dagger.sh
 bash composability/tune_dagger.sh krylov ordinarydiffeq
-DAGGER_TUNE_CONFIG=composability/sizes_141GB.toml bash composability/tune_dagger.sh
+DAGGER_TUNE_CONFIG=composability/sizes_80GB.toml bash composability/tune_dagger.sh
 ```
 
-The tuner reads `weak_base` from `sizes_80GB.toml` by default, matching
-`run_composability.jl --mode=multi`. For each GPU count G, it uses
+The tuner reads `weak_base` from `sizes_141GB.toml` (H200) by default, matching
+`run_composability.jl --mode=multi --config=composability/sizes_141GB.toml`.
+For each GPU count G, it uses
 `N = round(weak_base * sqrt(G))`, exactly as the benchmark launchers do.
 Set `DAGGER_TUNE_CONFIG` to the same preset/custom TOML file used for your
 benchmark run; relative paths are resolved from the calling directory.
