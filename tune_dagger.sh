@@ -1,31 +1,50 @@
 #!/bin/bash
-# Tune Dagger blocks_per_gpu at every weak- and strong-scaling point in
-# configs/multi_gpu; each run appends to tunes/<name>.csv.
-#   ./tune_dagger.sh [benchmark...]   e.g. ./tune_dagger.sh grayscott nas_ft
+# Tune main and composability benchmarks. Comment out calls below to disable them.
+#   ./tune_dagger.sh [--dry-run] [benchmark...]
+#   ./tune_dagger.sh krylov_cg ordinarydiffeq
+# Main results append to tunes/<name>.csv; composability uses tunes/composability/.
 # Weak scaling: gpus[i] runs N[i] -> tunes/<name>.csv.
 # Strong scaling: one size on every GPU count -> tunes/<name>-strong.csv.
 # Failed tunes are listed at the end; the script keeps going.
 
 set -uo pipefail
-cd "$(dirname "$0")"
+if [[ -n ${DAGGER_TUNE_CONFIG:-} ]]; then
+    DAGGER_TUNE_CONFIG=$(realpath "$DAGGER_TUNE_CONFIG") || exit 1
+    export DAGGER_TUNE_CONFIG
+fi
+cd "$(dirname "$0")" || exit 1
 
 JULIA=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
 CPUS=8
+GPUS=(1 2 4 8)
+DRY=0
+[[ ${1:-} != --dry-run ]] || { DRY=1; shift; }
 ONLY=("$@")
 FAILED=()
 
-# tune <gpus> <name> <T> <N> <M> [kwargs TOML]
+# Main: tune <gpus> <name> <T> <N> <M> [kwargs TOML]
+# Composability: tune <gpus> <name> (sizes come from DAGGER_TUNE_CONFIG).
 tune() {
     local gpus=$1 name=$2
     [[ ${#ONLY[@]} -gt 0 && ! " ${ONLY[*]} " =~ " $name " ]] && return
+    local project=environments/dagger worker=src/dagger/tune.jl
+    local -a extra=() julia_flags=() cmd
+    case $name in
+        krylov_cg|krylov_bicgstab|ordinarydiffeq|integrals_optimization)
+            project=environments/composability worker=composability/tune.jl
+            julia_flags=(--startup-file=no)
+            (( ! DRY )) || extra=(--dry-run) ;;
+    esac
     echo
     echo "==> $name, $gpus GPU(s): ${*:3}"
-    bash run_benchmark.sh --model=dagger --gpus="$gpus" --cpus=$CPUS -- \
-        "$JULIA" --project=environments/dagger --threads=$CPUS src/dagger/tune.jl "${@:2}" ||
-        FAILED+=("$*")
+    cmd=(bash run_benchmark.sh --model=dagger --gpus="$gpus" --cpus=$CPUS --
+        "$JULIA" "${julia_flags[@]}" --project="$project" --threads=$CPUS
+        "$worker" "${@:2}" "${extra[@]}")
+    if (( DRY )) && [[ $worker == src/dagger/tune.jl ]]; then
+        printf '  %q' "${cmd[@]}"; printf '\n'; return
+    fi
+    "${cmd[@]}" || FAILED+=("$*")
 }
-
-GPUS=(1 2 4 8)
 
 # Weak scaling, matching configs/multi_gpu/*.toml.
 N=(43408 54688 68904 86816)
@@ -61,6 +80,15 @@ for g in "${GPUS[@]}"; do
     tune "$g" nas_mg Float64 256 256 'class = "B"'
 done
 unset DAGGER_TUNE_TAG
+
+# Composability: H200 weak_base sizes, one warmup + two five-iteration runs.
+# Keep each call on its own line so individual solvers are easy to toggle.
+for g in "${GPUS[@]}"; do
+    tune "$g" krylov_cg
+    # tune "$g" krylov_bicgstab
+    tune "$g" ordinarydiffeq
+    # tune "$g" integrals_optimization
+done
 
 echo
 if [[ ${#FAILED[@]} -eq 0 ]]; then

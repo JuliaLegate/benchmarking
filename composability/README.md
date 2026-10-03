@@ -45,14 +45,14 @@ is nonzero. Existing results are never overwritten.
 
 ## Dagger block tuning
 
-Tune the actual multi-GPU problem sizes on 1, 2, 4, and 8 GPUs to select a
-partition factor for each workload and GPU count:
+The root `tune_dagger.sh` launches both main and composability tuning. Its
+default run includes all main benchmarks plus composability CG and heat.
+To tune only composability at the actual multi-GPU sizes on 1, 2, 4, and 8 GPUs:
 
 ```sh
-bash composability/tune_dagger.sh --dry-run
-bash composability/tune_dagger.sh
-bash composability/tune_dagger.sh krylov ordinarydiffeq
-DAGGER_TUNE_CONFIG=composability/sizes_80GB.toml bash composability/tune_dagger.sh
+bash tune_dagger.sh --dry-run krylov_cg ordinarydiffeq
+bash tune_dagger.sh krylov_cg ordinarydiffeq
+DAGGER_TUNE_CONFIG=composability/sizes_80GB.toml bash tune_dagger.sh krylov_cg ordinarydiffeq
 ```
 
 The tuner reads `weak_base` from `sizes_141GB.toml` (H200) by default, matching
@@ -61,10 +61,14 @@ For each GPU count G, it uses
 `N = round(weak_base * sqrt(G))`, exactly as the benchmark launchers do.
 Set `DAGGER_TUNE_CONFIG` to the same preset/custom TOML file used for your
 benchmark run; relative paths are resolved from the calling directory.
-The chosen config is saved as `sizes.toml` alongside the timings.
+The chosen config is saved as `sizes.toml` alongside each case's logs.
 This tunes the multi-GPU sizes, including G=1, rather than every entry in the
-separate `single` size sweep. The plume call stays commented out; uncomment
-its `tune` line to include it.
+separate `single` size sweep. Each solver has its own call at the bottom of
+`tune_dagger.sh`: comment out `tune "$g" krylov_cg` or
+`tune "$g" ordinarydiffeq` to disable it. BiCGSTAB (`krylov_bicgstab`) and plume
+(`integrals_optimization`) start commented out; uncomment either call to enable
+it. `cg` selects the main CG benchmark, while `krylov_cg` selects Krylov.jl CG.
+Change the single `GPUS=(1 2 4 8)` list to limit GPU counts for every workload.
 
 Each candidate runs in a fresh Julia process with `COMPOSABILITY_TUNE=1`:
 one untimed warmup followed by two timed runs. Both warmup and timed runs use
@@ -80,10 +84,13 @@ Input construction, warmup, and process startup are excluded from timing.
 The sweep tries `blocks_per_gpu = 1, 2, 4, 8, 16, 32, 64`, stopping when a
 successful candidate is more than 4x slower than the best mean, as in the root
 tuner. Failed candidates keep their logs and the sweep continues with a nonzero
-final status. `composability/tunes/<run-id>/results.csv` holds mean timings;
-`best.csv` holds the lowest mean for each workload/solver/GPU count. Raw samples
-remain in worker logs. Set `DAGGER_TUNE_OUTPUT` to choose a new output directory;
-existing directories are never reused. `--dry-run` uses Julia's standard
+final status. The Julia helper `composability/tune.jl` appends mean timings to
+`tunes/composability/<name>.csv` and winners to `<name>-best.csv`, using hyphens
+in filenames (for example, `krylov-cg.csv`). Raw samples remain in per-run
+directories under `tunes/composability/logs/`. Existing CSVs are appended to;
+logs are never overwritten. Set `DAGGER_TUNE_OUTPUT` to override the composability
+output directory (relative paths are relative to the repository root).
+`--dry-run` uses Julia's standard
 library to read the config and prints commands without creating files,
 loading GPU packages, or running benchmarks.
 

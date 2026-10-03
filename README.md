@@ -179,6 +179,25 @@ check on 1, 2, 4, and 8 GPUs with:
 julia --project=. run.jl --config=configs/multi_gpu/grayscott.toml --verbose
 ```
 
+## Tune Dagger block counts
+
+Use the shared launcher for main and composability benchmarks:
+
+```bash
+bash tune_dagger.sh                              # all enabled calls
+bash tune_dagger.sh grayscott nas_ft              # selected main benchmarks
+bash tune_dagger.sh krylov_cg ordinarydiffeq      # composability CG and ODE
+bash tune_dagger.sh --dry-run krylov_cg ordinarydiffeq
+```
+
+Comment out individual `tune` calls in the script to disable benchmarks.
+BiCGSTAB and plume are commented out by default; all main benchmarks, Krylov CG,
+and ODE are enabled. The single `GPUS=(1 2 4 8)` list controls GPU counts for all
+calls. Main timing logic remains in `src/dagger/tune.jl`; composability uses
+`composability/tune.jl` with H200 preset sizes and short runs. See the
+[composability tuning details](composability/README.md#dagger-block-tuning) for
+size overrides and output paths.
+
 ## Setup tests and CI
 
 [Environment setup tests](.github/workflows/setup-tests.yml) run on every pull
