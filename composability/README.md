@@ -43,6 +43,56 @@ julia --project=. run_composability.jl --help
 A failed case keeps its log; the remaining cases still run, and the exit code
 is nonzero. Existing results are never overwritten.
 
+## Dagger block tuning
+
+Tune the actual multi-GPU problem sizes on 1, 2, 4, and 8 GPUs to select a
+partition factor for each workload and GPU count:
+
+```sh
+bash composability/tune_dagger.sh --dry-run
+bash composability/tune_dagger.sh
+bash composability/tune_dagger.sh krylov ordinarydiffeq
+DAGGER_TUNE_CONFIG=composability/sizes_80GB.toml bash composability/tune_dagger.sh
+```
+
+The tuner reads `weak_base` from `sizes_141GB.toml` (H200) by default, matching
+`run_composability.jl --mode=multi --config=composability/sizes_141GB.toml`.
+For each GPU count G, it uses
+`N = round(weak_base * sqrt(G))`, exactly as the benchmark launchers do.
+Set `DAGGER_TUNE_CONFIG` to the same preset/custom TOML file used for your
+benchmark run; relative paths are resolved from the calling directory.
+The chosen config is saved as `sizes.toml` alongside the timings.
+This tunes the multi-GPU sizes, including G=1, rather than every entry in the
+separate `single` size sweep. The plume call stays commented out; uncomment
+its `tune` line to include it.
+
+Each candidate runs in a fresh Julia process with `COMPOSABILITY_TUNE=1`:
+one untimed warmup followed by two timed runs. Both warmup and timed runs use
+at most **5 Krylov iterations**, **5 heat steps**, or **5 optimizer iterations**,
+instead of the regular limits of 200, 20, and 80. This mode overrides inherited
+sample/iteration settings so a benchmark environment cannot make tuning expensive.
+Heat uses the usual default timestep of 0.05 over a shorter trajectory.
+Krylov checks finite residual reduction and plume checks finite loss improvement;
+these short runs do not require full convergence or parameter recovery. Heat
+retains its analytical accuracy check. Normal benchmark validation is unchanged.
+Input construction, warmup, and process startup are excluded from timing.
+
+The sweep tries `blocks_per_gpu = 1, 2, 4, 8, 16, 32, 64`, stopping when a
+successful candidate is more than 4x slower than the best mean, as in the root
+tuner. Failed candidates keep their logs and the sweep continues with a nonzero
+final status. `composability/tunes/<run-id>/results.csv` holds mean timings;
+`best.csv` holds the lowest mean for each workload/solver/GPU count. Raw samples
+remain in worker logs. Set `DAGGER_TUNE_OUTPUT` to choose a new output directory;
+existing directories are never reused. `--dry-run` uses Julia's standard
+library to read the config and prints commands without creating files,
+loading GPU packages, or running benchmarks.
+
+Apply a winner through `DAGGER_BLOCKS_PER_GPU`, which defaults to 1 in regular
+composability runs. Heat and plume use row slabs of height
+`cld(N, GPUs * blocks_per_gpu)`, assigned round-robin to GPUs. Krylov uses that
+same side length for square matrix tiles and matching vector blocks, so its
+matrix tile count grows quadratically with this factor.
+
 ## Problem sizes
 
 Each config section sets the one-GPU sweep and the weak-scaling base, with
