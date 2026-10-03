@@ -40,13 +40,14 @@ function verify_projects(workspace, source)
             if haskey(declared, "Dagger")
                 dagger = only(dependencies["Dagger"])
                 @test dagger["version"] == "0.22.5"
-                if project == "environments/composability"
-                    @test get(dagger, "repo-url", nothing) == "https://github.com/JuliaParallel/Dagger.jl.git"
-                    @test get(dagger, "repo-rev", nothing) == "aot-schedulers-rebased"
-                    @test !haskey(dagger, "path")
-                else
-                    @test !any(key -> haskey(dagger, key), ("path", "repo-url", "repo-rev"))
-                end
+                # Read the original source declaration: setup must neither erase
+                # it from the staged project nor resolve to a registry release.
+                expected = TOML.parsefile(joinpath(ROOT, project, "Project.toml"))["sources"]["Dagger"]
+                actual_sources = get(TOML.parsefile(joinpath(directory, "Project.toml")), "sources", Dict())
+                @test get(actual_sources, "Dagger", nothing) == expected
+                @test get(dagger, "repo-url", nothing) == expected["url"]
+                @test get(dagger, "repo-rev", nothing) == expected["rev"]
+                @test !haskey(dagger, "path")
             end
             if haskey(declared, "cuNumeric")
                 for (name, expected) in ("cuNumeric" => source,

@@ -22,19 +22,9 @@ echo "Instantiating the benchmark orchestrator"
 
 for environment in cuda jacc dagger; do
     echo "Instantiating environments/$environment"
-    "$julia_bin" --project="environments/$environment" -e '
-        using Pkg
-        Pkg.resolve()
-        # Existing manifests may still track the old Dagger development branch.
-        for (uuid, info) in Pkg.dependencies()
-            if info.name == "Dagger" && info.is_direct_dep
-                # Pkg.free first unpins a pinned repo; a second call releases it.
-                info.is_pinned && Pkg.free(PackageSpec(uuid=uuid))
-                !info.is_tracking_registry && Pkg.free(PackageSpec(uuid=uuid))
-            end
-        end
-        Pkg.instantiate()
-    '
+    # Preserve the dependency sources declared by each Project.toml.
+    "$julia_bin" --project="environments/$environment" \
+        -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
 done
 
 echo "Installing ImplicitGlobalGrid's Conda MPI environment and Julia packages"
