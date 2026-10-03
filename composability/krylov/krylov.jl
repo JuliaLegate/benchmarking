@@ -27,23 +27,13 @@ function dense_operator_buffer(reference::Tridiagonal; row_major=false)
     return Matrix(stored)
 end
 
-# CG uses full-height column strips, with vectors split at the same columns.
+# Full-height column strips, with vectors split at the same columns.
 function dagger_krylov_layout(a, procs)
     block = cld(N, GPUS * BLOCKS_PER_GPU)
-    if SOLVER == "cg"
-        blocks = ndims(a) == 2 ? (size(a, 1), block) : (block,)
-        nb = cld(N, block)
-        owner(j) = procs[cld(j * length(procs), nb)]
-        grid = ndims(a) == 2 ? [owner(j) for _ in 1:1, j in 1:nb] :
-                              [owner(j) for j in 1:nb]
-    else
-        blocks = ntuple(_ -> block, ndims(a))
-        grid = Array{eltype(procs)}(undef, ntuple(i -> cld(size(a, i), block), ndims(a)))
-        for I in CartesianIndices(grid)
-            grid[I] = procs[mod1(I[1], GPUS)]
-        end
-    end
-    return blocks, grid
+    nb = cld(N, block)
+    owner(j) = procs[cld(j * length(procs), nb)]
+    a isa AbstractVector && return (block,), [owner(j) for j in 1:nb]
+    return (N, block), [owner(j) for _ in 1:1, j in 1:nb]
 end
 
 make_operator(a) = make_array(a)

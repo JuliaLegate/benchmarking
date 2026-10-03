@@ -38,13 +38,15 @@ layout = only(expr for expr in source.args if
     expr.args[1].args[1] == :dagger_krylov_layout)
 Core.eval(@__MODULE__, layout)
 
-@testset "Dagger CG column strips" begin
-    for n in (64, 67), gpus in (1, 2, 4, 8), splits in (1, 2, 4)
+@testset "Dagger Krylov column strips" begin
+    for n in (64, 67), gpus in (1, 2, 4, 8), splits in (1, 2, 4), solver in ("cg", "bicgstab")
         global N = n
         global GPUS = gpus
         global BLOCKS_PER_GPU = splits
-        global SOLVER = "cg"
-        A = Matrix(Tridiagonal(fill(-0.5, n - 1), collect(range(2, 4; length=n)), fill(-0.5, n - 1)))
+        global SOLVER = solver
+        lower = fill(solver == "cg" ? -0.5 : -0.3, n - 1)
+        upper = fill(solver == "cg" ? -0.5 : -0.8, n - 1)
+        A = Matrix(Tridiagonal(lower, collect(range(2, 4; length=n)), upper))
         x = sin.(1:n)
         blocks, owners = dagger_krylov_layout(A, collect(1:gpus))
         vblocks, vowners = dagger_krylov_layout(x, collect(1:gpus))
@@ -65,12 +67,6 @@ Core.eval(@__MODULE__, layout)
             y .+= A[:, cols] * x[cols]
         end
         @test y ≈ A * x
-
-        global SOLVER = "bicgstab"
-        square, oldowners = dagger_krylov_layout(A, collect(1:gpus))
-        @test square[1] == square[2] == blocks[2]
-        @test size(oldowners) == (length(vowners), length(vowners))
-        @test oldowners[:, 1] == [mod1(i, gpus) for i in eachindex(vowners)]
     end
 end
 
