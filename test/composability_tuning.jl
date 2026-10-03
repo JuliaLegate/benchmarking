@@ -57,7 +57,7 @@ using .ComposabilityTuning: tune, CASES, run_worker, mean_time
                 @test env["$(spec.prefix)_GPUS"] == "4"
                 @test env["$(spec.prefix)_ELTYPE"] == "Float32"
                 @test cmd.exec[end-length(spec.args)-1:end] == ["Dagger"; spec.args; string(n)]
-                ms = b == 1 ? 10 : b == 2 ? 5 : 30
+                ms = b == 1 ? 22 : b == 2 ? 55 : b == 4 ? 155 : b == 8 ? 176 : 177
                 row = if spec.workload == "krylov"
                     "Dagger,$(spec.args[1]),stock,Float32,4,$n,5,$ms,0,$ms,$ms,$ms,0.01,$ms;$ms"
                 elseif spec.workload == "ordinarydiffeq"
@@ -68,11 +68,11 @@ using .ComposabilityTuning: tune, CASES, run_worker, mean_time
                 write(log, "RESULT,$row\n")
             end
             @test tune(name; gpus=4, output, executor, io=IOBuffer()) == 0
-            @test calls == [1, 2, 4] # Preserve the existing 4x cutoff.
+            @test calls == [1, 2, 4, 8, 16] # Continue at 8x; stop only above it.
             stem = replace(name, '_' => '-')
-            @test length(readlines(joinpath(output, "$stem.csv"))) == 4
+            @test length(readlines(joinpath(output, "$stem.csv"))) == 6
             best = split(last(readlines(joinpath(output, "$stem-best.csv"))), ',')
-            @test best[6:7] == ["2", "5.0"]
+            @test best[6:7] == ["1", "22.0"]
         end
 
         # Process failures and malformed results cannot win or stop later candidates.
@@ -83,12 +83,12 @@ using .ComposabilityTuning: tune, CASES, run_worker, mean_time
                 b = parse(Int, env["DAGGER_BLOCKS_PER_GPU"])
                 push!(calls, b)
                 b == 2 && bad == "failure" && error("Simulated worker failure")
-                ms = b == 1 ? "10" : b == 2 && bad == "nonfinite" ? "NaN" : "50"
+                ms = b == 1 ? "10" : b == 2 && bad == "nonfinite" ? "NaN" : b <= 4 ? "50" : "90"
                 row = "RESULT,Dagger,Float32,1,32768,5,$ms,0,$ms,$ms,$ms,0.01,$ms;$ms\n"
                 write(log, b != 2 ? row : bad == "malformed" ? "bad\n" : bad == "duplicate" ? row * row : row)
             end
             @test tune("ordinarydiffeq"; output=joinpath(output, bad), gpus=1, executor, io=IOBuffer()) == 1
-            @test calls == [1, 2, 4]
+            @test calls == [1, 2, 4, 8]
         end
 
         log = joinpath(output, "real-process.log")

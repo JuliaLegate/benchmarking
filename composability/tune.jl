@@ -5,7 +5,7 @@ using Dates, TOML
 include("../run_composability.jl")
 
 const SPLITS = [1, 2, 4, 8, 16, 32, 64]
-const GIVE_UP = 4.0
+const GIVE_UP = 8.0
 const HEADER = "timestamp,name,eltype,n,gpus,blocks_per_gpu,mean_ms"
 const CASES = Dict(
     "krylov_cg" => (workload="krylov", prefix="BENCH", worker="krylov/krylov.jl", args=["cg", "stock"], mean_column=8),

@@ -26,7 +26,7 @@ const SPLITS = [1, 2, 4, 8, 16, 32, 64]
 # Chunks smaller than a 2048×2048 tile are never faster, whatever the dimensionality.
 const MIN_CHUNK = 2048^2
 # Stop once a split is this much slower than the best; smaller blocks only get worse.
-const GIVE_UP = 4.0
+const GIVE_UP = 8.0
 const TAG = get(ENV, "DAGGER_TUNE_TAG", "")
 const CSV = normpath(joinpath(
     @__DIR__, "..", "..", "tunes", join(filter(!isempty, [replace(NAME, "_" => "-"), TAG]), "-") * ".csv"

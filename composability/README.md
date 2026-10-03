@@ -82,7 +82,7 @@ retains its analytical accuracy check. Normal benchmark validation is unchanged.
 Input construction, warmup, and process startup are excluded from timing.
 
 The sweep tries `blocks_per_gpu = 1, 2, 4, 8, 16, 32, 64`, stopping when a
-successful candidate is more than 4x slower than the best mean, as in the root
+successful candidate is more than 8x slower than the best mean, as in the root
 tuner. Failed candidates keep their logs and the sweep continues with a nonzero
 final status. The Julia helper `composability/tune.jl` appends mean timings to
 `tunes/composability/<name>.csv` and winners to `<name>-best.csv`, using hyphens
