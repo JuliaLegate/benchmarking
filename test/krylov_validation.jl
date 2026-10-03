@@ -32,6 +32,48 @@ Core.eval(@__MODULE__, buffer_constructor)
     end
 end
 
+layout = only(expr for expr in source.args if
+    expr isa Expr && expr.head == :function &&
+    expr.args[1] isa Expr && expr.args[1].head == :call &&
+    expr.args[1].args[1] == :dagger_krylov_layout)
+Core.eval(@__MODULE__, layout)
+
+@testset "Dagger CG column strips" begin
+    for n in (64, 67), gpus in (1, 2, 4, 8), splits in (1, 2, 4)
+        global N = n
+        global GPUS = gpus
+        global BLOCKS_PER_GPU = splits
+        global SOLVER = "cg"
+        A = Matrix(Tridiagonal(fill(-0.5, n - 1), collect(range(2, 4; length=n)), fill(-0.5, n - 1)))
+        x = sin.(1:n)
+        blocks, owners = dagger_krylov_layout(A, collect(1:gpus))
+        vblocks, vowners = dagger_krylov_layout(x, collect(1:gpus))
+        @test blocks[1] == n
+        @test size(owners, 1) == 1
+        @test size(owners, 2) <= gpus * splits
+        @test vec(owners) == vowners
+        @test Set(vowners) == Set(1:gpus)
+        @test issorted(vowners) # Contiguous groups, like Gray-Scott.
+        @test vblocks == (blocks[2],)
+        n == 64 && @test count(==(1), owners) == splits
+
+        # Each matrix strip consumes the matching vector segment. Summing
+        # full-height partial products must reproduce the original operator.
+        y = zeros(n)
+        for firstcol in 1:blocks[2]:n
+            cols = firstcol:min(firstcol + blocks[2] - 1, n)
+            y .+= A[:, cols] * x[cols]
+        end
+        @test y ≈ A * x
+
+        global SOLVER = "bicgstab"
+        square, oldowners = dagger_krylov_layout(A, collect(1:gpus))
+        @test square[1] == square[2] == blocks[2]
+        @test size(oldowners) == (length(vowners), length(vowners))
+        @test oldowners[:, 1] == [mod1(i, gpus) for i in eachindex(vowners)]
+    end
+end
+
 const TOL = 1e-5
 TUNING = false
 const SYNCHRONIZED = Ref(false)
