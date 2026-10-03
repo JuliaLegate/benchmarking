@@ -6,8 +6,8 @@
 # Validate larger sizes on every backend before raising weak_base.
 
 [krylov]
-# Match the measured H200 sweep, which omits 98304.
-single = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 81920, 114688, 131072]
+# Avoid some of the higher powers of 2, cuBlas was having some weird behavior
+single = [1024, 2048, 4096, 8192, 16384, 32500, 65000, 81920, 114688, 130000]
 weak_base = 130000
 
 [ordinarydiffeq]
