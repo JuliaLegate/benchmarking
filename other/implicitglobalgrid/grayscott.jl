@@ -1,11 +1,24 @@
+# Opt-in diagnostics are flushed even when the sweep pipes output through tee.
+function igg_startup(message)
+    if get(ENV, "IGG_VERBOSE", "0") == "1"
+        rank = get(ENV, "OMPI_COMM_WORLD_RANK", "?")
+        println(stderr, "[IGG worker rank=$rank pid=$(getpid())] ", message)
+        flush(stderr)
+    end
+end
+
+igg_startup("Loading CUDA")
 using CUDA # Import before ImplicitGlobalGrid to activate CUDA support.
+igg_startup("Loading ImplicitGlobalGrid")
 using ImplicitGlobalGrid
+igg_startup("Loading MPI")
 using MPI
 using Random
 using Printf
 using Statistics
 
 include("grayscott_core.jl")
+igg_startup("Packages loaded")
 
 function grayscott_kernel!(u, v, un, vn, p)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x + 1
@@ -19,6 +32,7 @@ end
 # One trial: N_WARMUP untimed steps followed by N_ITER measured steps.
 function grayscott(nx, ny, N, coords, n_iter, n_warmup, comm)
     p = (dt=0.2f0, dx2=1.0f0, cu=1.0f0, cv=0.3f0, f=0.03f0, k=0.06f0)
+    igg_startup("Allocating and initializing local arrays")
     u, v = CUDA.ones(Float32, nx, ny), CUDA.zeros(Float32, nx, ny)
     un, vn = similar(u), similar(v)
 
@@ -34,7 +48,9 @@ function grayscott(nx, ny, N, coords, n_iter, n_warmup, comm)
     MPI.Bcast!(seed_v, 0, comm)
     igg_seed!(u, v, coords, CuArray(seed_u), CuArray(seed_v))
     CUDA.synchronize()
+    igg_startup("Exchanging initial halos")
     update_halo!(u, v)
+    igg_startup("Initial halos ready; entering warmup and timed steps")
 
     threads = (32, 8)
     blocks = (cld(nx - 2, threads[1]), cld(ny - 2, threads[2]))
@@ -64,7 +80,9 @@ n_trials = length(ARGS) == 5 ? parse(Int, ARGS[5]) : 5
 gpus > 0 && N >= 4 && n_iter > 0 && n_warmup >= 0 && n_trials > 0 ||
     error("Invalid benchmark dimensions or iteration counts")
 
+igg_startup("Initializing MPI")
 MPI.Init()
+igg_startup("MPI initialized")
 nprocs = MPI.Comm_size(MPI.COMM_WORLD)
 nprocs == gpus || error("Expected $gpus MPI ranks, got $nprocs")
 # N counts global simulation cells; each local array also needs two halo cells.
@@ -72,6 +90,7 @@ dims = MPI.Dims_create(nprocs, [0, 0, 1])
 all(d -> N % d == 0 && N ÷ d >= 2, dims[1:2]) ||
     error("N=$N must divide evenly across the $(dims[1])x$(dims[2]) process grid, with at least two cells per rank in each dimension")
 nx, ny = N ÷ dims[1] + 2, N ÷ dims[2] + 2
+igg_startup("Initializing global grid and selecting GPU")
 me, dims, nprocs, coords, comm = init_global_grid(nx, ny, 1;
     dimx=dims[1], dimy=dims[2], dimz=1, periodx=1, periody=1, init_MPI=false)
 me == 0 && @printf("Periodic simulation domain: %dx%d; local arrays: %dx%d including halos\n",

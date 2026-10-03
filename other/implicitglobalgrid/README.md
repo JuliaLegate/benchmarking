@@ -53,6 +53,18 @@ It writes a log for each GPU count and appends trial rows to
 `results/implicitglobalgrid`, relative to the repository root. A failed run
 stops the sweep and returns a nonzero exit status.
 
+## Startup diagnostics
+
+Set `IGG_VERBOSE=1` to print flushed progress messages for Conda activation,
+Julia package loading, MPI launch, GPU selection, and the initial halo exchange:
+
+```bash
+IGG_VERBOSE=1 bash other/implicitglobalgrid/run_benchmark.sh 1 256 5 2 1
+```
+
+The flag also works with `run_weak_scaling.sh`. Diagnostics run outside the
+measured timestep loop. The last message identifies the stage to investigate.
+
 ## Notes
 
 - Each trial uses fresh arrays and `N_WARMUP` untimed steps; its time is the
