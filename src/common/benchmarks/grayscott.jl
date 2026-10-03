@@ -16,21 +16,8 @@ abstract type AbstractGrayScott{T} <: AbstractBenchmark{T} end
 # Timesteps form one trajectory; allow Legate to schedule ahead within it.
 fence_each_iteration(::AbstractGrayScott) = false
 
-Base.@kwdef struct GrayScottBaseline{T} <: AbstractGrayScott{T}
-    N::Int
-    M::Int
-end
-
-Base.@kwdef struct GrayScottAccelerated{T} <: AbstractGrayScott{T}
-    N::Int
-    M::Int
-end
-
-name(::GrayScottBaseline) = "grayscott_plain"
-name(::GrayScottAccelerated) = "grayscott"
 dims(b::AbstractGrayScott) = (b.N, b.M)
 data(b::AbstractGrayScott{T}) where {T} = "GrayScott with T=$(T), N=$(b.N), M=$(b.M)"
-allowed_types(::Type{AbstractGrayScott}) = cuNumeric.SUPPORTED_FLOAT_TYPES
 total_flops(b::AbstractGrayScott) = b.N * b.M # grid points updated per step
 
 # Four live grids: u, v, u_new, v_new. Legion halos are not counted.
@@ -65,7 +52,7 @@ mutable struct GrayScottState{A,P}
 end
 
 function initialize_grayscott_state(
-    b::AbstractGrayScott{T}; mod=cuNumeric, deterministic::Bool=false,
+    b::AbstractGrayScott{T}; mod=benchmark_array_module(typeof(b)), deterministic::Bool=false,
 ) where {T}
     u = ones_array(mod, T, b.N, b.M)
     v = zeros_array(mod, T, b.N, b.M)
@@ -87,7 +74,9 @@ function initialize_grayscott_state(
     return GrayScottState(u, v, u_new, v_new, GSParams{T}())
 end
 
-function initialize(b::AbstractGrayScott; mod=cuNumeric, deterministic::Bool=false)
+function initialize(
+    b::AbstractGrayScott; mod=benchmark_array_module(typeof(b)), deterministic::Bool=false,
+)
     return (initialize_grayscott_state(b; mod, deterministic),)
 end
 
@@ -106,12 +95,6 @@ function correctness_problem(b::AbstractGrayScott{T}) where {T}
 end
 correctness_iters(::AbstractGrayScott, gs::GlobalSettings) = gs.n_correctness_iter
 correctness_result(::AbstractGrayScott, state, _) = (only(state).u, only(state).v)
-# CPU reference so CUDA.jl gets a non-circular check (the forms stay CUDA).
-correctness_uses_cpu(::Union{GrayScottBaseline,GrayScottAccelerated}) = true
-function cuda_runnable(b::GrayScottAccelerated{T}) where {T}
-    return GrayScottBaseline{T}(; N=b.N, M=b.M)
-end
-
 # Shared syntax tree keeps every Gray-Scott variant on the exact same workload.
 const GRAYSCOTT_STEP_BODY = quote
     # Dot every operator so each RHS can fuse.
@@ -166,14 +149,6 @@ const GRAYSCOTT_STEP_BODY = quote
     v_new[end, :] = v[2, :]
 end
 
-# cuNumeric replaces this plain fallback in its worker.
-let body = deepcopy(GRAYSCOTT_STEP_BODY)
-    @eval _gs_step!(b::GrayScottBaseline, u, v, u_new, v_new, args::GSParams) = $body
-    if !CUNUMERIC_BENCH_RUNTIME
-        @eval _gs_step!(b::GrayScottAccelerated, u, v, u_new, v_new, args::GSParams) = $body
-    end
-end
-
 function run!(b::AbstractGrayScott, st::GrayScottState)
     _gs_step!(b, st.u, st.v, st.u_new, st.v_new, st.params)
     # swap references rather than copy
@@ -181,6 +156,3 @@ function run!(b::AbstractGrayScott, st::GrayScottState)
     st.v, st.v_new = st.v_new, st.v
     return nothing
 end
-
-register_benchmark("grayscott", GrayScottAccelerated)
-register_benchmark("grayscott_plain", GrayScottBaseline)

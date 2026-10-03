@@ -64,7 +64,7 @@ function memory_estimate(b::AbstractMonteCarloIntegration{T}, c::MemoryContext) 
     validate_memory_context(b, c)
     e = cld(big(b.n_samples), c.gpus)
     bytes = e * sizeof(T)
-    if b isa MonteCarloIntegration && c.model in (:cunumeric, :cudajl, :jacc, :dagger)
+    if name(b) == "montecarlo" && c.model in (:cunumeric, :cudajl, :jacc, :dagger)
         return MemoryEstimate(
             2bytes, 2bytes, 0,
             "partitioned samples plus conservative per-device reduction workspace; " *
@@ -80,7 +80,7 @@ function memory_estimate(b::AbstractMonteCarloIntegration{T}, c::MemoryContext) 
     )
 end
 
-function memory_estimate(b::GEMM{T}, c::MemoryContext) where {T}
+function memory_estimate(b::AbstractGEMM{T}, c::MemoryContext) where {T}
     validate_memory_context(b, c)
     # Without a mapper-specific replication guarantee count the complete inputs
     # on each GPU. This also covers broadcast operands in distributed matmul.
@@ -144,7 +144,7 @@ function memory_estimate(b::AbstractDMD{T}, c::MemoryContext) where {T}
     )
 end
 
-function memory_estimate(b::PoissonFFT{T}, c::MemoryContext) where {T}
+function memory_estimate(b::AbstractPoissonFFT{T}, c::MemoryContext) where {T}
     validate_memory_context(b, c)
     e = cld(big(b.M), c.gpus)*big(b.N)^2
     realbytes, complexbytes = e*sizeof(T), e*sizeof(Complex{T})
@@ -162,7 +162,7 @@ function memory_estimate(b::AbstractTensorContraction{T}, c::MemoryContext) wher
     validate_memory_context(b, c)
     # Full operands and intermediates, without assuming distributed packing.
     n = big(b.N)
-    if b isa TensorProjection3
+    if b isa AbstractTensorProjection3
         live = (4n^3+n^2)*sizeof(T)
         init = max((2n^3+n^2)*sizeof(T), random_peak(n^3, T, c.model))
     else
@@ -184,7 +184,7 @@ function memory_estimate(b::AbstractConjugateGradient{T}, c::MemoryContext) wher
         "partitioned CG bands/workspace plus active iteration temporaries")
 end
 
-function memory_estimate(b::NASFourierTransform{T}, c::MemoryContext) where {T}
+function memory_estimate(b::AbstractNASFT{T}, c::MemoryContext) where {T}
     validate_memory_context(b, c)
     p = validate_nas_ft(b)
     n = big(p.nx)*p.ny*p.nz
@@ -201,7 +201,7 @@ function memory_estimate(b::NASFourierTransform{T}, c::MemoryContext) where {T}
     )
 end
 
-function memory_estimate(b::NASEmbarrassinglyParallel{T}, c::MemoryContext) where {T}
+function memory_estimate(b::AbstractNASEP{T}, c::MemoryContext) where {T}
     validate_memory_context(b, c)
     p = validate_nas_ep(b)
     streams = cld(big(nas_ep_batches(p)), c.gpus)
@@ -227,7 +227,7 @@ function memory_estimate(b::NASEmbarrassinglyParallel{T}, c::MemoryContext) wher
     )
 end
 
-function memory_estimate(b::NASMultiGrid{T}, c::MemoryContext) where {T}
+function memory_estimate(b::AbstractNASMG{T}, c::MemoryContext) where {T}
     validate_memory_context(b, c)
     p = validate_nas_mg(b)
     levels = nas_mg_level_shapes(p)

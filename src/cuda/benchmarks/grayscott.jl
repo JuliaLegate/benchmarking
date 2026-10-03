@@ -1,5 +1,31 @@
+Base.@kwdef struct CUDAGrayScottPlain{T} <: AbstractGrayScott{T}
+    N::Int
+    M::Int
+end
+
+name(::CUDAGrayScottPlain) = "grayscott_plain"
+register_benchmark("grayscott_plain", CUDAGrayScottPlain)
+
+Base.@kwdef struct CUDAGrayScott{T} <: AbstractGrayScott{T}
+    N::Int
+    M::Int
+end
+
+name(::CUDAGrayScott) = "grayscott"
+register_benchmark("grayscott", CUDAGrayScott)
+
+correctness_uses_cpu(::Union{CUDAGrayScottPlain,CUDAGrayScott}) = true
+
+let body = deepcopy(GRAYSCOTT_STEP_BODY)
+    @eval _gs_step!(::Union{CUDAGrayScott,CUDAGrayScottPlain}, u, v, u_new, v_new, args::GSParams) = $body
+end
+allowed_types(::Type{<:CUDAGrayScottPlain}) = Union{Float32,Float64}
+allowed_types(::Type{<:CUDAGrayScott}) = Union{Float32,Float64}
+
+benchmark_array_module(::Type{<:Union{CUDAGrayScottPlain,CUDAGrayScott}}) = CUDA
+
 # CUDA.jl copy of the shared Gray-Scott step. Keep its equations and periodic
-# boundaries in sync with ../../benchmarks/grayscott.jl.
+# boundaries in sync with ../../common/benchmarks/grayscott.jl.
 mutable struct CUDAGrayScottState{A,P}
     u::A
     v::A
@@ -14,7 +40,7 @@ end
 
 # Both public Gray-Scott names use this implementation in the CUDA worker.
 function initialize(
-    b::Union{GrayScottBaseline{T},GrayScottAccelerated{T}};
+    b::Union{CUDAGrayScottPlain{T},CUDAGrayScott{T}};
     mod=CUDA, deterministic::Bool=false,
 ) where {T}
     # Reuse the shared initial conditions, including the host correctness seed.
@@ -89,7 +115,7 @@ end
     v_new[end, :] .= v[2, :]
 end
 
-function run!(b::AbstractGrayScott, st::CUDAGrayScottState)
+function run!(b::Union{CUDAGrayScottPlain,CUDAGrayScott}, st::CUDAGrayScottState)
     if st.u isa Array
         # Preserve the independent shared CPU reference for correctness checks.
         _gs_step!(b, st.u, st.v, st.u_new, st.v_new, st.params)

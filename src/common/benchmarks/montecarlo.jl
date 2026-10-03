@@ -1,21 +1,9 @@
 abstract type AbstractMonteCarloIntegration{T} <: AbstractBenchmark{T} end
 
-Base.@kwdef struct MonteCarloIntegration{T} <: AbstractMonteCarloIntegration{T}
-    n_samples::Int
-end
-
-Base.@kwdef struct MonteCarloNaive{T} <: AbstractMonteCarloIntegration{T}
-    n_samples::Int
-end
-
-name(::MonteCarloIntegration) = "montecarlo"
-name(::MonteCarloNaive) = "montecarlo_naive"
 dims(mci::AbstractMonteCarloIntegration) = (mci.n_samples, 1)
 function data(mci::AbstractMonteCarloIntegration{T}) where {T}
     return "Monte Carlo Integration with T=$(T), n_samples=$(mci.n_samples)"
 end
-
-allowed_types(::Type{<:AbstractMonteCarloIntegration}) = cuNumeric.SUPPORTED_FLOAT_TYPES
 
 total_flops(s::AbstractMonteCarloIntegration) = s.n_samples
 # Reserve one sample array plus one array-sized reduction/broadcast workspace.
@@ -37,7 +25,7 @@ function fit_one_gpu(
     return (align8(n), 1)
 end
 
-function initialize(mci::AbstractMonteCarloIntegration{T}; mod=cuNumeric) where {T}
+function initialize(mci::AbstractMonteCarloIntegration{T}; mod=benchmark_array_module(typeof(mci))) where {T}
     # Uniform samples over the integration domain [0, 10].
     x = T(10) .* rand_array(mod, T, mci.n_samples)
     GC.gc()
@@ -49,6 +37,11 @@ _domain_volume(mci::AbstractMonteCarloIntegration{T}) where {T} = T(10) / mci.n_
 # Dot the negation too: plain `-` materializes the squared array and prevents
 # the surrounding exponential from sharing one broadcast with the square.
 _montecarlo_integrand(x) = exp.(.-(x .^ 2))
+
+function _montecarlo_mapreduce(mci::AbstractMonteCarloIntegration{T}, x) where {T}
+    total = mapreduce(_montecarlo_scalar_integrand, +, x; init=zero(T))
+    return _domain_volume(mci) * total
+end
 
 function run!(mci::AbstractMonteCarloIntegration, x)
     integrand = _montecarlo_integrand(x)
@@ -69,6 +62,3 @@ function correctness_seed(b::AbstractMonteCarloIntegration{T}) where {T}
     return (T.(range(T(0), T(10); length=b.n_samples)),)
 end
 correctness_uses_cpu(::AbstractMonteCarloIntegration) = true
-
-register_benchmark("montecarlo", MonteCarloIntegration)
-register_benchmark("montecarlo_naive", MonteCarloNaive)

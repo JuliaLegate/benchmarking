@@ -2,20 +2,6 @@ using LinearAlgebra: Tridiagonal, dot, norm
 
 abstract type AbstractConjugateGradient{T} <: AbstractBenchmark{T} end
 
-Base.@kwdef struct ConjugateGradientBenchmark{T} <: AbstractConjugateGradient{T}
-    N::Int
-    M::Int = 1
-    check_every::Int = 10
-    max_iter::Int = 1000
-end
-Base.@kwdef struct ConjugateGradientAccelerated{T} <: AbstractConjugateGradient{T}
-    N::Int
-    M::Int = 1
-    check_every::Int = 10
-    max_iter::Int = 1000
-end
-name(::ConjugateGradientAccelerated) = "cg"
-name(::ConjugateGradientBenchmark) = "cg_plain"
 dims(b::AbstractConjugateGradient) = (b.N, 1)
 function data(b::AbstractConjugateGradient)
     return "CG: N=$(b.N), check_every=$(b.check_every), max_iter=$(b.max_iter)"
@@ -54,9 +40,8 @@ estimate_scaling(b::AbstractConjugateGradient, p::Integer) = (scale_axis(b.N, p,
 total_space(b::AbstractConjugateGradient{T}) where {T} = 7big(b.N)*sizeof(T)
 correctness_uses_cpu(::AbstractConjugateGradient) = true
 
-# Array-backend workers (cuNumeric, CUDA.jl) share this generic solver; cuNumeric
-# adds an @accelerate specialization of cg_step! for ConjugateGradientAccelerated.
-function initialize(b::AbstractConjugateGradient{T}; mod=cuNumeric) where {T}
+# Array-backend workers share this solver; backend files add specialized steps.
+function initialize(b::AbstractConjugateGradient{T}; mod=benchmark_array_module(typeof(b))) where {T}
     lower = mod.ones(T, b.N)
     diagonal = mod.ones(T, b.N)
     diagonal .*= T(4)
@@ -84,8 +69,7 @@ const CG_STEP_BODY = quote
     return next
 end
 
-# Plain step covers ConjugateGradientBenchmark everywhere, and the accelerated
-# variant on backends without cuNumeric's @accelerate (e.g. the CUDA.jl worker).
+# Default plain step; cuNumeric specializes its accelerated benchmark type.
 let body = deepcopy(CG_STEP_BODY)
     @eval cg_step!(
         b::AbstractConjugateGradient{T}, x, r, p, Ap, lower, diagonal, upper, rho
@@ -114,7 +98,7 @@ function run!(b::AbstractConjugateGradient{T}, s) where {T}
 end
 
 function check_benchmark_correctness(
-    b::AbstractConjugateGradient{T}, gs::GlobalSettings; mod=cuNumeric
+    b::AbstractConjugateGradient{T}, gs::GlobalSettings; mod=benchmark_array_module(typeof(b))
 ) where {T}
     n = min(b.N, 32)
     small = typeof(b)(; N=n, check_every=b.check_every, max_iter=b.max_iter)
@@ -125,6 +109,3 @@ function check_benchmark_correctness(
     err = b.max_iter==1 ? x .- T(n/(12n-4)) : A*x .- T(0.5)
     return norm(err) <= (T==Float32 ? 2e-5 : 2e-8)*sqrt(n)/2 ? "pass" : "fail"
 end
-
-register_benchmark("cg", ConjugateGradientAccelerated)
-register_benchmark("cg_plain", ConjugateGradientBenchmark)

@@ -65,7 +65,7 @@ function baseline_shape(s, k)
     B = BENCHMARKS[s.name]
     if B <: AbstractDMD
         return (something(s.N_hint, k), something(s.M_hint, DEFAULT_DMD_M))
-    elseif B <: PoissonFFT
+    elseif B <: AbstractPoissonFFT
         return s.N_hint === nothing ? (k, something(s.M_hint, 1)) : (s.N_hint, k)
     elseif B <: AbstractMonteCarloIntegration || B <: AbstractTensorContraction ||
         B <: AbstractConjugateGradient
@@ -142,9 +142,9 @@ function plan_runs(specs, gs, raw, groups, budget)
         length(hints)==1 || error("Incompatible size constraints in comparison group $(key[1])")
         s = first(members)
         B = BENCHMARKS[s.name]
-        quantum = if B <: PoissonFFT && s.N_hint !== nothing
+        quantum = if B <: AbstractPoissonFFT && s.N_hint !== nothing
             1
-        elseif B <: AbstractTensorContraction || B <: PoissonFFT
+        elseif B <: AbstractTensorContraction || B <: AbstractPoissonFFT
             2
         else
             8

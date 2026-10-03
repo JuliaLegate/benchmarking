@@ -8,8 +8,9 @@ using cuNumeric
 
 const BENCHMARK_SRC = joinpath(@__DIR__, "..", "src")
 include(joinpath(BENCHMARK_SRC, "core.jl"))
-include(joinpath(BENCHMARK_SRC, "benchmarks", "grayscott.jl"))
-include(joinpath(BENCHMARK_SRC, "benchmarks", "grayscott_accelerate_forms.jl"))
+include(joinpath(BENCHMARK_SRC, "common", "benchmarks", "grayscott.jl"))
+include(joinpath(BENCHMARK_SRC, "cunumeric", "benchmarks", "grayscott.jl"))
+include(joinpath(BENCHMARK_SRC, "cunumeric", "benchmarks", "grayscott_accelerate_forms.jl"))
 
 const N = length(ARGS) >= 1 ? parse(Int, ARGS[1]) : 64
 N >= 4 || error("N must be at least 4")

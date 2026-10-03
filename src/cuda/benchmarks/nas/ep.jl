@@ -9,20 +9,20 @@ struct CUDANASEPState{A,I}
     indices::I
 end
 
-function initialize(b::NASEmbarrassinglyParallel{Float64}; mod=CUDA)
+function initialize(b::CUDANASEP{Float64}; mod=CUDA)
     batches = nas_ep_batches(validate_nas_ep(b))
     return (CUDANASEPState(
         CUDA.CuArray{NASEPPartial}(undef, batches), CUDA.CuArray(collect(Int64, 0:batches-1))
     ),)
 end
 
-function run!(b::NASEmbarrassinglyParallel, s::CUDANASEPState)
+function run!(b::CUDANASEP, s::CUDANASEPState)
     s.partials .= nas_ep_batch.(s.indices, Ref(nas_ep_batch_jump()))
     return s.partials
 end
 
 function check_benchmark_correctness(
-    b::NASEmbarrassinglyParallel, gs::GlobalSettings; mod=CUDA
+    b::CUDANASEP, gs::GlobalSettings; mod=CUDA
 )
     state = only(initialize(b; mod))
     result = nas_ep_combine(Array(run!(b, state)))

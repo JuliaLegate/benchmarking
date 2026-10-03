@@ -8,21 +8,8 @@
 
 abstract type AbstractDMD{T} <: AbstractBenchmark{T} end
 
-Base.@kwdef struct DMDBaseline{T} <: AbstractDMD{T}
-    N::Int
-    M::Int
-end
-
-Base.@kwdef struct DMDAccelerated{T} <: AbstractDMD{T}
-    N::Int
-    M::Int
-end
-
-name(::DMDBaseline) = "dmd_baseline"
-name(::DMDAccelerated) = "dmd_accelerated"
 dims(b::AbstractDMD) = (b.N, b.M)
 data(b::AbstractDMD{T}) where {T} = "DMD with T=$(T), N=$(b.N), M=$(b.M)"
-allowed_types(::Type{<:AbstractDMD}) = cuNumeric.SUPPORTED_FLOAT_TYPES
 
 function build_benchmark(::Type{A}, ::Type{T}, N, M; kwargs...) where {A<:AbstractDMD,T}
     return A{T}(; kwargs..., N=N, M=M)
@@ -77,7 +64,7 @@ function fit_one_gpu(
     return (max(align8(N), M), M)
 end
 
-function initialize(b::AbstractDMD{T}; mod=cuNumeric) where {T}
+function initialize(b::AbstractDMD{T}; mod=benchmark_array_module(typeof(b))) where {T}
     # X1 is N×(M-1); the SVD backend requires m >= n.
     b.N >= b.M - 1 || throw(
         ArgumentError("DMD snapshot matrix is N×M with N ≥ M-1 (got N=$(b.N), M=$(b.M))")
@@ -87,16 +74,8 @@ function initialize(b::AbstractDMD{T}; mod=cuNumeric) where {T}
     return (X,)
 end
 
-_is_cunumeric_array(A) = nameof(typeof(A)) === :NDArray
-_dmd_T(A) = _is_cunumeric_array(A) ?
-            getfield(@__MODULE__, :cuNumeric).transpose(A) : transpose(A)
-function _dmd_row(v)
-    return if _is_cunumeric_array(v)
-        getfield(@__MODULE__, :cuNumeric).reshape(v, (1, length(v)))
-    else
-        reshape(v, 1, length(v))
-    end
-end
+_dmd_T(A) = transpose(A)
+_dmd_row(v) = reshape(v, 1, length(v))
 
 # svd / eigen return factorizations whose stores the lifetime rewriter cannot
 # see, so those stay outside the macro. The GEMM lift is wrapped.
@@ -113,20 +92,11 @@ function _dmd_factors(X, r)
     return X2, F.U[:, 1:rk], F.Vt[1:rk, :], F.S[1:rk]
 end
 
-let body = quote
-        Sinv = eltype(X)(1) ./ _dmd_row(S)
-        B = (X2 * _dmd_T(Vt)) .* Sinv
-        Ã = _dmd_T(U) * B
-        (B, Ã)
-    end
-    @eval _dmd_project(::DMDBaseline, X, X2, U, Vt, S) = $body
-    if CUNUMERIC_BENCH_ACCELERATE
-        @eval @accelerate function _dmd_project(
-            ::DMDAccelerated, X, X2, U, Vt, S
-        )
-            $body
-        end
-    end
+const DMD_PROJECT_BODY = quote
+    Sinv = eltype(X)(1) ./ _dmd_row(S)
+    B = (X2 * _dmd_T(Vt)) .* Sinv
+    Ã = _dmd_T(U) * B
+    (B, Ã)
 end
 
 function _dmd_compute!(b::AbstractDMD, X, r)
@@ -149,9 +119,3 @@ end
 function correctness_result(::AbstractDMD, _, out)
     return sort(abs.(vec(to_host(out[1]))); rev=true)
 end
-function cuda_runnable(b::DMDAccelerated{T}) where {T}
-    return DMDBaseline{T}(; N=b.N, M=b.M)
-end
-
-register_benchmark("dmd_baseline", DMDBaseline)
-register_benchmark("dmd_accelerated", DMDAccelerated)

@@ -59,6 +59,6 @@ stops the sweep and returns a nonzero exit status.
   slowest rank's elapsed time over `N_ITER` steps.
 - Halos travel through CUDA-aware MPI by default; `IGG_CUDAAWARE_MPI=0` stages
   them through the host.
-- Physics matches [`src/benchmarks/grayscott.jl`](../../src/benchmarks/grayscott.jl),
+- Physics matches [`src/common/benchmarks/grayscott.jl`](../../src/common/benchmarks/grayscott.jl),
   but initial conditions and boundaries follow the original script, so
   trajectories differ from the harness's.

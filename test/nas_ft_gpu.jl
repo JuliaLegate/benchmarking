@@ -2,7 +2,10 @@
 # LEGATE_AUTO_CONFIG=0 LEGATE_CONFIG="--gpus=1 --cpus=1 --fbmem=12288".
 using Test, cuNumeric, AbstractFFTs
 include("../src/core.jl")
-include("../src/benchmarks/nas/ft.jl")
+include("../src/common/benchmarks/nas/ft.jl")
+include("../src/common/benchmarks/nas/ep.jl")
+include("../src/common/benchmarks/nas/mg.jl")
+include("../src/cunumeric/benchmarks/nas/types.jl")
 include("../src/cunumeric/benchmarks/nas/ft.jl")
 
 function verify_ft_trial(b)

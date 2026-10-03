@@ -5,16 +5,16 @@
 # JACC's one-kernel-per-operator approach. The common harness times initial
 # zeroing and L2 sum-of-squares, but omits NPB's Linf norm (see nas/README.md).
 
-function cuda_nas_mg_impl(b::NASMultiGrid)
+function cuda_nas_mg_impl(b::CUDANASMG)
     impl = b.implementation == "default" ? "direct" : b.implementation
     impl in ("direct", "separable") || error("CUDA NAS MG implementation must be direct or separable")
     return impl
 end
 
-benchmark_backend_label(b::NASMultiGrid, backend::String, default::String) =
+benchmark_backend_label(b::CUDANASMG, backend::String, default::String) =
     backend == "cudajl" ? "CUDA.jl ($(cuda_nas_mg_impl(b)))" : default
 
-benchmark_backend_save_as(b::NASMultiGrid, backend::String, default::String) =
+benchmark_backend_save_as(b::CUDANASMG, backend::String, default::String) =
     backend == "cudajl" && cuda_nas_mg_impl(b) == "separable" ?
         "CUDA.jl_separable" : default
 
@@ -25,7 +25,7 @@ mutable struct CUDANASMGState{U,R,V,W}
     interp_weights::W
 end
 
-function initialize(b::NASMultiGrid{Float64}; mod=CUDA)
+function initialize(b::CUDANASMG{Float64}; mod=CUDA)
     p = validate_nas_mg(b)
     shapes = nas_mg_level_shapes(p)
     u = [CUDA.zeros(Float64, shape) for shape in shapes]
@@ -112,7 +112,7 @@ function cuda_nas_mg_norm2(residual)
     return sum(abs2, interior; dims=(1, 2, 3))
 end
 
-function run!(b::NASMultiGrid, s::CUDANASMGState)
+function run!(b::CUDANASMG, s::CUDANASMGState)
     p = nas_mg_parameters(b.class)
     c = nas_mg_smoother(b.class)
     foreach(x -> fill!(x, 0.0), s.u)
@@ -127,7 +127,7 @@ function run!(b::NASMultiGrid, s::CUDANASMGState)
     return cuda_nas_mg_norm2(s.r[end])
 end
 
-function check_benchmark_correctness(b::NASMultiGrid, gs::GlobalSettings; mod=CUDA)
+function check_benchmark_correctness(b::CUDANASMG, gs::GlobalSettings; mod=CUDA)
     state = only(initialize(b; mod))
     squared = run!(b, state)
     points = prod(nas_mg_dims(nas_mg_parameters(b.class)))

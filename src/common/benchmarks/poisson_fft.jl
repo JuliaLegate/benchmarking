@@ -1,3 +1,4 @@
+abstract type AbstractPoissonFFT{T} <: AbstractBenchmark{T} end
 # Spectral Poisson on a stack of periodic N×N grids.
 # Each of the M right-hand sides is an independent ∇²u = f solve:
 #   û = fft(f),  û *= −1/|k|²,  u = ifft(û)
@@ -24,19 +25,12 @@ function _poisson_inv_laplacian(::Type{T}, n::Int) where {T}
     return invk
 end
 
-Base.@kwdef struct PoissonFFT{T} <: AbstractBenchmark{T}
-    N::Int
-    M::Int
-end
-
-name(::PoissonFFT) = "poisson_fft"
-dims(b::PoissonFFT) = (b.N, b.M)
-data(b::PoissonFFT{T}) where {T} = "Poisson FFT with T=$(T), N=$(b.N), M=$(b.M)"
-allowed_types(::Type{PoissonFFT}) = cuNumeric.SUPPORTED_FLOAT_TYPES
+dims(b::AbstractPoissonFFT) = (b.N, b.M)
+data(b::AbstractPoissonFFT{T}) where {T} = "Poisson FFT with T=$(T), N=$(b.N), M=$(b.M)"
 
 # 2-d C2C FFT: 5 n log2(n) real flops per 1-d line, 2n lines → 10 n² log2(n).
 # Forward + inverse, plus n² complex muls (6 real flops each), times M batches.
-function total_flops(b::PoissonFFT)
+function total_flops(b::AbstractPoissonFFT)
     n = b.N
     m = b.M
     n2 = n * n
@@ -44,36 +38,36 @@ function total_flops(b::PoissonFFT)
 end
 
 # fc and work as Complex, kinv as T, plus an FFT workspace ~ one extra complex grid.
-function total_space(b::PoissonFFT{T}) where {T}
+function total_space(b::AbstractPoissonFFT{T}) where {T}
     n2 = b.N * b.N
     return (3 * b.M * n2) * sizeof(Complex{T}) + n2 * sizeof(T)
 end
 
-function estimate_scaling(b::PoissonFFT, P::Integer)
+function estimate_scaling(b::AbstractPoissonFFT, P::Integer)
     P == 1 && return (b.N, b.M)
     # Grid N is held across P (FFT is the last two axes). Batch M partitions.
     return (b.N, b.M * P)
 end
 
 function fit_one_gpu(
-    ::Type{PoissonFFT}, ::Type{T};
+    ::Type{B}, ::Type{T};
     budget::Int, N_hint=nothing, M_hint=nothing,
-) where {T}
+) where {B<:AbstractPoissonFFT,T}
     if N_hint !== nothing
         N = N_hint
         hi = max(1, Int(fld(budget, max(3 * N * N * sizeof(Complex{T}), 1))))
-        M = largest_feasible(1, hi, m -> total_space(PoissonFFT{T}(; N=N, M=m)) <= budget)
+        M = largest_feasible(1, hi, m -> total_space(B{T}(; N=N, M=m)) <= budget)
         M === nothing && error("poisson_fft N=$N does not fit in $(budget) bytes")
         return (N, M)
     else
         hi = max(8, Int(floor(sqrt(Float64(budget) / (3 * sizeof(Complex{T}))))))
-        N = largest_feasible(8, hi, n -> total_space(PoissonFFT{T}(; N=n, M=1)) <= budget)
+        N = largest_feasible(8, hi, n -> total_space(B{T}(; N=n, M=1)) <= budget)
         N === nothing && error("poisson_fft does not fit in $(budget) bytes")
         return (align2(N), 1)
     end
 end
 
-function initialize(b::PoissonFFT{T}; mod=cuNumeric) where {T}
+function initialize(b::AbstractPoissonFFT{T}; mod=benchmark_array_module(typeof(b))) where {T}
     f = rand_array(mod, T, b.M, b.N, b.N)
     fc = astype_array(f, Complex{T})
     work = copy(fc)
@@ -84,14 +78,10 @@ end
 
 _trailing_fft_dims(A) = ntuple(i -> i + 1, ndims(A) - 1)
 
-if CUNUMERIC_BENCH_RUNTIME
-    _batched_fft!(A::NDArray) = (cuNumeric.batched_fft!(A); A)
-    _batched_ifft!(A::NDArray) = (cuNumeric.batched_ifft!(A); A)
-end
 _batched_fft!(A) = (fft!(A, _trailing_fft_dims(A)); A)
 _batched_ifft!(A) = (ifft!(A, _trailing_fft_dims(A)); A)
 
-function run!(::PoissonFFT, fc, work, kinv)
+function run!(::AbstractPoissonFFT, fc, work, kinv)
     copyto!(work, fc)
     _batched_fft!(work)
     work .*= kinv
@@ -99,6 +89,4 @@ function run!(::PoissonFFT, fc, work, kinv)
     return work
 end
 
-correctness_problem(b::PoissonFFT{T}) where {T} = PoissonFFT{T}(; N=min(b.N, 32), M=1)
-
-register_benchmark("poisson_fft", PoissonFFT)
+correctness_problem(b::AbstractPoissonFFT) = typeof(b)(; N=min(b.N, 32), M=1)

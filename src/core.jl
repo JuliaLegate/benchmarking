@@ -51,13 +51,14 @@ const CUNUMERIC_BENCH_RUNTIME = isdefined(@__MODULE__, :cuNumeric)
 const CUNUMERIC_BENCH_ACCELERATE =
     CUNUMERIC_BENCH_RUNTIME && isdefined(cuNumeric, Symbol("@accelerate"))
 
-# Interface each benchmark implements (see benchmarks/gemm.jl for a template).
+# Interface each benchmark implements (see common/benchmarks/gemm.jl for a template).
 function name end
 function dims end
 function data end
 function allowed_types end
 function total_flops end
 function initialize end
+function benchmark_array_module end
 function run! end
 throughput_label(::AbstractBenchmark) = "GFLOP/s"
 # Optional untimed reset before warmup and measurement. Return true when the
@@ -66,8 +67,11 @@ reset!(::AbstractBenchmark, state...) = false
 
 include("autosize.jl")
 
-function include_benchmarks()
-    dir = joinpath(@__DIR__, "benchmarks")
+# Shared families and identical algorithms load before backend concrete types.
+# The orchestrator uses cuNumeric's catalog without importing its runtime.
+function include_benchmarks(model::Symbol=:cunumeric)
+    model in (:cunumeric, :cudajl) || error("Unknown array backend: $model")
+    dir = joinpath(@__DIR__, "common", "benchmarks")
     files = String[]
     for (root, _, names) in walkdir(dir), name in names
         endswith(name, ".jl") && push!(files, joinpath(root, name))
@@ -75,6 +79,8 @@ function include_benchmarks()
     for file in sort!(files)
         Base.include(@__MODULE__, file)
     end
+    backend = model === :cudajl ? "cuda" : "cunumeric"
+    Base.include(@__MODULE__, joinpath(@__DIR__, backend, "benchmarks.jl"))
     return nothing
 end
 

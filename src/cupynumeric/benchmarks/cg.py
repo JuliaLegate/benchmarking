@@ -1,5 +1,5 @@
 # cuPyNumeric implementation of the tridiag(1,4,1) conjugate-gradient solve.
-# Mirrors the array-generic recurrence in ../../benchmarks/cg.jl.
+# Mirrors the array-generic recurrence in ../../common/benchmarks/cg.jl.
 import cupynumeric as np
 import numpy as host_np
 

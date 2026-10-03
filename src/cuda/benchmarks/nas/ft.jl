@@ -16,7 +16,7 @@ struct CUDANASFTState{A,T,S,I,C}
     checksums::Vector{C}
 end
 
-function initialize(b::NASFourierTransform{Float64}; mod=CUDA)
+function initialize(b::CUDANASFT{Float64}; mod=CUDA)
     p = validate_nas_ft(b)
     shape = (p.nx, p.ny, p.nz)
     u0 = CUDA.zeros(ComplexF64, shape)
@@ -89,7 +89,7 @@ function cuda_nas_ft_gather_kernel!(samples, values, indices)
     return nothing
 end
 
-function run!(b::NASFourierTransform, s::CUDANASFTState)
+function run!(b::CUDANASFT, s::CUDANASFTState)
     p = nas_ft_parameters(b.class)
     nas_ft_plane_starts!(s.host_starts, p.nx, p.ny)
     copyto!(s.starts, s.host_starts)
@@ -114,7 +114,7 @@ function run!(b::NASFourierTransform, s::CUDANASFTState)
 end
 
 function check_benchmark_correctness(
-    b::NASFourierTransform, gs::GlobalSettings; mod=CUDA
+    b::CUDANASFT, gs::GlobalSettings; mod=CUDA
 )
     state = only(initialize(b; mod))
     got = ComplexF64[only(Array(x)) for x in run!(b, state)]
