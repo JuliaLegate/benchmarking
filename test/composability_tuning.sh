@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# CPU-only integration checks: bash test/composability_tuning.sh
+# CPU-only integration checks (Julia stdlib required): bash test/composability_tuning.sh
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
+export REAL_JULIA=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
 export JULIA="$tmp/mock-julia"
+unset DAGGER_TUNE_CONFIG
 export DAGGER_TUNE_OUTPUT="$tmp/results"
 export CUDA_VISIBLE_DEVICES=7,6,5,4,3,2,1,0
 cat > "$JULIA" <<'EOF'
 #!/usr/bin/env bash
 set -eu
+# Exercise real TOML parsing; mock only the GPU workers.
+if [[ ${2:-} == -e ]]; then exec "$REAL_JULIA" "$@"; fi
 worker=$4
 [[ $1 == --startup-file=no && $2 == --project=* && $3 == --threads=8 ]]
 [[ $5 == Dagger ]]
@@ -20,15 +24,15 @@ case $worker in
     krylov/krylov.jl)
         g=$BENCH_GPUS n=$8
         row="Dagger,$6,stock,Float32,$g,$n,5,$mean,0,$mean,$mean,$mean,0.001,$mean;$mean"
-        [[ $n == 4096 ]] ;;
+        ;;
     ordinarydiffeq/benchmark_heat.jl)
         g=$ODE_GPUS n=$6
         row="Dagger,Float32,$g,$n,5,$mean,0,$mean,$mean,$mean,0.000001,$mean;$mean"
-        [[ $n == 1024 ]] ;;
+        ;;
     integrals_optimization/benchmark.jl)
         g=$INTOPT_GPUS n=$6
         row="Dagger,Float32,$g,$n,4,12,5,10,$mean,0,$mean,$mean,$mean,1,0.001,0.2,$mean;$mean"
-        [[ $n == 512 ]] ;;
+        ;;
     *) exit 9 ;;
 esac
 case $g in
@@ -45,7 +49,21 @@ chmod +x "$JULIA"
 bash "$root/composability/tune_dagger.sh" --dry-run > "$tmp/dry.log"
 [[ ! -e $DAGGER_TUNE_OUTPUT ]]
 [[ $(grep -c '^==>' "$tmp/dry.log") == 84 ]]
+for pair in '1 65536' '2 92682' '4 131072' '8 185364'; do
+    read -r g n <<< "$pair"
+    grep -q "^==> krylov-cg G=$g N=$n " "$tmp/dry.log"
+done
+for pair in '1 16384' '2 23170' '4 32768' '8 46341'; do
+    read -r g n <<< "$pair"
+    grep -q "^==> heat G=$g N=$n " "$tmp/dry.log"
+done
+# Config paths are relative to the caller, even though the tuner changes directory.
+(cd "$root"; DAGGER_TUNE_CONFIG=composability/sizes_141GB.toml \
+    bash composability/tune_dagger.sh --dry-run) > "$tmp/h200.log"
+grep -q '^==> krylov-cg G=8 N=367696 ' "$tmp/h200.log"
+grep -q '^==> heat G=8 N=92682 ' "$tmp/h200.log"
 bash "$root/composability/tune_dagger.sh" > "$tmp/run.log"
+cmp "$root/composability/sizes_80GB.toml" "$DAGGER_TUNE_OUTPUT/sizes.toml"
 [[ $(wc -l < "$DAGGER_TUNE_OUTPUT/results.csv") == 37 ]]
 [[ $(wc -l < "$DAGGER_TUNE_OUTPUT/best.csv") == 13 ]]
 awk -F, 'NR > 1 && ($4 != 2 || $5 != 5) { exit 1 }' "$DAGGER_TUNE_OUTPUT/best.csv"

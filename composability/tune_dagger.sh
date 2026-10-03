@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # ./composability/tune_dagger.sh [--dry-run] [workload ...]
 # Workloads: krylov, ordinarydiffeq (default: both). Uncomment plume below to enable it.
-# Small Float32 problems; each candidate gets one warmup + two timed runs,
+# Sizes match the multi-GPU benchmark preset (DAGGER_TUNE_CONFIG overrides it).
+# Each candidate gets one warmup + two timed runs,
 # each capped at five iterations/steps by COMPOSABILITY_TUNE=1.
 set -uo pipefail
+CONFIG=$(realpath "${DAGGER_TUNE_CONFIG:-$(dirname "$0")/sizes_80GB.toml}") || exit 1
 cd "$(dirname "$0")" || exit 1
 source common.sh || exit 1
 JULIA=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
@@ -19,19 +21,31 @@ for name in "${ONLY[@]}"; do
         *) echo "Unknown workload: $name" >&2; exit 2 ;;
     esac
 done
+# Reuse the benchmark CLI's TOML validation; this loads no GPU packages.
+bases=$("$JULIA" --startup-file=no -e '
+    include("../run_composability.jl")
+    using TOML
+    config = TOML.parsefile(only(ARGS))
+    print(join((ComposabilityCLI.workload_sizes(config, w).base
+                for w in ComposabilityCLI.WORKLOADS), " "))
+' "$CONFIG") || exit 1
+read -r KRYLOV_N ODE_N PLUME_N <<< "$bases"
 OUTPUT=${DAGGER_TUNE_OUTPUT:-"$PWD/tunes/$(date +%Y%m%d-%H%M%S)-$$"}
 if (( ! DRY )); then
     mkdir -p "$(dirname "$OUTPUT")" && mkdir "$OUTPUT" || exit 1
+    cp "$CONFIG" "$OUTPUT/sizes.toml" || exit 1
     echo 'name,gpus,n,blocks_per_gpu,mean_ms' | tee "$OUTPUT/results.csv" > "$OUTPUT/best.csv"
 fi
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
 
-# tune <gpus> <workload> <label> <N> <env prefix> <worker> <mean column> [worker args]
+# tune <gpus> <workload> <label> <weak_base> <env prefix> <worker> <mean column> [worker args]
 tune() {
-    local gpus=$1 workload=$2 name=$3 n=$4 prefix=$5 worker=$6 column=$7
+    local gpus=$1 workload=$2 name=$3 base=$4 prefix=$5 worker=$6 column=$7
     shift 7
     [[ ${#ONLY[@]} -gt 0 && ! " ${ONLY[*]} " =~ " $workload " ]] && return
-    local mask blocks log result ms best= winner= row
+    local n mask blocks log result ms best= winner= row
+    # Identical weak-scaling size calculation to the workload launchers.
+    n=$(awk -v b="$base" -v g="$gpus" 'BEGIN { printf "%.0f", b * sqrt(g) }')
     mask=$(gpu_mask_for_count "$gpus") || { FAILED+=("$name G=$gpus (GPU mask)"); return; }
     for blocks in "${BLOCKS[@]}"; do
         echo "==> $name G=$gpus N=$n blocks_per_gpu=$blocks"
@@ -65,10 +79,10 @@ tune() {
 }
 
 for g in "${GPUS[@]}"; do
-    tune "$g" krylov krylov-cg 4096 BENCH krylov/krylov.jl 8 cg stock
-    tune "$g" krylov krylov-bicgstab 4096 BENCH krylov/krylov.jl 8 bicgstab stock
-    tune "$g" ordinarydiffeq heat 1024 ODE ordinarydiffeq/benchmark_heat.jl 6
-    # tune "$g" integrals_optimization plume 512 INTOPT integrals_optimization/benchmark.jl 9
+    tune "$g" krylov krylov-cg "$KRYLOV_N" BENCH krylov/krylov.jl 8 cg stock
+    tune "$g" krylov krylov-bicgstab "$KRYLOV_N" BENCH krylov/krylov.jl 8 bicgstab stock
+    tune "$g" ordinarydiffeq heat "$ODE_N" ODE ordinarydiffeq/benchmark_heat.jl 6
+    # tune "$g" integrals_optimization plume "$PLUME_N" INTOPT integrals_optimization/benchmark.jl 9
 done
 if (( ${#FAILED[@]} )); then
     echo 'Failed tunes:'; printf '  %s\n' "${FAILED[@]}"; exit 1
