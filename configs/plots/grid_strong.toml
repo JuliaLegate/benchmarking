@@ -1,0 +1,18 @@
+# NAS strong scaling: class B at every GPU count (plot_grid.jl).
+
+metrics = ["throughput", "time", "efficiency"]
+columns = 2
+legend_scale = 1.0
+panel_size = [400, 320]
+format = "pdf"
+width_in = 3.5   # one IEEE column
+font_size = 6
+
+[[panel]]
+benchmark = "nas_ep"
+results = "results-brev/20261001-073858-GgV9Iq"
+log = true
+
+[[panel]]
+benchmark = "nas_ft"
+results = "results-brev/20261001-075222-pAw6qj"

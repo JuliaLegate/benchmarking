@@ -1,17 +1,16 @@
-# Complexity vs performance: one figure per GPU count, one panel per metric.
-#   julia --project=. plot_complexity.jl [--config=...] [--out=plots/complexity]
-# y = fastest time / model time (1 = fastest). Style keys match grid.toml.
+# Complexity vs performance: one figure per GPU count (plot_complexity.jl).
+# y = fastest time / model time (1 = fastest).
 
 grid = "configs/plots/grid.toml"           # runs to plot
 loc = "loc-analysis/results/summary.csv"   # scc counts
-metrics = ["cyclomatic", "sloc"]  # "cyclomatic", "uloc", "sloc"
+metrics = ["cyclomatic", "sloc"]           # also "uloc"
 gpus = [1, 2, 4, 8]
-hide = ["cuPyNumeric"] # legend labels to leave out
-mean = true   # large outlined marker at each model's mean
-ideal = true  # mark the ideal point (0 complexity, fastest)
+hide = ["cuPyNumeric"]
+mean = true    # mean marker per model
+ideal = true   # ideal point (0 complexity, fastest)
 
 panel_size = [400, 340]
-legend_scale = 1.0   # same as the other 1x2 figures
+legend_scale = 1.0
 format = "pdf"
-width_in = 3.5   # one IEEE column, like the other 1x2 figures
+width_in = 3.5   # one IEEE column
 font_size = 6

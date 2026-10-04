@@ -1,0 +1,41 @@
+# Benchmark grid: one figure per metric, one panel per [[panel]] (plot_grid.jl).
+# Panel keys: benchmark, results, members, title, log, hide,
+#   split = { metric = value } (broken y axis), note = { text, model, at }
+
+metrics = ["throughput", "time", "efficiency"]
+gridlines = true
+columns = 2
+legend_scale = 1.6
+panel_size = [400, 220]
+format = "pdf"
+
+[[panel]]
+benchmark = "gemm"
+results = "results-brev/20261001-023020-EgnbwV"
+note = { text = "JACC omitted: no BLAS-3 GEMM", model = "JACC.jl" }
+
+[[panel]]
+benchmark = "montecarlo"
+results = "results-brev/20261001-025503-B66XYH"
+
+[[panel]]
+benchmark = "grayscott"
+results = "results-brev/20260930-231831-1QsvHo"
+
+[[panel]]
+benchmark = "cg"
+results = "results-brev/20260930-232808-LygubK"
+
+[[panel]]
+benchmark = "nas_ep"
+results = "results-brev/20260930-234926-SAIP3B"
+log = true
+
+[[panel]]
+benchmark = "nas_ft"
+results = "results-brev/20261001-001153-TBPDeB"
+split = { time = 2000 }   # Dagger's 8-GPU time
+
+[[panel]]
+benchmark = "nas_mg"
+results = "results-brev/20261001-003034-E0lZWa"

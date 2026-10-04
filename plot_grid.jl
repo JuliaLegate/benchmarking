@@ -240,8 +240,10 @@ function legend_col_widths(series, cols, d)
     return [maximum(entry_px(s, d) for s in series[c:cols:end]) + d.gap for c in 1:cols]
 end
 
-function legend_rows(series, width, st)
+# `pad` adds that many px between columns (for fonts the width estimate runs short on).
+function legend_rows(series, width, st; pad=0)
     d = legend_dims(st)
+    d = merge(d, (; gap=d.gap + pad))
     cols = something(findlast(c -> sum(legend_col_widths(series, c, d)) <= width - LEGEND_INSET_PX,
         1:length(series)), 1)
     # Same row count, entries spread evenly (5 -> 3 + 2, not 4 + 1).
@@ -251,12 +253,21 @@ end
 
 # `slot_h` set: the legend fills an empty grid slot, rows hanging from the top.
 # `shift` moves the rows up by that fraction of the legend's height.
-# `center` centers the columns horizontally. `nrows` spaces rows as if there
+# `center` centers the columns horizontally; `justify` spreads one row across the width. `nrows` spaces rows as if there
 # were that many (room for extra lines, like a legend title).
-function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false, nrows=length(rows))
+function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false, nrows=length(rows), pad=0,
+        justify=false, char=nothing)
     d = legend_dims(st)
+    # `char`: per-character width override, where the default estimate runs short.
+    d = merge(d, (; gap=d.gap + pad, char=something(char, d.char)))
     col_x = cumsum([0.0; legend_col_widths(reduce(vcat, rows), length(first(rows)), d)])
     center && (col_x .+= max(0, (width - LEGEND_INSET_PX - col_x[end]) / 2))
+    # `justify` (one row): spread the entries over the full width, equal gaps between.
+    if justify && length(rows) == 1 && length(only(rows)) > 1
+        w = [entry_px(s, d) for s in only(rows)]
+        extra = max(0, (width - LEGEND_INSET_PX - sum(w)) / (length(w) - 1))
+        col_x = cumsum([0.0; w .+ extra])
+    end
     pl = plot(; framestyle=:none, grid=false, ticks=false, legend=false,
         xlims=(0, width - LEGEND_INSET_PX), ylims=(0, 1), widen=false,
         # Cancel GR's 2mm padding; at the canvas bottom, stop short so rounding
@@ -398,8 +409,7 @@ end
 
 function grid_main(args=ARGS)
     cfg = parse_grid_args(args)
-    isfile(cfg.config) || error("grid config not found: $(cfg.config); " *
-        "copy configs/plots/grid.example.toml to configs/plots/grid.toml and fill in run ids")
+    isfile(cfg.config) || error("grid config not found: $(cfg.config)")
     raw = TOML.parsefile(cfg.config)
     metrics = string.(get(raw, "metrics", ["throughput", "time", "efficiency"]))
     for m in metrics

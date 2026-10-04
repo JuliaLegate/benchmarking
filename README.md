@@ -339,10 +339,12 @@ julia --project=. plot_results.jl results/<run-id>
 julia --project=. plot_results.jl results/<run-id> --fusion=on --format=pdf   # fused series only
 ```
 
-For the paper figures, run `./plot_all.sh`. It reads two local configs (copy
-the `.example.toml` next to each): `configs/plots/grid.toml` for the benchmark
-grid and speedup summary (`plots/grid/`), and `configs/plots/figures.toml` for
-standalone figures such as the Gray-Scott forms, fused and unfused (`plots/figures/`).
+For the paper figures, run `./plot_all.sh`. It reads the configs in
+`configs/plots/`: `grid.toml` and `grid_strong.toml` for the benchmark grids and
+speedup summaries (`plots/grid/`, `plots/grid_strong/`), `figures.toml` for
+standalone figures such as the Gray-Scott forms, fused and unfused (`plots/figures/`),
+`complexity.toml` for complexity vs performance (`plots/complexity/`), and
+`tunes.toml` for the Dagger tuning sensitivity (`plots/tunes/`).
 
 ### Conjugate gradient
 
