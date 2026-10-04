@@ -3,7 +3,7 @@
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-project="$script_dir/../../environments/implicitglobalgrid"
+project="$script_dir/../environments/implicitglobalgrid"
 julia_bin=$(command -v "${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}")
 conda_bin=${CUNUMERIC_BENCH_CONDA:-${CONDA_EXE:-conda}}
 command -v "$conda_bin" >/dev/null 2>&1 || {
@@ -43,4 +43,4 @@ fi
 
 # MPI and CUDA preferences take effect in a fresh Julia process.
 "$julia_bin" --startup-file=no --project="$project" -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
-echo "IGG setup complete. Run $script_dir/run_benchmark.sh GPUS N [N_ITER] [N_WARMUP] [N_TRIALS]."
+echo "IGG setup complete. Run $script_dir/../other/implicitglobalgrid/run_benchmark.sh GPUS N [N_ITER] [N_WARMUP] [N_TRIALS]."

@@ -31,7 +31,7 @@ startup_log "Querying Conda base"
 conda_base=$("$conda_bin" info --base)
 mpi_prefix=${IGG_MPI_PREFIX:-$conda_base/envs/igg-mpi}
 if [[ ! -d "$mpi_prefix/conda-meta" ]]; then
-    echo "Run $script_dir/setup_igg.sh first to install and configure IGG." >&2
+    echo "Run deps-install/setup_igg.sh first to install and configure IGG." >&2
     exit 1
 fi
 startup_log "Activating $mpi_prefix"
@@ -60,7 +60,7 @@ startup_log "Starting Julia MPI launcher: $julia_bin"
     using MPIPreferences
     MPIPreferences.binary == "system" &&
         MPIPreferences.System.libmpi == joinpath(ENV["CONDA_PREFIX"], "lib", "libmpi.so") ||
-        error("Run setup_igg.sh to configure Julia for the active Conda MPI environment")
+        error("Run deps-install/setup_igg.sh to configure Julia for the active Conda MPI environment")
     startup_log("Loading MPI")
     using MPI
     project = dirname(Base.active_project())

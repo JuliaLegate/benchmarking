@@ -28,7 +28,7 @@ for environment in cuda jacc dagger; do
 done
 
 echo "Installing ImplicitGlobalGrid's Conda MPI environment and Julia packages"
-JULIA="$julia_bin" bash "$benchmark_dir/other/implicitglobalgrid/setup_igg.sh"
+JULIA="$julia_bin" bash "$benchmark_dir/deps-install/setup_igg.sh"
 
 echo "Setting JACC backend to cuda"
 "$julia_bin" --project="environments/jacc" \

@@ -298,8 +298,7 @@ esac
                 (bench / "deps-install").mkdir()
                 (bench / "deps-install" / script.name).write_text(script.read_text(), newline="\n")
                 # Keep this source-path test independent of Conda installation.
-                igg_setup = bench / "other/implicitglobalgrid/setup_igg.sh"
-                igg_setup.parent.mkdir(parents=True)
+                igg_setup = bench / "deps-install/setup_igg.sh"
                 igg_setup.write_text('"$JULIA" --project=environments/implicitglobalgrid\n', newline="\n")
                 project = bench / "environments/composability/Project.toml"
                 project.parent.mkdir(parents=True)

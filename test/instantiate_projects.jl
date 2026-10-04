@@ -12,9 +12,7 @@ const PROJECTS = [".", "environments/cuda", "environments/jacc",
 function stage_projects(destination)
     mkpath(joinpath(destination, "deps-install"))
     cp(joinpath(ROOT, "deps-install", "instantiate_projects.sh"), joinpath(destination, "deps-install", "instantiate_projects.sh"))
-    igg_scripts = joinpath(destination, "other", "implicitglobalgrid")
-    mkpath(igg_scripts)
-    cp(joinpath(ROOT, "other", "implicitglobalgrid", "setup_igg.sh"), joinpath(igg_scripts, "setup_igg.sh"))
+    cp(joinpath(ROOT, "deps-install", "setup_igg.sh"), joinpath(destination, "deps-install", "setup_igg.sh"))
     for project in PROJECTS
         target = joinpath(destination, project)
         mkpath(target)

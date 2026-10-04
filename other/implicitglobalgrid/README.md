@@ -13,7 +13,7 @@ MPIPreferences at it. Conda must be on `PATH`, or selected with
 To install or refresh only IGG's environment:
 
 ```bash
-bash other/implicitglobalgrid/setup_igg.sh
+bash deps-install/setup_igg.sh
 ```
 
 `IGG_MPI_PREFIX` selects the Conda environment's location, `IGG_CUDA_VERSION`

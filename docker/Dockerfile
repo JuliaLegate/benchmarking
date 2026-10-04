@@ -28,8 +28,7 @@ COPY environments/dagger/Project.toml environments/dagger/Project.toml
 COPY environments/jacc/Project.toml environments/jacc/Project.toml
 COPY environments/implicitglobalgrid/Project.toml environments/implicitglobalgrid/Project.toml
 COPY environments/composability/Project.toml environments/composability/Project.toml
-COPY deps-install/instantiate_projects.sh deps-install/install_cupynumeric.sh deps-install/
-COPY other/implicitglobalgrid/setup_igg.sh other/implicitglobalgrid/setup_igg.sh
+COPY deps-install/instantiate_projects.sh deps-install/install_cupynumeric.sh deps-install/setup_igg.sh deps-install/
 
 ARG DEPENDENCY_REFRESH=0
 RUN echo "Benchmark dependency refresh: ${DEPENDENCY_REFRESH}" \
