@@ -104,12 +104,15 @@ function fit_one_gpu(
 end
 
 # Internal adapter for benchmark generators that share a quoted step body.
-function _define_accelerated_definition(signature, body, form=:function)
+function _define_accelerated_definition(signature, body, form=:function; aggressive=false)
     if form === :function
-        return cuNumeric._accelerate_expand(Expr(:function, signature, body), @__MODULE__)
+        return cuNumeric._accelerate_expand(
+            Expr(:function, signature, body), @__MODULE__; aggressive
+        )
     end
     scoped = form === :begin ? Expr(:block, body.args...) : Expr(:let, body)
-    call = Expr(:macrocall, Symbol("@accelerate"), LineNumberNode(0), scoped)
+    call = Expr(:macrocall, Symbol("@accelerate"), LineNumberNode(0),
+        :(aggressive = $aggressive), scoped)
     return Expr(:function, signature, Expr(:block, Base.macroexpand(@__MODULE__, call)))
 end
 

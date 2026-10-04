@@ -33,15 +33,18 @@ function cuda_runnable(b::AbstractGrayScottAccelerateForm{T}) where {T}
     return GrayScottBaseline{T}(; N=b.N, M=b.M)
 end
 
-function _define_grayscott_accelerated_step(type, form=:function)
+function _define_grayscott_accelerated_step(type, form=:function; aggressive=false)
     body = deepcopy(GRAYSCOTT_STEP_BODY)
     signature = :(_gs_step!(b::$type, u, v, u_new, v_new, args::GSParams))
-    return Core.eval(@__MODULE__, _define_accelerated_definition(signature, body, form))
+    definition = _define_accelerated_definition(signature, body, form; aggressive)
+    return Core.eval(@__MODULE__, definition)
 end
 
 if CUNUMERIC_BENCH_ACCELERATE
+    # `grayscott` merges the u/v updates into one launch; the form variants keep
+    # the default so they compare scope forms only.
+    _define_grayscott_accelerated_step(GrayScottAccelerated; aggressive=true)
     for (type, form) in (
-        (GrayScottAccelerated, :function),
         (GrayScottFunctionAccelerated, :function),
         (GrayScottBeginAccelerated, :begin),
         (GrayScottLetAccelerated, :let),
