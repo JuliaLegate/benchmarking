@@ -1,6 +1,5 @@
 #!/bin/bash
-# Run every benchmark config: main weak scaling, variants, NAS strong scaling,
-# then composability weak scaling (COMPOSABILITY_CONFIG picks the size file).
+# Run every paper benchmark.
 #   ./run_all.sh [run.jl args...]   e.g. ./run_all.sh --verbose
 # Failed runs are listed at the end; the script keeps going.
 
@@ -31,19 +30,31 @@ run --config=$MULTI/nas_mg_weak.toml
 run --config=$MULTI/grayscott_forms.toml
 run --config=$MULTI/montecarlo_forms.toml
 
-# Strong scaling: NAS.
-run --config=$MULTI/nas_ep_strong.toml
-run --config=$MULTI/nas_ft_strong.toml
-run --config=$MULTI/nas_mg_strong.toml
+# Strong scaling: NAS (not used in the paper).
+# run --config=$MULTI/nas_ep_strong.toml
+# run --config=$MULTI/nas_ft_strong.toml
+# run --config=$MULTI/nas_mg_strong.toml
 
-# Composability weak scaling: OrdinaryDiffEq heat and Krylov CG.
-COMPOSABILITY=(--only=ordinarydiffeq,krylov --solvers=cg --mode=multi --gpus=1,2,4,8
-    --models=${COMPOSABILITY_MODELS:-dagger,cunumeric}
-    --config=${COMPOSABILITY_CONFIG:-composability/sizes_141GB.toml}
-    --output=results/composability-multi-$(date +%Y%m%d-%H%M%S))
+# ImplicitGlobalGrid Gray-Scott, same weak-scaling sizes as grayscott.toml.
 echo
-echo "==> $JULIA --project=. run_composability.jl ${COMPOSABILITY[*]}"
-"$JULIA" --project=. run_composability.jl "${COMPOSABILITY[@]}" || FAILED+=("composability ${COMPOSABILITY[*]}")
+echo "==> bash other/implicitglobalgrid/run_weak_scaling.sh"
+bash other/implicitglobalgrid/run_weak_scaling.sh || FAILED+=("implicitglobalgrid")
+
+composability() {
+    local args=("$@" --config=${COMPOSABILITY_CONFIG:-composability/sizes_141GB.toml})
+    echo
+    echo "==> $JULIA --project=. run_composability.jl ${args[*]}"
+    "$JULIA" --project=. run_composability.jl "${args[@]}" || FAILED+=("composability ${args[*]}")
+}
+STAMP=$(date +%Y%m%d-%H%M%S)
+
+# Composability single GPU: OrdinaryDiffEq heat and Krylov CG (with local CG).
+composability --only=ordinarydiffeq,krylov --solvers=cg --local --mode=single \
+    --models=cuda,dagger,cunumeric --output=results/composability-single-$STAMP
+
+# Composability weak scaling: Krylov CG.
+composability --only=krylov --solvers=cg --mode=multi --gpus=1,2,4,8 \
+    --models=${COMPOSABILITY_MODELS:-dagger,cunumeric} --output=results/composability-multi-$STAMP
 
 echo
 if [[ ${#FAILED[@]} -eq 0 ]]; then
