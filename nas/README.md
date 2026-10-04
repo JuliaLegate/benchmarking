@@ -1,108 +1,85 @@
 # NAS benchmarks
 
-EP, FT, and MG from GMAP/NPB-GPU at commit
+EP, FT and MG from GMAP/NPB-GPU at commit
 `3f12d84920ee315ab00ef283717c1e74b68f4d00` (license:
-[`THIRD_PARTY_LICENSE.md`](THIRD_PARTY_LICENSE.md)). Don't change the commit
-without re-validating the official verification values. Backends live in
-`src/<model>/benchmarks/nas/`.
+[`THIRD_PARTY_LICENSE.md`](THIRD_PARTY_LICENSE.md)). Re-validate the official
+verification values before changing the commit. Classes and references are in
+`src/nas/`; adapters are in `src/<model>/benchmarks/nas/`.
+
+These are the same problems, not identical kernels or certified NPB scores.
+Each adapter's header lists its deviations.
 
 ## Running
 
-The class sets the problem size; N and M are derived from it.
-
-| Config | What it runs |
+| Config | Runs |
 | --- | --- |
-| `configs/single_gpu/nas_{ep,ft,mg}.toml` | Class B, one GPU, all models |
-| `configs/single_gpu/nas_{ep,mg}_compare.toml` | Adds CUDA.jl/JACC variants (below) |
+| `configs/single_gpu/nas_{ep,ft,mg}.toml` | Class B, one GPU |
+| `configs/single_gpu/nas_mg_compare.toml` | Adds CUDA.jl's `separable` MG |
+| `configs/multi_gpu/nas_*_weak.toml` | Weak scaling on 1, 2, 4, 8 GPUs |
 | `configs/multi_gpu/nas_*_strong.toml` | Class B on 1, 2, 4, 8 GPUs |
-| `configs/multi_gpu/nas_*_weak.toml` | `class = [...]` zipped with `gpus` (A–D for FT, B–E otherwise) |
 
 ```sh
-julia --project=. run.jl --config=configs/single_gpu/nas_ep.toml
+julia --project=. run.jl --config=configs/multi_gpu/nas_ft_weak.toml
 ```
 
-Every config uses Float64 and `n_iter = 1`; use `n_trial` for repeats. Each
-run is verified against the official NPB values after timing.
+All configs use Float64 and `n_iter = 1` (one full class run per sample).
+Official classes don't grow with GPU count, so weak scaling adds sizes named
+`<class>.<k>` that keep the work per GPU roughly fixed:
 
-NPB classes don't grow in step with GPU count, so per-GPU work varies along a
-weak-scaling ladder. The efficiency plot uses throughput, h(P) / (P · h(1)).
+| | 1 GPU | 2 | 4 | 8 |
+| --- | --- | --- | --- | --- |
+| EP | B | B.2 | C | C.8 |
+| FT | A | A.2 | B.4 | B.8 |
+| MG | B | B.2 | B.4 | C |
 
-## Multi-GPU support
-
-| | EP | FT | MG |
-| --- | --- | --- | --- |
-| cuNumeric, cuPyNumeric | partitioned | slab-partitioned FFT | partitioned |
-| Dagger | partitioned | distributed FFT | partitioned |
-| JACC | partitioned | slab-partitioned FFT | `JACC.Multi` z-slabs |
-| CUDA.jl | 1 GPU | 1 GPU | 1 GPU |
-
-cuNumeric and cuPyNumeric's FFT task broadcasts every transformed axis
-(`src/ndarray/detail/fft.jl` in cuNumeric.jl), so a single 3-D FFT call runs
-as one task. FT therefore does two slab passes, a 2-D FFT over the last two
-axes and then a 1-D FFT over the first; each pass splits across GPUs along the
-axes it does not transform, and Legate moves data between them.
-
-## Fairness
-
-These are the same problems, not identical kernels or certified NPB scores.
-Throughput differences include algorithm choices, not only runtime overhead.
-Each adapter's header lists its limitations.
+Custom sizes have no NAS reference and report `skipped` correctness, except
+FT B.4 (class B's grid for 6 iterations), which checks B's first 6 checksums.
 
 ## EP
 
-One sample generates the class's `2^(m+1)` random numbers with NPB's 46-bit
-LCG, applies the Gaussian transform, and produces the 10-bin histogram and
-`sx`/`sy` sums. All models use `MK = 8` (NPB allows changing it; results are
-identical), giving 256 pairs per independent stream. Final aggregation is
+Each sample runs NPB's 46-bit LCG and Gaussian transform for `2^(m+1)` numbers,
+producing the 10-bin histogram and `sx`/`sy` sums. Every model uses `MK = 8`
+(256 pairs per stream) and splits streams across GPUs. Final aggregation is
 untimed.
 
-- **cuNumeric**: broadcasts the stream function into one `NDArray{NASEPPartial}`.
-- **cuPyNumeric**: array skip-ahead in slabs of up to `2^25` pairs per GPU.
-- **CUDA.jl**: broadcasts the stream function over a `CuArray`.
-- **JACC**: no broadcast API, so `JACC.Multi.parallel_for` maps the stream
-  function over the streams, split across GPUs.
-- **Dagger**: broadcasts the stream function over a GPU `DArray`.
-
-cuNumeric saves to `nas_ep_cunumeric_struct.csv`.
+- **cuNumeric**: broadcasts the stream function into one `NDArray` of struct
+  partials (`nas_ep_cunumeric_struct.csv`).
+- **cuPyNumeric**: array skip-ahead; materializes larger intermediates.
+- **CUDA.jl, Dagger**: broadcast over a `CuArray` / GPU `DArray`.
+- **JACC**: `JACC.Multi.parallel_for` over the streams.
 
 ## FT
 
-One sample generates the initial field, runs one forward 3-D FFT, then for each
-of the class's `NITER` iterations evolves the spectrum, runs an inverse FFT,
-and takes the 1024-point checksum. All of this is timed; verification (relative
-tolerance `1e-12`) is not.
+Each sample generates the initial field, runs one forward 3-D FFT, then for
+each of `NITER` iterations evolves the spectrum, inverse transforms it and
+takes the 1024-point checksum. Verification (relative tolerance `1e-12`) is
+untimed.
 
+- **cuNumeric**: host RNG, one `fft!`/`bfft!` per 3-D transform, masked
+  checksum reduction.
+- **cuPyNumeric**: host RNG, one `fftn`/`ifftn` per transform, checksum via
+  `take`.
 - **CUDA.jl**: device RNG and cuFFT.
-- **JACC**: `JACC.Multi` on every GPU count (`ft_multi.jl`): z-slabs for the
-  x/y FFTs, y-slabs for the z FFT, cuFFT per GPU (JACC has no FFT API), and a
-  JACC pack/unpack plus GPU-to-GPU all-to-all between them. Checksums are
-  fetched each iteration.
-- **cuNumeric**: host RNG, attached upload, unnormalized inverse with a
-  pre-scaled full-volume checksum mask.
-- **cuPyNumeric**: host RNG, `fftn`/`ifftn`, checksum via `take`.
-- **Dagger**: host RNG, distributed FFT, full-volume mask; cross-GPU checksum
+- **JACC**: `JACC.Multi` slabs with cuFFT per GPU (JACC has no FFT): z-slabs
+  for the x/y FFTs, y-slabs for the z FFT, and a GPU-to-GPU all-to-all between
+  them.
+- **Dagger**: host RNG, Dagger's distributed FFT; cross-GPU checksum
   aggregation is untimed.
-
-cuNumeric GPU regression (S/W/B under a 12 GiB framebuffer cap):
-
-```sh
-LEGATE_AUTO_CONFIG=0 LEGATE_CONFIG="--gpus=1 --cpus=1 --fbmem=12288" \
-  julia --project=environments/cunumeric test/nas_ft_gpu.jl
-```
 
 ## MG
 
-One sample clears the hierarchy, computes the initial residual, runs the class's
-fixed number of V-cycles (periodic exchange, 27-point residual, restriction,
-interpolation, smoother), and computes initial and final L2 sums of squares.
-The impulse search is setup; the square root and verification (relative
-tolerance `1e-8`) are untimed. NPB's Linf norm is omitted.
+Each sample clears the hierarchy, computes the initial residual, runs the
+class's V-cycles (periodic exchange, 27-point residual, restriction,
+interpolation, smoother) and the L2 sums of squares. The sparse right-hand
+side is built on the host before timing, as in NPB-GPU; verification
+(relative tolerance `1e-8`) is untimed and NPB's Linf norm is omitted.
 
-- **CUDA.jl**: direct kernels; the `separable` variant (`nas_mg_compare.toml`)
-  uses cuNumeric's three-axis restriction/interpolation decomposition.
-- **JACC**: `JACC.Multi` z-slabs on every GPU count (`mg_multi.jl`): ghost
-  planes via `sync_ghost_elems!` (host-staged), small levels replicated per GPU,
-  custom GPU-to-GPU copies for the periodic wrap and the slab-to-replicated
-  gather.
-- **cuNumeric, cuPyNumeric, Dagger**: distributed arrays. Dagger's restriction
-  evaluates the full fine grid, and it combines per-slab norms after timing.
+- **cuNumeric**: views and broadcasts with separable transfer passes;
+  `@accelerate` on every operator.
+- **cuPyNumeric**: views and array expressions with separable transfer passes.
+- **CUDA.jl**: fused `CuArray` broadcasts; `separable` uses cuNumeric's
+  three-axis transfer decomposition.
+- **JACC**: `JACC.Multi` z-slabs with ghost planes; small levels replicated
+  on every GPU.
+- **Dagger**: distributed periodic stencils; restriction filters the whole
+  fine grid, and norm aggregation is untimed.
