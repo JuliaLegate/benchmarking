@@ -1,6 +1,6 @@
 using TOML
 
-# tunes/*.csv (written by tune_dagger.sh) as (benchmark, gpus, class) => blocks_per_gpu => ms,
+# results/tunes/*.csv (written by tune_dagger.sh) as (benchmark, gpus, class) => blocks_per_gpu => ms,
 # whatever N/M was tuned. When a key was tuned at several sizes, the most recently tuned
 # size wins; within a size, a split's latest non-failing row wins.
 function read_dagger_tunes(dir)

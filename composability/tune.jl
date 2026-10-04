@@ -38,7 +38,7 @@ end
 
 function tune(name; gpus=parse(Int, get(ENV, "CUNUMERIC_BENCH_GPUS", "1")),
               config=get(ENV, "DAGGER_TUNE_CONFIG", joinpath(@__DIR__, "sizes_141GB.toml")),
-              output=get(ENV, "DAGGER_TUNE_OUTPUT", joinpath(@__DIR__, "..", "tunes", "composability")),
+              output=get(ENV, "DAGGER_TUNE_OUTPUT", joinpath(@__DIR__, "..", "results", "tunes", "composability")),
               dry=false, executor=run_worker, io=stdout)
     spec = CASES[name]
     gpus in (1, 2, 4, 8) || error("GPU count must be 1, 2, 4, or 8")

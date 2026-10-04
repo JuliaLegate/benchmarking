@@ -5,9 +5,9 @@ end
 
 include(joinpath(@__DIR__, "tunes.jl"))
 
-# Tuned chunks per GPU, keyed by (benchmark, gpus, class): the fastest split in tunes/.
+# Tuned chunks per GPU, keyed by (benchmark, gpus, class): the fastest split in results/tunes/.
 # Points never tuned use 1.
-load_dagger_tunes(dir=normpath(joinpath(@__DIR__, "..", "..", "tunes"))) =
+load_dagger_tunes(dir=normpath(joinpath(@__DIR__, "..", "..", "results", "tunes"))) =
     Dict(key => first(argmin(last, collect(splits))) for (key, splits) in read_dagger_tunes(dir))
 const DAGGER_BLOCKS_PER_GPU = load_dagger_tunes()
 
@@ -20,7 +20,7 @@ function dagger_blocks_per_gpu(config)
 end
 function dagger_blocks_per_gpu_source(config)
     haskey(config.kwargs, :blocks_per_gpu) && return "kwarg"
-    return haskey(DAGGER_BLOCKS_PER_GPU, dagger_tune_key(config)) ? "tuned" : "default, not in tunes/"
+    return haskey(DAGGER_BLOCKS_PER_GPU, dagger_tune_key(config)) ? "tuned" : "default, not in results/tunes/"
 end
 
 # Owner of chunk i of n: consecutive chunks share a GPU, in processor order.

@@ -1,6 +1,6 @@
 # Sweep blocks_per_gpu for any Dagger benchmark on every visible GPU; set the
 # winner as `blocks_per_gpu` in that benchmark's config kwargs. Every run is
-# appended to tunes/<name>.csv (e.g. tunes/nas-ft.csv), or tunes/<name>-<tag>.csv
+# appended to results/tunes/<name>.csv (e.g. nas-ft.csv), or <name>-<tag>.csv
 # when DAGGER_TUNE_TAG is set (tune_dagger.sh uses "strong" for strong scaling).
 #   LD_LIBRARY_PATH="" julia --project=environments/dagger src/dagger/tune.jl \
 #       <name> <T> <N> <M> [kwargs TOML]
@@ -29,7 +29,7 @@ const MIN_CHUNK = 2048^2
 const GIVE_UP = 8.0
 const TAG = get(ENV, "DAGGER_TUNE_TAG", "")
 const CSV = normpath(joinpath(
-    @__DIR__, "..", "..", "tunes", join(filter(!isempty, [replace(NAME, "_" => "-"), TAG]), "-") * ".csv"
+    @__DIR__, "..", "..", "results", "tunes", join(filter(!isempty, [replace(NAME, "_" => "-"), TAG]), "-") * ".csv"
 ))
 
 # (chunk count, elements per chunk). 1-D ranges and 3-D z-slabs split one

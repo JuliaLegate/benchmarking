@@ -2,9 +2,9 @@
 # Tune main and composability benchmarks. Comment out calls below to disable them.
 #   ./scripts/tune_dagger.sh [--dry-run] [benchmark...]
 #   ./scripts/tune_dagger.sh krylov_cg ordinarydiffeq
-# Main results append to tunes/<name>.csv; composability uses tunes/composability/.
-# Weak scaling: gpus[i] runs N[i] -> tunes/<name>.csv.
-# Strong scaling: one size on every GPU count -> tunes/<name>-strong.csv.
+# Main results append to results/tunes/<name>.csv; composability uses results/tunes/composability/.
+# Weak scaling: gpus[i] runs N[i] -> results/tunes/<name>.csv.
+# Strong scaling: one size on every GPU count -> results/tunes/<name>-strong.csv.
 # Failed tunes are listed at the end; the script keeps going.
 
 set -uo pipefail
@@ -92,7 +92,7 @@ done
 
 echo
 if [[ ${#FAILED[@]} -eq 0 ]]; then
-    echo "All tunes finished; results in tunes/."
+    echo "All tunes finished; results in results/tunes/."
 else
     echo "Failed tunes:"
     printf '  %s\n' "${FAILED[@]}"
