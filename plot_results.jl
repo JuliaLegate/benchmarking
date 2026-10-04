@@ -286,8 +286,9 @@ function weak_scaling_figure(series; plot_title, log_values=false)
     kind = scaling_kind(series)
     common = (
         xscale=:log2, xticks=([1, 2, 4, 8], ["1", "2", "4", "8"]), xlabel="GPUs",
-        framestyle=:box, grid=false, gridalpha=0, gridlinewidth=0, minorgrid=false,
-        foreground_color_grid=:white,
+        # Light grid lines, matching plot_grid.jl.
+        framestyle=:box, grid=true, gridcolor=:gray, gridalpha=0.25, gridlinewidth=0.8,
+        gridstyle=:solid, minorgrid=false,
         foreground_color_axis=:black, foreground_color_border=:black,
         foreground_color_text=:black, foreground_color_guide=:black,
         tickfontcolor=:black, guidefontcolor=:black, titlefontcolor=:black,

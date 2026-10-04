@@ -104,15 +104,19 @@ function complexity_panel(points, metric; show_mean, ideal, first_col, fix, st)
     groups = model_groups(points, m.column)
     hi = maximum(maximum(g.xs) for g in groups)
     p = plot(;
-        xlabel=m.xlabel, ylabel=first_col ? "Relative performance" : "",
+        xlabel=m.xlabel, ylabel=first_col ? "Relative perf." : "",
         # Just left of 0, so markers at 0 show whole.
-        xlims=(-0.02hi, 1.08hi), ylims=(0, 1.08), widen=false,
-        xformatter=compact_tick, yformatter=compact_tick, framestyle=:box, legend=false,
+        xlims=(-0.02hi, 1.08hi), ylims=(0, ideal ? 1.15 : 1.08), widen=false,
+        # At most four round ticks, so narrow panels don't crowd them.
+        xticks=0:first(filter(t -> hi / t <= 4, [m * 10.0^k for k in 0:6 for m in (1, 2, 5)])):hi,
+        # The panels share the 0..1 y scale, so only the first labels it.
+        xformatter=compact_tick, yformatter=first_col ? compact_tick : (_ -> ""),
+        framestyle=:box, legend=false,
         tickfontsize=st.tick, guidefontsize=st.guide,
-        left_margin=(fix.ticks + (first_col ? fix.guide : 0)) * Plots.px +
-                    (first_col ? 3st.k * Plots.mm : 0Plots.mm),
+        left_margin=first_col ? (fix.ticks + fix.guide) * Plots.px + 3st.k * Plots.mm :
+                    -4Plots.mm,   # GR keeps room for the (empty) tick labels
         bottom_margin=(fix.bottom + fix.guide) * Plots.px,
-        top_margin=1Plots.mm, right_margin=2Plots.mm,
+        top_margin=1Plots.mm, right_margin=1Plots.mm,
     )
     hline!(p, [1.0]; color=IDEALCOL, ls=:dashdot, lw=1.4st.k, label="")
     ideal && ideal_point!(p, st)

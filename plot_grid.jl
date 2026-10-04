@@ -101,14 +101,47 @@ function gr_margin_fix(width, height, st)
             ticks=(1 - sh) * tick_w)
 end
 
-function grid_line!(p, s, y, st; kw...)
-    return plot!(p, getfield.(s.agg, :gpus), y; color=s.color, lw=st.lw, ls=s.ls,
-        marker=s.marker, ms=st.ms, msc=s.color, markerstrokewidth=0.6st.k,
-        label=s.label, kw...)
+# Hollow markers for every series first, then all lines and error bars over them:
+# GR can't draw a see-through marker fill, so this keeps every line visible
+# through the markers. `items` are (series, y, yerror or nothing).
+function grid_lines!(p, items, st)
+    for (s, y, _) in items
+        hollow_marker!(p, getfield.(s.agg, :gpus), y, s, st.ms)
+    end
+    for (s, y, err) in items
+        grid_line!(p, s, y, st; yerror=err)
+    end
+    return p
+end
+
+# A colored marker with a smaller white one on top. GR's PDF output scales marker
+# outlines (markerstrokewidth) with canvas height, so tall figures got near-solid
+# markers; filled markers keep the same size in every figure.
+function hollow_marker!(p, x, y, s, ms)
+    scatter!(p, x, y; marker=s.marker, ms, color=s.color, markerstrokewidth=0, label="")
+    return scatter!(p, x, y; marker=s.marker, ms=0.6ms, color=:white, markerstrokewidth=0, label="")
+end
+
+# One series' line and thin error bars (Plots would draw them at the line width).
+function grid_line!(p, s, y, st; yerror=nothing, kw...)
+    x = getfield.(s.agg, :gpus)
+    plot!(p, x, y; color=s.color, lw=st.lw, ls=s.ls, label=s.label, kw...)
+    yerror === nothing && return p
+    lo, hi = yerror isa Tuple ? yerror : (yerror, yerror)
+    cap, w = 2^0.05, 0.4st.lw
+    for (xi, yi, l, h) in zip(x, y, lo, hi)
+        bottom = max(yi - l, 1e-3yi)   # stays positive on log axes
+        plot!(p, [xi, xi], [bottom, yi + h]; color=s.color, lw=w, label="")
+        for yc in (bottom, yi + h)
+            plot!(p, [xi / cap, xi * cap], [yc, yc]; color=s.color, lw=w, label="")
+        end
+    end
+    return p
 end
 
 # Axis labels only on the outer edge of the grid; every panel shares them.
-function panel_plot(series, metric; title, log_values, first_col, last_row, bottom_row, fix, st)
+function panel_plot(series, metric; title, log_values, split=nothing, gridlines=true,
+    first_col, last_row, bottom_row, fix, st)
     gpus = sort(unique(x.gpus for s in series for x in s.agg))
     p = plot(;
         title, xlabel=bottom_row ? "GPUs" : "",
@@ -117,6 +150,8 @@ function panel_plot(series, metric; title, log_values, first_col, last_row, bott
         xscale=:log2, xticks=(gpus, last_row ? string.(gpus) : fill("", length(gpus))),
         xlims=(minimum(gpus) / 1.15, maximum(gpus) * 1.15), widen=false,
         framestyle=:box, legend=false,
+        # Light lines at every tick (on unless a config sets gridlines = false).
+        grid=gridlines, gridcolor=:gray, gridalpha=0.25, gridlinewidth=0.6st.k, gridstyle=:solid,
         tickfontsize=st.tick, guidefontsize=st.guide, titlefontsize=st.title,
         titlefontfamily="DejaVuSans-Bold",   # TTF bold of the default font; GR built-ins mis-size
         left_margin=(fix.ticks + (first_col ? fix.guide : 0)) * Plots.px +
@@ -131,10 +166,7 @@ function panel_plot(series, metric; title, log_values, first_col, last_row, bott
         hi = max(1.0, maximum(maximum, effs; init=0.0))
         plot!(p; ylims=positive_ylim(hi; pad=0.12))
         hline!(p, [1.0]; color=IDEALCOL, ls=:dashdot, lw=1.4st.k, label="")
-        for s in series
-            e = efficiency(s)
-            e === nothing || grid_line!(p, s, e, st)
-        end
+        grid_lines!(p, [(s, efficiency(s), nothing) for s in series if efficiency(s) !== nothing], st)
         return p
     end
     y, e = metric == "throughput" ? (:h, :hsd) : (:t, :tsd)
@@ -143,8 +175,54 @@ function panel_plot(series, metric; title, log_values, first_col, last_row, bott
         positive_ylim(series_ymax(series, y, e); pad=0.2)
     plot!(p; ylims, yscale=log_values ? :log10 : :identity)
     plot!(p; yformatter=compact_tick)
-    for s in series
-        grid_line!(p, s, getfield.(s.agg, y), st; yerror=getfield.(s.agg, e))
+    above = [getfield(x, y) for s in series for x in s.agg if split !== nothing && getfield(x, y) > split]
+    (log_values || isempty(above)) || return split_panel(p, series, y, e, split, gpus, st)
+    grid_lines!(p, [(s, getfield.(s.agg, y), getfield.(s.agg, e)) for s in series], st)
+    return p
+end
+
+# Broken y axis in one panel: 0..split fills the bottom 70%, split..max is
+# compressed into the top 30%, and a mark on the left axis shows the break.
+function split_panel(p, series, y, e, split, gpus, st; frac=0.7)
+    hi = series_ymax(series, y, e) * 1.05
+    # Data never lands in the gap: 0..split ends at its bottom, split..max starts at its top.
+    gap = 0.045
+    t(v) = v <= split ? (frac - gap) * v / split :
+        frac + gap + (1 - frac - gap) * (v - split) / (hi - split)
+    step(lo, hi, n) = first(filter(s -> (hi - lo) / s <= n, [m * 10.0^k for k in 0:9 for m in (1, 2, 5)]))
+    below = collect(0:step(0, split, 4):(0.999split))
+    s_hi = step(split, hi, 3)
+    ticks = [below; collect((ceil(split / s_hi) * s_hi):s_hi:hi)]
+    plot!(p; ylims=(0, 1), yticks=(t.(ticks), compact_tick.(ticks)))
+    grid_lines!(p, map(series) do s
+        v, err = getfield.(s.agg, y), getfield.(s.agg, e)
+        (s, t.(v), (t.(v) .- t.(max.(v .- err, 0)), t.(v .+ err) .- t.(v)))
+    end, st)
+    # GR draws the frame over everything, so a split panel draws its own: full
+    # top and bottom lines, left and right lines cut at the break with // marks,
+    # and inward tick marks like the :box frame of the other panels.
+    plot!(p; framestyle=:grid)
+    # The drawn frame sits at the usual x limits; the plot area extends a little
+    # past it so the outer half of each slash isn't clipped.
+    (x0, x1), lw = (minimum(gpus) / 1.15, maximum(gpus) * 1.15), 0.7st.k
+    edge(xs, ys) = plot!(p, xs, ys; color=INK, lw, label="")
+    tick = 2^(0.02 * log2(x1 / x0))   # inward tick length on the log2 x axis
+    slash = 2^0.08
+    plot!(p; xlims=(x0 / slash^1.2, x1 * slash^1.2))
+    edge([x0, x1], [0, 0]); edge([x0, x1], [1, 1])
+    for (x, inward) in ((x0, tick), (x1, 1 / tick))
+        edge([x, x], [0, frac - gap]); edge([x, x], [frac + gap, 1])
+        # Each slash is centered on the axis line, at the start and the end of the gap.
+        for dy in (-gap, gap)
+            plot!(p, [x / slash, x * slash], [frac + dy - 0.025, frac + dy + 0.025];
+                color=INK, lw=1.8lw, label="")
+        end
+        for v in t.(ticks)
+            edge([x, x * inward], [v, v])
+        end
+    end
+    for g in gpus
+        edge([g, g], [0, 0.03]); edge([g, g], [0.97, 1])
     end
     return p
 end
@@ -173,8 +251,9 @@ end
 
 # `slot_h` set: the legend fills an empty grid slot, rows hanging from the top.
 # `shift` moves the rows up by that fraction of the legend's height.
-# `center` centers the columns horizontally.
-function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false)
+# `center` centers the columns horizontally. `nrows` spaces rows as if there
+# were that many (room for extra lines, like a legend title).
+function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false, nrows=length(rows))
     d = legend_dims(st)
     col_x = cumsum([0.0; legend_col_widths(reduce(vcat, rows), length(first(rows)), d)])
     center && (col_x .+= max(0, (width - LEGEND_INSET_PX - col_x[end]) / 2))
@@ -185,15 +264,14 @@ function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false)
         margin=0Plots.mm, top_margin=-2Plots.mm, bottom_margin=-1.9Plots.mm)
     for (r, row) in enumerate(rows)
         # In a slot, GR padding shrinks the height; spread rows instead.
-        step = slot_h === nothing ? 1 / length(rows) : min(1 / length(rows), 1.6d.row / slot_h)
+        step = slot_h === nothing ? 1 / nrows : min(1 / nrows, 1.6d.row / slot_h)
         y = 1 - (r - 0.5) * step + shift
         for (c, s) in enumerate(row)
             x = col_x[c]
             scale = st.legend_k / st.k
             plot!(pl, [x, x + d.swatch], [y, y]; color=s.color, lw=0.9scale * st.lw, ls=s.ls,
                 label="")
-            scatter!(pl, [x + d.swatch / 2], [y]; color=s.color, marker=s.marker,
-                ms=0.65scale * st.ms, msc=s.color, markerstrokewidth=0.5st.legend_k, label="")
+            hollow_marker!(pl, [x + d.swatch / 2], [y], s, 0.65scale * st.ms)
             annotate!(pl, x + d.swatch + 4, y, text(s.label, st.legend, :black, :left))
         end
     end
@@ -228,11 +306,29 @@ function grid_layout(make_panel, n, legend_series, columns; panel_w, panel_h, st
         layout=grid(2, 1; heights=[rows * panel_h, legend_h] ./ height), fig_kw...)
 end
 
-function grid_figure(panels, metric, columns; panel_w, panel_h, st)
+# Panel `note`: { text, model (colors it like that model's series), at = [x, y] as
+# fractions of the panel, default bottom right }.
+function panel_note!(p, note, log_y, st)
+    note === nothing && return p
+    color = something(get(note, "color", nothing),
+        get(Dict(f[2] => f[3] for f in REF_FAMILIES), get(note, "model", ""), nothing),
+        get(note, "model", "") == "cuNumeric.jl" ? COLOR_CUNUMERIC : INK)
+    fx, fy = get(note, "at", [0.97, 0.02])
+    at(lims, f, log) = log ? exp2(log2(lims[1]) + f * (log2(lims[2]) - log2(lims[1]))) :
+                       lims[1] + f * (lims[2] - lims[1])
+    y = log_y ? exp10(log10(ylims(p)[1]) + fy * (log10(ylims(p)[2]) - log10(ylims(p)[1]))) :
+        at(ylims(p), fy, false)
+    annotate!(p, at(xlims(p), fx, true), y, text(note["text"], st.tick, color, fx > 0.5 ? :right : :left, :bottom))
+    return p
+end
+
+function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=true)
     # Same label always has the same style, so one shared legend covers all panels.
     legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
-    draw(i; kw...) = panel_plot(panels[i].series, metric;
-        title=panels[i].title, log_values=panels[i].log, st, kw...)
+    draw(i; kw...) = panel_note!(panel_plot(panels[i].series, metric; title=panels[i].title,
+            log_values=panels[i].log, split=get(get(panels[i], :split, Dict()), metric, nothing),
+            gridlines, st, kw...),
+        get(panels[i], :note, nothing), panels[i].log && metric != "efficiency", st)
     return grid_layout(draw, length(panels), legend_series, columns; panel_w, panel_h, st)
 end
 
@@ -315,14 +411,17 @@ function grid_main(args=ARGS)
     panels = map(get(raw, "panel", [])) do p
         (series=panel_series(p),
          title=get(p, "title", group_title(p["benchmark"])),
-         log=get(p, "log", false))
+         log=get(p, "log", false),
+         split=get(p, "split", Dict()),
+         note=get(p, "note", nothing))
     end
     isempty(panels) && error("no [[panel]] entries in $(cfg.config)")
 
     mkpath(cfg.out_dir)
     for m in metrics
         out = joinpath(cfg.out_dir, "grid_$(m).$(format)")
-        fig = grid_figure(panels, m, columns; panel_w, panel_h, st)
+        fig = grid_figure(panels, m, columns; panel_w, panel_h, st,
+            gridlines=get(raw, "gridlines", true))
         savefig(fig, out)
         println("wrote $out")
     end

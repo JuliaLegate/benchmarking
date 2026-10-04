@@ -52,7 +52,8 @@ function tunes_panel(name, runs; first_col, last_row, bottom_row, fix, st)
     p = plot(;
         title=group_title(name), xlabel=bottom_row ? "Blocks per GPU" : "",
         ylabel=first_col ? "Speedup" : "",
-        xticks=(xs, string.(blocks)), xlims=(minimum(xs) - 0.6, maximum(xs) + 0.6),
+        # Many settings: label every other tick so the labels don't run together.
+        xticks=(xs, [length(blocks) > 5 && iseven(i) ? "" : string(b) for (i, b) in enumerate(blocks)]), xlims=(minimum(xs) - 0.6, maximum(xs) + 0.6),
         # Same 0.5 steps and one decimal everywhere, so tick labels (and y labels) line up.
         ylims=(max(0, floor(2minimum(all)) / 2 - 0.1), ceil(2maximum(all)) / 2 + 0.1),
         yticks=0:0.5:ceil(2maximum(all)) / 2, yformatter=v -> string(round(v; digits=1)),

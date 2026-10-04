@@ -10,8 +10,8 @@ hide = ["cuPyNumeric"] # legend labels to leave out
 mean = true   # large outlined marker at each model's mean
 ideal = true  # mark the ideal point (0 complexity, fastest)
 
-panel_size = [400, 320]
-legend_scale = 1.3
+panel_size = [400, 340]
+legend_scale = 1.0   # same as the other 1x2 figures
 format = "pdf"
-width_in = 7.16   # both IEEE columns
+width_in = 3.5   # one IEEE column, like the other 1x2 figures
 font_size = 6
