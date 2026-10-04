@@ -27,6 +27,15 @@ function dense_operator_buffer(reference::Tridiagonal; row_major=false)
     return Matrix(stored)
 end
 
+# Full-height column strips, with vectors split at the same columns.
+function dagger_krylov_layout(a, procs)
+    block = cld(N, GPUS * BLOCKS_PER_GPU)
+    nb = cld(N, block)
+    owner(j) = procs[cld(j * length(procs), nb)]
+    a isa AbstractVector && return (block,), [owner(j) for j in 1:nb]
+    return (N, block), [owner(j) for _ in 1:1, j in 1:nb]
+end
+
 make_operator(a) = make_array(a)
 if BACKEND == "cuNumeric"
     @eval using cuNumeric
@@ -58,16 +67,11 @@ else
         return mul!(y, opA, x, α, β)
     end
     @eval function make_array(a)
-        block = cld(N, GPUS * BLOCKS_PER_GPU) # Square tiles align solver vectors.
         procs = sort(collect(filter(p -> p isa Dagger.CuArrayDeviceProc,
                                     Dagger.compatible_processors())); by=p -> p.device)
         length(procs) == GPUS || error("Dagger sees $(length(procs)) of $GPUS requested GPUs")
-        grid = Array{Dagger.Processor}(undef,
-                                      ntuple(i -> cld(size(a, i), block), ndims(a)))
-        for I in CartesianIndices(grid)
-            grid[I] = procs[mod1(I[1], GPUS)]
-        end
-        result = Dagger.distribute(a, Dagger.Blocks(ntuple(_ -> block, ndims(a))...), grid)
+        blocks, grid = dagger_krylov_layout(a, procs)
+        result = Dagger.distribute(a, Dagger.Blocks(blocks...), grid)
         wait(result)
         chunks = [fetch(chunk; raw=true) for chunk in result.chunks]
         all(chunk -> chunk isa Dagger.Chunk{<:CuArray}, chunks) ||

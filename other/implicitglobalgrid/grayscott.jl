@@ -1,35 +1,59 @@
+# Opt-in diagnostics are flushed even when the sweep pipes output through tee.
+function igg_startup(message)
+    if get(ENV, "IGG_VERBOSE", "0") == "1"
+        rank = get(ENV, "OMPI_COMM_WORLD_RANK", "?")
+        println(stderr, "[IGG worker rank=$rank pid=$(getpid())] ", message)
+        flush(stderr)
+    end
+end
+
+igg_startup("Loading CUDA")
 using CUDA # Import before ImplicitGlobalGrid to activate CUDA support.
+igg_startup("Loading ImplicitGlobalGrid")
 using ImplicitGlobalGrid
+igg_startup("Loading MPI")
 using MPI
 using Random
 using Printf
 using Statistics
 
-@views  inn(A) = A[2:end-1, 2:end-1]
+include("grayscott_core.jl")
+igg_startup("Packages loaded")
+
+function grayscott_kernel!(u, v, un, vn, p)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x + 1
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y + 1
+    if i < size(u, 1) && j < size(u, 2)
+        igg_update_cell!(i, j, u, v, un, vn, p)
+    end
+    return nothing
+end
 
 # One trial: N_WARMUP untimed steps followed by N_ITER measured steps.
-@views function grayscott(nx, ny, n_iter, n_warmup, comm)
-    # Physics
-    c_u = 1.0f0
-    c_v = 0.3f0
-    f = 0.03f0
-    k = 0.06f0
+function grayscott(nx, ny, N, coords, n_iter, n_warmup, comm)
+    p = (dt=0.2f0, dx2=1.0f0, cu=1.0f0, cv=0.3f0, f=0.03f0, k=0.06f0)
+    igg_startup("Allocating and initializing local arrays")
+    u, v = CUDA.ones(Float32, nx, ny), CUDA.zeros(Float32, nx, ny)
+    un, vn = similar(u), similar(v)
 
-    # Numerics
-    dx = 1.0f0
-    dy = dx
-    dt = dx / 5.0f0
+    # Same global initial-condition recipe as JACC/Dagger. Only the small seed
+    # patch is held on the host, and every rank receives the same random values.
+    seed = min(150, N)
+    seed_u, seed_v = zeros(Float32, seed, seed), zeros(Float32, seed, seed)
+    if MPI.Comm_rank(comm) == 0
+        rand!(seed_u)
+        rand!(seed_v)
+    end
+    MPI.Bcast!(seed_u, 0, comm)
+    MPI.Bcast!(seed_v, 0, comm)
+    igg_seed!(u, v, coords, CuArray(seed_u), CuArray(seed_v))
+    CUDA.synchronize()
+    igg_startup("Exchanging initial halos")
+    update_halo!(u, v)
+    igg_startup("Initial halos ready; entering warmup and timed steps")
 
-    u     = CUDA.zeros(Float32, nx, ny)
-    v     = CUDA.zeros(Float32, nx, ny)
-    F_u   = CUDA.zeros(Float32, nx-2, ny-2)
-    F_v   = CUDA.zeros(Float32, nx-2, ny-2)
-    lap_u = CUDA.zeros(Float32, nx-2, ny-2)
-    lap_v = CUDA.zeros(Float32, nx-2, ny-2)
-
-    Random.rand!(u[1:nx÷10, 1:ny÷10])
-    Random.rand!(v[1:nx÷10, 1:ny÷10])
-
+    threads = (32, 8)
+    blocks = (cld(nx - 2, threads[1]), cld(ny - 2, threads[2]))
     start = 0.0
     for it = 1:(n_warmup + n_iter)
         # Exclude allocation and warmup from the measured timesteps.
@@ -39,21 +63,11 @@ using Statistics
             start = MPI.Wtime()
         end
 
-        @. F_u = (-$inn(u) * ($inn(v)^2)) + f * (1.0f0 - $inn(u))
-        @. F_v = ($inn(u) * ($inn(v)^2)) - (f + k) * $inn(v)
-
-        # Keep both directions in one broadcast; array-returning helpers
-        # would allocate a full-grid temporary for each direction.
-        @. lap_u = ((u[3:end, 2:end-1] - 2.0f0 * $inn(u) + u[1:end-2, 2:end-1]) / (dx * dx)) +
-                   ((u[2:end-1, 3:end] - 2.0f0 * $inn(u) + u[2:end-1, 1:end-2]) / (dy * dy))
-        @. lap_v = ((v[3:end, 2:end-1] - 2.0f0 * $inn(v) + v[1:end-2, 2:end-1]) / (dx * dx)) +
-                   ((v[2:end-1, 3:end] - 2.0f0 * $inn(v) + v[2:end-1, 1:end-2]) / (dy * dy))
-
-        @. u[2:end-1, 2:end-1] += dt * ((c_u * lap_u) + F_u)
-        @. v[2:end-1, 2:end-1] += dt * ((c_v * lap_v) + F_v)
-
+        @cuda threads=threads blocks=blocks grayscott_kernel!(u, v, un, vn, p)
         CUDA.synchronize()
-        update_halo!(u, v)
+        update_halo!(un, vn)
+        u, un = un, u
+        v, vn = vn, v
     end
     CUDA.synchronize()
     MPI.Barrier(comm)
@@ -66,7 +80,9 @@ n_trials = length(ARGS) == 5 ? parse(Int, ARGS[5]) : 5
 gpus > 0 && N >= 4 && n_iter > 0 && n_warmup >= 0 && n_trials > 0 ||
     error("Invalid benchmark dimensions or iteration counts")
 
+igg_startup("Initializing MPI")
 MPI.Init()
+igg_startup("MPI initialized")
 nprocs = MPI.Comm_size(MPI.COMM_WORLD)
 nprocs == gpus || error("Expected $gpus MPI ranks, got $nprocs")
 # N counts global simulation cells; each local array also needs two halo cells.
@@ -74,13 +90,14 @@ dims = MPI.Dims_create(nprocs, [0, 0, 1])
 all(d -> N % d == 0 && N ÷ d >= 2, dims[1:2]) ||
     error("N=$N must divide evenly across the $(dims[1])x$(dims[2]) process grid, with at least two cells per rank in each dimension")
 nx, ny = N ÷ dims[1] + 2, N ÷ dims[2] + 2
+igg_startup("Initializing global grid and selecting GPU")
 me, dims, nprocs, coords, comm = init_global_grid(nx, ny, 1;
-    dimx=dims[1], dimy=dims[2], dimz=1, init_MPI=false)
-me == 0 && @printf("Simulation domain: %dx%d (IGG's global grid above includes the outer halos); local arrays: %dx%d including halos\n",
+    dimx=dims[1], dimy=dims[2], dimz=1, periodx=1, periody=1, init_MPI=false)
+me == 0 && @printf("Periodic simulation domain: %dx%d; local arrays: %dx%d including halos\n",
     N, N, nx, ny)
 times_ms = zeros(n_trials)
 for trial in 1:n_trials
-    times_ms[trial] = grayscott(nx, ny, n_iter, n_warmup, comm) / n_iter * 1e3
+    times_ms[trial] = grayscott(nx, ny, N, coords, n_iter, n_warmup, comm) / n_iter * 1e3
     me == 0 && @printf("Trial %d/%d: %.6f ms/step\n", trial, n_trials, times_ms[trial])
 end
 

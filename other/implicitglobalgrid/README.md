@@ -53,12 +53,35 @@ It writes a log for each GPU count and appends trial rows to
 `results/implicitglobalgrid`, relative to the repository root. A failed run
 stops the sweep and returns a nonzero exit status.
 
+## Startup diagnostics
+
+Set `IGG_VERBOSE=1` to print flushed progress messages for Conda activation,
+Julia package loading, MPI launch, GPU selection, and the initial halo exchange:
+
+```bash
+IGG_VERBOSE=1 bash other/implicitglobalgrid/run_benchmark.sh 1 256 5 2 1
+```
+
+The flag also works with `run_weak_scaling.sh`. Diagnostics run outside the
+measured timestep loop. The last message identifies the stage to investigate.
+
 ## Notes
 
 - Each trial uses fresh arrays and `N_WARMUP` untimed steps; its time is the
   slowest rank's elapsed time over `N_ITER` steps.
 - Halos travel through CUDA-aware MPI by default; `IGG_CUDAAWARE_MPI=0` stages
   them through the host.
-- Physics matches [`src/common/benchmarks/grayscott.jl`](../../src/common/benchmarks/grayscott.jl),
-  but initial conditions and boundaries follow the original script, so
-  trajectories differ from the harness's.
+- Both axes are periodic, matching the JACC/Dagger forward-Euler reference in
+  [`src/model_worker.jl`](../../src/model_worker.jl). Initialization uses
+  `u=1` and `v=0` with one random global `1:min(150,N)` square patch.
+  The patch is broadcast to all ranks and placed using global coordinates;
+  the initialization recipe matches JACC/Dagger, but random samples are not
+  shared across separate backend runs.
+- One CUDA kernel computes both species into separate output buffers. IGG
+  exchanges the new halos before the buffers are swapped. This eliminates
+  the four reaction/Laplacian intermediates and the six broadcast passes.
+  Halos are also exchanged before the first timestep.
+- The kernel synchronizes before halo exchange; this version does not overlap
+  communication and computation. Benchmark CSV correctness remains `skipped`.
+- CPU partition/reference checks: `julia --startup-file=no test/igg_grayscott.jl`.
+  These validate the update and initialization, not CUDA/MPI execution.

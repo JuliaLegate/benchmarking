@@ -12,11 +12,14 @@ single-GPU paths run by default; `--local` adds the fourth:
 | cuNumeric local (opt-in) | Concise local solver loop on `NDArray`, with `@accelerate` vector-update helpers |
 
 The weak-scaling run uses Dagger and cuNumeric stock; `--local` also includes
-cuNumeric local. Dagger uses
-square tiles and the requested GPU scope; cuNumeric uses Legate's `--gpus`
-configuration. The Dagger checkout used for the original comparison calls CPU
-BLAS from its tile GEMV fallback, so this benchmark adds a CuArray tile method
-that forwards to GPU `mul!`. It does not change Krylov's solver code.
+cuNumeric local. Both Dagger solvers use full-height column strips, assigned to GPUs
+in contiguous groups like Gray-Scott. `DAGGER_BLOCKS_PER_GPU` controls the
+number of strips per GPU (approximately, when dimensions do not divide evenly);
+solver vectors use matching column widths. This layout is shared by tuning and
+regular runs. Dagger uses the requested GPU scope; cuNumeric uses Legate's
+`--gpus` configuration. The Dagger checkout used for the original comparison
+calls CPU BLAS from its tile GEMV fallback, so this benchmark adds a CuArray
+tile method that forwards to GPU `mul!`. It does not change Krylov's solver code.
 
 Use Julia 1.13 and a cuNumeric checkout containing the Krylov extension. From
 the benchmarking repository root, initialize all benchmark environments with
