@@ -64,7 +64,7 @@ def draw_bars(results):
             ax.bar_label(bars, labels=[f"{value:+.1f}%"], padding=5, fontsize=9, rotation=90)
     ax.set_xticks(range(len(variants)), [group_label(v) for v in variants],
                   fontsize=12, fontweight="bold", color="black")
-    ax.set_ylabel("Percent Difference in Total Counts vs cuNumeric.jl", fontsize=14)
+    ax.set_ylabel(f"Percent Difference in Total Counts vs {PLOT_VARIANT_LABEL['cunumeric']}", fontsize=14)
     ax.tick_params(axis="y", labelsize=11)
     ax.yaxis.set_major_formatter(PercentFormatter(100, decimals=0))
     ax.axhline(0, color="#333333", linewidth=1)
@@ -94,7 +94,7 @@ def main():
 
     results = comparisons(plot_rows(read_rows(args.input)), args.benchmarks)
     if not results:
-        parser.error("No benchmarks shared by cuNumeric.jl and another backend")
+        parser.error(f"No benchmarks shared by {PLOT_VARIANT_LABEL['cunumeric']} and another backend")
     out = args.output_dir or args.input.parent / "plots"
     out.mkdir(parents=True, exist_ok=True)
     with (out / "comparisons.csv").open("w", newline="", encoding="utf-8") as stream:

@@ -2,9 +2,12 @@ module KrylovPlot
 
 using Plots
 using Statistics: mean, std
+include(joinpath(@__DIR__, "..", "..", "plotter", "names.jl"))
 
 const COLORS = Dict("CUDA" => "#4c78a8", "Dagger" => "#f58518",
     "cuNumeric" => "#54a24b", "cuNumeric local" => "#b279a2")
+# "cuNumeric local" -> "<name> local".
+backend_label(b) = replace(b, "cuNumeric" => CUNUMERIC_NAME)
 const SOLVER_LABELS = Dict("cg" => "CG", "bicgstab" => "BiCGStab")
 
 function read_results(experiment, paths; solver="cg")
@@ -56,10 +59,10 @@ function plot_results(experiment, paths, image_path; solver="cg")
         isempty(subset) && continue
         x = [experiment == "single" ? row.n : row.gpus for row in subset]
         plot!(figure, x, [row.mean for row in subset];
-            yerror=[row.stderr for row in subset], label=backend, marker=:circle, color=COLORS[backend])
+            yerror=[row.stderr for row in subset], label=backend_label(backend), marker=:circle, color=COLORS[backend])
         if experiment == "weak" && first(x) == 1
             hline!(figure, [first(subset).mean];
-                linestyle=:dash, alpha=0.4, label="$backend ideal", color=COLORS[backend])
+                linestyle=:dash, alpha=0.4, label="$(backend_label(backend)) ideal", color=COLORS[backend])
         end
     end
     savefig(figure, image_path)

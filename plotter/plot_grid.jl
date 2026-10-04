@@ -45,7 +45,7 @@ end
 function panel_series(panel)
     group = panel["benchmark"]
     members = String[string(m) for m in get(panel, "members", [group])]
-    hide = Set(string.(get(panel, "hide", String[])))
+    hide = Set(display_name.(string.(get(panel, "hide", String[]))))
     series = []
     seen = Set{String}()
     for dir in aslist(panel["results"])
@@ -321,9 +321,10 @@ end
 # fractions of the panel, default bottom right }.
 function panel_note!(p, note, log_y, st)
     note === nothing && return p
+    model = display_name(get(note, "model", ""))
     color = something(get(note, "color", nothing),
-        get(Dict(f[2] => f[3] for f in REF_FAMILIES), get(note, "model", ""), nothing),
-        get(note, "model", "") == "cuNumeric.jl" ? COLOR_CUNUMERIC : INK)
+        get(Dict(f[2] => f[3] for f in REF_FAMILIES), model, nothing),
+        model == CUNUMERIC_NAME ? COLOR_CUNUMERIC : INK)
     fx, fy = get(note, "at", [0.97, 0.02])
     at(lims, f, log) = log ? exp2(log2(lims[1]) + f * (log2(lims[2]) - log2(lims[1]))) :
                        lims[1] + f * (lims[2] - lims[1])
@@ -343,11 +344,11 @@ function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=tr
     return grid_layout(draw, length(panels), legend_series, columns; panel_w, panel_h, st)
 end
 
-# cuNumeric.jl speedups for the paper text: (label, GPU counts compared).
-# Speedup = reference time / cuNumeric.jl time at the same GPU count; panels
+# cuNumeric speedups for the paper text: (label, GPU counts compared).
+# Speedup = reference time / cuNumeric time at the same GPU count; panels
 # already guarantee equal problem sizes per GPU count.
 const SPEEDUP_REFERENCES = (
-    ("cuPyNumeric", :all), ("JACC.jl", :all), ("Dagger.jl", :all), ("CUDA.jl", 1),
+    (CUPYNUMERIC_NAME, :all), ("JACC.jl", :all), ("Dagger.jl", :all), ("CUDA.jl", 1),
 )
 
 geomean(x) = exp(sum(log, x) / length(x))
@@ -355,7 +356,7 @@ fmt_x(x) = string(round(x; sigdigits=3), "×")
 
 function speedups(panel, reference, gpus)
     find(label) = findfirst(s -> s.label == label, panel.series)
-    i, j = find("cuNumeric.jl"), find(reference)
+    i, j = find(CUNUMERIC_NAME), find(reference)
     (i === nothing || j === nothing) && return nothing
     ours = Dict(x.gpus => x.t for x in panel.series[i].agg)
     theirs = Dict(x.gpus => x.t for x in panel.series[j].agg)
@@ -366,7 +367,7 @@ end
 
 # Per benchmark: geomean over shared GPU counts; overall: geomean of those.
 function speedup_summary(panels)
-    lines = ["# cuNumeric.jl speedup summary", ""]
+    lines = ["# $CUNUMERIC_NAME speedup summary", ""]
     overall = Dict{String,Any}()
     for (reference, gpus) in SPEEDUP_REFERENCES
         scope = gpus === :all ? "all shared GPU counts" : "$gpus GPU"

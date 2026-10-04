@@ -160,7 +160,7 @@ function figures_main(args=ARGS)
         for (group, members) in parse_plot_groups(cfg_path)
             panels = map(aslist(get(f, "fusion", "both"))) do fusion
                 series = group_series(dir, group, members; fusion)
-                relabel = get(get(f, "labels", Dict()), fusion, Dict())
+                relabel = Dict(display_name(k) => v for (k, v) in get(get(f, "labels", Dict()), fusion, Dict()))
                 series = [merge(s, (; label=get(relabel, s.label, s.label))) for s in series]
                 # Sort by the first number in a label; others keep their order.
                 labelnum(s) = (m = match(r"\d+(\.\d+)?", s.label); m === nothing ? Inf : parse(Float64, m.match))

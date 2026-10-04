@@ -9,6 +9,7 @@ using Statistics
 const BENCH_ROOT = dirname(@__DIR__)
 
 include(joinpath(BENCH_ROOT, "src", "parse_benchmarks.jl"))
+include(joinpath(@__DIR__, "names.jl"))
 
 # GPU nodes often have no display; 100 = PNG. Override with GKSwstype if needed.
 get!(ENV, "GKSwstype", "100")
@@ -90,7 +91,7 @@ const VARIANT_COLORS = [COLOR_CUNUMERIC, "#7b2d8e", "#b8860b", "#3d5a80", "#a23b
 const VARIANT_MARKERS = [:circle, :diamond, :hexagon, :dtriangle, :star4, :pentagon]
 
 const REF_FAMILIES = [
-    ("cupynumeric", "cuPyNumeric", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC),
+    ("cupynumeric", CUPYNUMERIC_NAME, COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC),
     ("CUDA.jl", "CUDA.jl", COLOR_CUDA, MARKER_CUDA),
     ("CUDA.jl_separable", "CUDA.jl (separable arrays)", COLOR_CUDA, :dtriangle),
     ("tensoroperations_cuda", "TensorOperations.jl / cuTENSOR", COLOR_CUTENSOR, MARKER_CUTENSOR),
@@ -148,7 +149,7 @@ end
 
 function cunumeric_series_label(group, member, fused)
     notes = filter(!isnothing, [variant_label(group, member), fused ? nothing : "unfused"])
-    return isempty(notes) ? "cuNumeric.jl" : "cuNumeric.jl ($(join(notes, ", ")))"
+    return isempty(notes) ? CUNUMERIC_NAME : "$CUNUMERIC_NAME ($(join(notes, ", ")))"
 end
 
 function overlay_refs(results_dir, members)
@@ -186,7 +187,7 @@ function group_series(results_dir, group, members; fusion="both")
             label = cunumeric_series_label(group, member, fused)
             # One fusion setting per figure: name just the form, all lines solid.
             if fusion != "both" && n_members > 1
-                stem = something(variant_label(group, member), "cuNumeric.jl")
+                stem = something(variant_label(group, member), CUNUMERIC_NAME)
                 label = replace(stem, " accelerated" => "", "expression" => "expr")
                 ls = :solid
             end
@@ -201,9 +202,9 @@ end
 # cuNumeric saves EP as `cunumeric_struct`; otherwise the usual model series.
 function ep_series(results_dir)
     entries = (
-        ("cunumeric_struct", "cuNumeric.jl", COLOR_CUNUMERIC, MARKER_CUNUMERIC, :solid),
+        ("cunumeric_struct", CUNUMERIC_NAME, COLOR_CUNUMERIC, MARKER_CUNUMERIC, :solid),
         ("dagger", "Dagger.jl", COLOR_DAGGER, MARKER_DAGGER, :solid),
-        ("cupynumeric", "cuPyNumeric", COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC, :solid),
+        ("cupynumeric", CUPYNUMERIC_NAME, COLOR_CUPYNUMERIC, MARKER_CUPYNUMERIC, :solid),
         ("CUDA.jl", "CUDA.jl", COLOR_CUDA, MARKER_CUDA, :solid),
         ("jacc", "JACC.jl", COLOR_JACC, MARKER_JACC, :solid),
     )

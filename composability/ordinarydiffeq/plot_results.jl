@@ -1,5 +1,6 @@
 using Plots
 using Statistics: mean, std
+include(joinpath(@__DIR__, "..", "..", "plotter", "names.jl"))
 
 length(ARGS) == 3 || error("Usage: julia plot_results.jl {single|weak} results.csv timings.png")
 experiment, csv_path, image_path = ARGS
@@ -43,10 +44,10 @@ for backend in ("CuArray", "Dagger", "cuNumeric")
     isempty(subset) && continue
     x = [experiment == "single" ? row.n : row.gpus for row in subset]
     plot!(figure, x, [row.mean for row in subset];
-          yerror=[row.stderr for row in subset], label=backend, marker=:circle)
+          yerror=[row.stderr for row in subset], label=display_name(backend), marker=:circle)
     if experiment == "weak" && first(x) == 1
         hline!(figure, [first(subset).mean];
-               linestyle=:dash, alpha=0.4, label="$backend ideal")
+               linestyle=:dash, alpha=0.4, label="$(display_name(backend)) ideal")
     end
 end
 savefig(figure, image_path)

@@ -28,11 +28,14 @@ REFS_DIR = HERE / "refs"
 DEFAULT_OUTPUT_DIR = HERE / "results"
 VENDORED_SCC = REPO_ROOT / "opt" / "scc" / "bin" / "scc"
 
+# Display names, shared with the Julia plotters (plotter/names.jl).
+NAMES = dict(re.findall(r'const (\w+)_NAME = "([^"]*)"', (REPO_ROOT / "plotter" / "names.jl").read_text()))
+
 BENCHMARK_ORDER = ("gemm", "montecarlo", "grayscott", "cg", "nas_ep", "nas_ft", "nas_mg")
 VARIANT_ORDER = ("cunumeric", "cupynumeric", "cudajl", "jacc", "dagger", "cuda", "cuda_cufft")
 VARIANT_LABEL = {
-    "cunumeric": "cuNumeric.jl",
-    "cupynumeric": "cuPyNumeric",
+    "cunumeric": NAMES["CUNUMERIC"],
+    "cupynumeric": NAMES["CUPYNUMERIC"],
     "cudajl": "CUDA.jl",
     "jacc": "JACC.jl",
     "dagger": "Dagger.jl",
@@ -200,7 +203,7 @@ def metric_table(title: str, metrics: dict, view: MetricView, variants) -> str:
         if count:
             lines.append(f"| {VARIANT_LABEL[variant]} | {count} | {metrics[f'{p}total_{variant}_loc']} |")
     lines += ["", "Totals cover each model's available refs; reductions use only shared benchmarks.", "",
-              "| cuNumeric.jl vs | Shared benchmarks | Pooled reduction | Mean per-benchmark reduction |",
+              f"| {VARIANT_LABEL['cunumeric']} vs | Shared benchmarks | Pooled reduction | Mean per-benchmark reduction |",
               "|---|---|---:|---:|"]
     for subject, reference in COMPARISONS:
         key = f"{subject}_vs_{reference}_pct"

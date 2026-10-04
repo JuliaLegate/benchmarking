@@ -15,7 +15,7 @@ const COMPLEXITY_METRICS = Dict(
 
 # Series label => loc-analysis variant; other series are skipped.
 const LOC_VARIANTS = Dict(
-    "cuNumeric.jl" => "cunumeric", "cuPyNumeric" => "cupynumeric", "CUDA.jl" => "cudajl",
+    CUNUMERIC_NAME => "cunumeric", CUPYNUMERIC_NAME => "cupynumeric", "CUDA.jl" => "cudajl",
     "JACC.jl" => "jacc", "Dagger.jl" => "dagger",
 )
 
@@ -207,7 +207,7 @@ function complexity_main(args=ARGS)
         haskey(COMPLEXITY_METRICS, m) ||
             error("unknown metric $m; use $(join(keys(COMPLEXITY_METRICS), ", "))")
     end
-    hide = Set(string.(get(raw, "hide", String[])))
+    hide = Set(display_name.(string.(get(raw, "hide", String[]))))
     show_mean = get(raw, "mean", true)
     ideal = get(raw, "ideal", true)
     panel_w, panel_h, st = grid_dimensions(raw, length(metrics))
