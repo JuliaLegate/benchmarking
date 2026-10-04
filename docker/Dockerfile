@@ -28,19 +28,19 @@ COPY environments/dagger/Project.toml environments/dagger/Project.toml
 COPY environments/jacc/Project.toml environments/jacc/Project.toml
 COPY environments/implicitglobalgrid/Project.toml environments/implicitglobalgrid/Project.toml
 COPY environments/composability/Project.toml environments/composability/Project.toml
-COPY instantiate_projects.sh install_cupynumeric.sh ./
+COPY deps-install/instantiate_projects.sh deps-install/install_cupynumeric.sh deps-install/
 COPY other/implicitglobalgrid/setup_igg.sh other/implicitglobalgrid/setup_igg.sh
 
 ARG DEPENDENCY_REFRESH=0
 RUN echo "Benchmark dependency refresh: ${DEPENDENCY_REFRESH}" \
     && julia -e 'using Pkg; Pkg.Registry.add("General")' \
-    && CONDA_OVERRIDE_CUDA="${CUDA_VERSION_MAJOR_MINOR}" JULIA_PKG_PRECOMPILE_AUTO=0 ./instantiate_projects.sh \
+    && CONDA_OVERRIDE_CUDA="${CUDA_VERSION_MAJOR_MINOR}" JULIA_PKG_PRECOMPILE_AUTO=0 ./deps-install/instantiate_projects.sh \
     && rm -rf /depot/registries /depot/scratchspaces /depot/logs
 
 # Docker builds do not expose the host NVIDIA driver, so Conda cannot discover
 # its __cuda virtual package. Solve against the same CUDA version as the base
 # image instead of pretending CUDA is unavailable.
-RUN CONDA_OVERRIDE_CUDA="${CUDA_VERSION_MAJOR_MINOR}" ./install_cupynumeric.sh \
+RUN CONDA_OVERRIDE_CUDA="${CUDA_VERSION_MAJOR_MINOR}" ./deps-install/install_cupynumeric.sh \
     && conda clean --all --yes
 
 # The cuNumeric TensorOperations extension links the CUDA Legate library while

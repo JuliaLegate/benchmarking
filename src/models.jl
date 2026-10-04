@@ -185,7 +185,7 @@ function model_environment(
 end
 
 function wrapped_worker_command(model::ExecutionModel, request::WorkerRequest, root; verbose=false)
-    runner = joinpath(root, "run_benchmark.sh")
+    runner = joinpath(root, "scripts", "run_benchmark.sh")
     inner = model_worker_command(model, request, root)
     verbose_arg = verbose ? `--verbose` : ``
     return `bash $runner --model=$(model_id(model)) --gpus=$(request.gpus) --cpus=$(request.cpus) $verbose_arg -- $inner`
@@ -201,14 +201,14 @@ function preflight_model(
     executable === nothing && error(
         "cuPyNumeric is enabled, but conda is not available to the worker. " *
         "Add conda to PATH or set CUNUMERIC_BENCH_CONDA to its executable path; " *
-        "then run bash install_cupynumeric.sh. No benchmarks have been started.",
+        "then run bash deps-install/install_cupynumeric.sh. No benchmarks have been started.",
     )
     name = get(env, "CUPYNUMERIC_ENV", nothing)
     name === nothing && (name = cupynumeric_env_name())
     code = "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('cupynumeric') else 1)"
     check(`$executable run --no-capture-output -n $name python -c $code`) || error(
         "Conda environment '$name' is unavailable or lacks cupynumeric. " *
-        "Run bash install_cupynumeric.sh, or set CUPYNUMERIC_ENV to an existing environment. " *
+        "Run bash deps-install/install_cupynumeric.sh, or set CUPYNUMERIC_ENV to an existing environment. " *
         "No benchmarks have been started.",
     )
     return nothing

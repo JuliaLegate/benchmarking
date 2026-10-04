@@ -29,29 +29,29 @@ printf '%s|%s|%s|%s|%s|%s\n' "$name" "$gpus" "$worker" "${DAGGER_TUNE_TAG:-}" "$
 EOF
 chmod +x "$JULIA"
 
-bash "$root/tune_dagger.sh" > "$tmp/all.log"
+bash "$root/scripts/tune_dagger.sh" > "$tmp/all.log"
 [[ $(wc -l < "$TUNE_TEST_CALLS") == 48 ]] # 28 weak + 12 strong + 8 composability.
 [[ $(grep -c '|composability/tune.jl|' "$TUNE_TEST_CALLS") == 8 ]]
 ! grep -Eq '^(krylov_bicgstab|integrals_optimization)\|' "$TUNE_TEST_CALLS"
 
 : > "$TUNE_TEST_CALLS"
-bash "$root/tune_dagger.sh" krylov_cg ordinarydiffeq > "$tmp/selected.log"
+bash "$root/scripts/tune_dagger.sh" krylov_cg ordinarydiffeq > "$tmp/selected.log"
 [[ $(wc -l < "$TUNE_TEST_CALLS") == 8 ]]
 [[ $(grep -c '^krylov_cg|' "$TUNE_TEST_CALLS") == 4 ]]
 [[ $(grep -c '^ordinarydiffeq|' "$TUNE_TEST_CALLS") == 4 ]]
 
 : > "$TUNE_TEST_CALLS"
-bash "$root/tune_dagger.sh" --dry-run cg > "$tmp/main-dry.log"
+bash "$root/scripts/tune_dagger.sh" --dry-run cg > "$tmp/main-dry.log"
 [[ ! -s $TUNE_TEST_CALLS ]]
 [[ $(grep -c '^==> cg,' "$tmp/main-dry.log") == 4 ]]
 (cd "$root"; DAGGER_TUNE_CONFIG=composability/sizes_80GB.toml \
-    bash tune_dagger.sh --dry-run ordinarydiffeq) > "$tmp/comp-dry.log"
+    bash scripts/tune_dagger.sh --dry-run ordinarydiffeq) > "$tmp/comp-dry.log"
 [[ $(wc -l < "$TUNE_TEST_CALLS") == 4 ]]
 [[ $(grep -c '|--dry-run$' "$TUNE_TEST_CALLS") == 4 ]]
 grep -Fq "$(realpath "$root/composability/sizes_80GB.toml")" "$TUNE_TEST_CALLS"
 
 : > "$TUNE_TEST_CALLS"
-if TUNE_TEST_FAIL=1 bash "$root/tune_dagger.sh" ordinarydiffeq > "$tmp/failed.log" 2>&1; then exit 1; fi
+if TUNE_TEST_FAIL=1 bash "$root/scripts/tune_dagger.sh" ordinarydiffeq > "$tmp/failed.log" 2>&1; then exit 1; fi
 [[ $(wc -l < "$TUNE_TEST_CALLS") == 4 ]] # Later GPU counts survive a failed case.
 grep -q 'Failed tunes:' "$tmp/failed.log"
 echo 'Combined tuning launcher checks passed'

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # benchmark root
 DEST_DIR="${1:-${ROOT}/opt/scc}"
 SCC_VERSION="v4.0.0"
 BASE_URL="https://github.com/boyter/scc/releases/download/${SCC_VERSION}"

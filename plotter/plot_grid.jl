@@ -14,8 +14,8 @@ const METRICS = Dict(
 )
 
 function parse_grid_args(args)
-    config = joinpath(@__DIR__, "configs", "plots", "grid.toml")
-    out_dir = joinpath(@__DIR__, "plots", "grid")
+    config = joinpath(BENCH_ROOT, "configs", "plots", "grid.toml")
+    out_dir = joinpath(BENCH_ROOT, "plots", "grid")
     for arg in args
         if startswith(arg, "--config=")
             config = last(split(arg, "="; limit=2))
@@ -25,14 +25,14 @@ function parse_grid_args(args)
             error("unknown argument: $arg")
         end
     end
-    config = isabspath(config) ? config : joinpath(@__DIR__, config)
-    out_dir = isabspath(out_dir) ? out_dir : joinpath(@__DIR__, out_dir)
+    config = isabspath(config) ? config : joinpath(BENCH_ROOT, config)
+    out_dir = isabspath(out_dir) ? out_dir : joinpath(BENCH_ROOT, out_dir)
     return (; config, out_dir)
 end
 
 # A run directory holds its CSVs under <T>/; accept either level.
 function csv_dir(path)
-    path = isabspath(path) ? path : joinpath(@__DIR__, path)
+    path = isabspath(path) ? path : joinpath(BENCH_ROOT, path)
     isdir(path) || error("results directory not found: $path")
     any(endswith(".csv"), readdir(path)) && return path
     subdirs = filter(d -> any(endswith(".csv"), readdir(d)),

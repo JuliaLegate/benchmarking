@@ -17,7 +17,7 @@ environment when formatting.
 
 `--scc-bin` accepts a full path, including a Windows `scc.exe` path. Without it,
 the runner uses `opt/scc/bin/scc` if present, otherwise `scc` on PATH. The existing
-`install_scc.sh` remains an optional Linux installer; the runner does not install scc.
+`deps-install/install_scc.sh` remains an optional Linux installer; the runner does not install scc.
 
 The existing JuliaFormatter and Black workflow is preserved: temporary Julia
 and Python copies are formatted at a 10,000-column margin before counting.

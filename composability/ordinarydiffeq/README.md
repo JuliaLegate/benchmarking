@@ -57,7 +57,7 @@ benchmark environments from the repository root:
 
 ```sh
 export CUNUMERIC_SOURCE=/path/to/cuNumeric.jl
-./instantiate_projects.sh
+./deps-install/instantiate_projects.sh
 ```
 
 The ODE launcher uses the shared `environments/composability` project in local
@@ -169,7 +169,7 @@ with CarpenterKennedy2N54, RK4, Tsit5, and Vern7 in fixed-step mode, and with
 RK4, Tsit5, and Vern7 in adaptive mode. It checks the returned NDArray and
 the final state against the discrete eigenmode solution. All passed at
 `N=128` and `N=4096` on one H100 (Float32, Julia 1.13). Install the
-shared environment with `./instantiate_projects.sh`; it includes these
+shared environment with `./deps-install/instantiate_projects.sh`; it includes these
 additional solvers:
 
 ```sh

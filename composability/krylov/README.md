@@ -26,7 +26,7 @@ the benchmarking repository root, initialize all benchmark environments with
 the repository's standard setup script:
 
 ```sh
-CUNUMERIC_SOURCE=/opt/cuNumeric.jl ./instantiate_projects.sh
+CUNUMERIC_SOURCE=/opt/cuNumeric.jl ./deps-install/instantiate_projects.sh
 ```
 
 Krylov uses the shared `environments/composability` project in both local runs

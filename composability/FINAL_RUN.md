@@ -5,7 +5,7 @@ benchmarking `main`, and cuNumeric's `codex/ode-scalar-broadcast` branch.
 
 ## Before running
 
-- Set up with `./instantiate_projects.sh` (the container does this at build time).
+- Set up with `./deps-install/instantiate_projects.sh` (the container does this at build time).
 - Check `nvidia-smi -L` shows eight idle H100s.
 - The `G=8` CG matrix (~128 GiB Float32) is built on the host first; aim for
   512 GiB of free host memory.

@@ -10,7 +10,8 @@ const PROJECTS = [".", "environments/cuda", "environments/jacc",
     "environments/cunumeric", "environments/composability"]
 
 function stage_projects(destination)
-    cp(joinpath(ROOT, "instantiate_projects.sh"), joinpath(destination, "instantiate_projects.sh"))
+    mkpath(joinpath(destination, "deps-install"))
+    cp(joinpath(ROOT, "deps-install", "instantiate_projects.sh"), joinpath(destination, "deps-install", "instantiate_projects.sh"))
     igg_scripts = joinpath(destination, "other", "implicitglobalgrid")
     mkpath(igg_scripts)
     cp(joinpath(ROOT, "other", "implicitglobalgrid", "setup_igg.sh"), joinpath(igg_scripts, "setup_igg.sh"))
@@ -85,7 +86,7 @@ function main()
     @testset "Real environment setup (Julia $VERSION)" begin
         mktempdir() do workspace
             stage_projects(workspace)
-            cmd = addenv(`bash $(joinpath(workspace, "instantiate_projects.sh"))`,
+            cmd = addenv(`bash $(joinpath(workspace, "deps-install", "instantiate_projects.sh"))`,
                 "CUNUMERIC_SOURCE" => source,
                 "CUNUMERIC_BENCH_JULIA" => julia,
                 "IGG_MPI_PREFIX" => joinpath(workspace, "igg-mpi"),

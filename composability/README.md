@@ -13,7 +13,7 @@ Use Julia 1.13. From the repository root:
 
 ```bash
 export CUNUMERIC_SOURCE=/path/to/cuNumeric.jl   # only for a standalone checkout
-./instantiate_projects.sh
+./deps-install/instantiate_projects.sh
 ```
 
 All workloads share `environments/composability`, which pins Dagger's
@@ -45,14 +45,14 @@ is nonzero. Existing results are never overwritten.
 
 ## Dagger block tuning
 
-The root `tune_dagger.sh` launches both main and composability tuning. Its
+`scripts/tune_dagger.sh` launches both main and composability tuning. Its
 default run includes all main benchmarks plus composability CG and heat.
 To tune only composability at the actual multi-GPU sizes on 1, 2, 4, and 8 GPUs:
 
 ```sh
-bash tune_dagger.sh --dry-run krylov_cg ordinarydiffeq
-bash tune_dagger.sh krylov_cg ordinarydiffeq
-DAGGER_TUNE_CONFIG=composability/sizes_80GB.toml bash tune_dagger.sh krylov_cg ordinarydiffeq
+bash scripts/tune_dagger.sh --dry-run krylov_cg ordinarydiffeq
+bash scripts/tune_dagger.sh krylov_cg ordinarydiffeq
+DAGGER_TUNE_CONFIG=composability/sizes_80GB.toml bash scripts/tune_dagger.sh krylov_cg ordinarydiffeq
 ```
 
 The tuner reads `weak_base` from `sizes_141GB.toml` (H200) by default, matching
@@ -64,7 +64,7 @@ benchmark run; relative paths are resolved from the calling directory.
 The chosen config is saved as `sizes.toml` alongside each case's logs.
 This tunes the multi-GPU sizes, including G=1, rather than every entry in the
 separate `single` size sweep. Each solver has its own call at the bottom of
-`tune_dagger.sh`: comment out `tune "$g" krylov_cg` or
+`scripts/tune_dagger.sh`: comment out `tune "$g" krylov_cg` or
 `tune "$g" ordinarydiffeq` to disable it. BiCGSTAB (`krylov_bicgstab`) and plume
 (`integrals_optimization`) start commented out; uncomment either call to enable
 it. `cg` selects the main CG benchmark, while `krylov_cg` selects Krylov.jl CG.

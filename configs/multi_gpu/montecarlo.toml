@@ -2,7 +2,7 @@
 # (20261001-025503-B66XYH), pinned so every model runs the same n_samples.
 # N = 7537741000 * P.
 [Global]
-models = ["dagger"]
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 n_warmup = 2
 n_iter = 50
 n_trial = 5

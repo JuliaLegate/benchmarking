@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # Standalone figures from configs/plots/figures.toml, in the grid's style.
-#   julia --project=. plot_figures.jl [--config=PATH] [--out=DIR]
+#   julia --project=. plotter/plot_figures.jl [--config=PATH] [--out=DIR]
 
 include(joinpath(@__DIR__, "plot_grid.jl"))
 
@@ -127,8 +127,8 @@ function legend_row!(f, series, width, height, legend_h, st, d; below_axis)
 end
 
 function figures_main(args=ARGS)
-    config = joinpath(@__DIR__, "configs", "plots", "figures.toml")
-    out_dir = joinpath(@__DIR__, "plots", "figures")
+    config = joinpath(BENCH_ROOT, "configs", "plots", "figures.toml")
+    out_dir = joinpath(BENCH_ROOT, "plots", "figures")
     for arg in args
         if startswith(arg, "--config=")
             config = last(split(arg, "="; limit=2))
@@ -156,7 +156,7 @@ function figures_main(args=ARGS)
     mkpath(out_dir)
     for f in get(raw, "figure", [])
         dir = csv_dir(f["results"])
-        cfg_path = isabspath(f["config"]) ? f["config"] : joinpath(@__DIR__, f["config"])
+        cfg_path = isabspath(f["config"]) ? f["config"] : joinpath(BENCH_ROOT, f["config"])
         for (group, members) in parse_plot_groups(cfg_path)
             panels = map(aslist(get(f, "fusion", "both"))) do fusion
                 series = group_series(dir, group, members; fusion)

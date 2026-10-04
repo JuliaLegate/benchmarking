@@ -145,7 +145,7 @@ function execute_plan(runs, gs, opts, budget, raw; launch=run, prepare=prepare_b
     if isempty(opts.positional)
         for T in unique(results_subdir(r.spec) for r in runs)
             try
-                plotter = joinpath(root, "plot_results.jl")
+                plotter = joinpath(root, "plotter", "plot_results.jl")
                 results = joinpath(dir, T)
                 out = joinpath(root, "plots", basename(dir), T)
                 suffix = failed ? "_incomplete" : ""

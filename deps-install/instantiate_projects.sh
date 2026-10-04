@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-benchmark_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+benchmark_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 julia_bin="${CUNUMERIC_BENCH_JULIA:-julia}"
 
 source_dir="${CUNUMERIC_SOURCE:-$benchmark_dir/..}"

@@ -39,14 +39,14 @@ Instantiate the Julia environments once, including the shared environment for
 Krylov, OrdinaryDiffEq, and Integrals + Optimization:
 
 ```bash
-./instantiate_projects.sh
+./deps-install/instantiate_projects.sh
 ```
 
 When used as cuNumeric.jl's `benchmark/` submodule, this develops the parent
 checkout and its CNPreferences package. For a standalone clone:
 
 ```bash
-CUNUMERIC_SOURCE=/path/to/cuNumeric.jl ./instantiate_projects.sh
+CUNUMERIC_SOURCE=/path/to/cuNumeric.jl ./deps-install/instantiate_projects.sh
 ```
 
 Set `CUNUMERIC_BENCH_JULIA` to select a different Julia executable.
@@ -61,14 +61,14 @@ Setup and launchers use this directory directly, including inside the container.
 Composability uses Dagger's `aot-schedulers-rebased` branch with version `0.22.5`.
 The separate Dagger benchmark environment uses the registered `0.22.5` release.
 Setup releases old branch pins only in that separate Dagger environment;
-rerun `./instantiate_projects.sh` after updating.
+rerun `./deps-install/instantiate_projects.sh` after updating.
 These workloads do not use JACC.
 `BENCH_PROJECT`, `ODE_PROJECT`, and `INTOPT_PROJECT` remain available as
 per-workload launcher overrides. Launchers also accept `JULIA`, which takes
 precedence over `CUNUMERIC_BENCH_JULIA`.
 
 Existing checkouts/images using the old per-workload environments must rerun
-`./instantiate_projects.sh`. Apply any machine-specific `LocalPreferences.toml`
+`./deps-install/instantiate_projects.sh`. Apply any machine-specific `LocalPreferences.toml`
 to the shared environment; old manifests and preferences are not migrated.
 
 In cuNumeric.jl, initialize the pinned harness with
@@ -80,7 +80,7 @@ container remains a derived layer on the existing cuNumeric base image;
 cuPyNumeric also needs its conda environment:
 
 ```bash
-./install_cupynumeric.sh
+./deps-install/install_cupynumeric.sh
 ```
 
 Set `CUNUMERIC_BENCH_CONDA` if `conda` is not on `PATH`, or
@@ -184,10 +184,10 @@ julia --project=. run.jl --config=configs/multi_gpu/grayscott.toml --verbose
 Use the shared launcher for main and composability benchmarks:
 
 ```bash
-bash tune_dagger.sh                              # all enabled calls
-bash tune_dagger.sh grayscott nas_ft              # selected main benchmarks
-bash tune_dagger.sh krylov_cg ordinarydiffeq      # composability CG and ODE
-bash tune_dagger.sh --dry-run krylov_cg ordinarydiffeq
+bash scripts/tune_dagger.sh                              # all enabled calls
+bash scripts/tune_dagger.sh grayscott nas_ft              # selected main benchmarks
+bash scripts/tune_dagger.sh krylov_cg ordinarydiffeq      # composability CG and ODE
+bash scripts/tune_dagger.sh --dry-run krylov_cg ordinarydiffeq
 ```
 
 Comment out individual `tune` calls in the script to disable benchmarks.
@@ -204,7 +204,7 @@ size overrides and output paths.
 request update and pushes to `main`, using **Julia 1.13.1** on a hosted Ubuntu
 runner. The job checks out `JuliaLegate/cuNumeric.jl` at `develop` (cuNumeric 0.3
 and CNPreferences 0.1.4), runs the setup
-path and composability CLI tests, then runs the real `instantiate_projects.sh`
+path and composability CLI tests, then runs the real `deps-install/instantiate_projects.sh`
 in fresh copies of all project directories. It verifies the generated
 manifests, local cuNumeric/CNPreferences paths, and each environment's Dagger version and source.
 
@@ -258,7 +258,7 @@ V-cycles), so `n_iter` averages whole runs.
 zipped by position. A benchmark block may override `models`, `n_warmup`,
 `n_iter`, or `n_trial`.
 
-For JACC and Dagger, `run_benchmark.sh` restricts each worker to the requested
+For JACC and Dagger, `scripts/run_benchmark.sh` restricts each worker to the requested
 GPU count. It selects the first `gpus` entries from an existing
 `CUDA_VISIBLE_DEVICES` scheduler mask, or uses logical devices starting at zero
 when no mask is provided.
@@ -335,8 +335,8 @@ benchmarks use GFLOP/s, while NAS EP follows NPB and reports G random numbers/s.
 To plot existing CSV files:
 
 ```bash
-julia --project=. plot_results.jl results/<run-id>
-julia --project=. plot_results.jl results/<run-id> --fusion=on --format=pdf   # fused series only
+julia --project=. plotter/plot_results.jl results/<run-id>
+julia --project=. plotter/plot_results.jl results/<run-id> --fusion=on --format=pdf   # fused series only
 ```
 
 For the paper figures, run `./plot_all.sh`. It reads the configs in

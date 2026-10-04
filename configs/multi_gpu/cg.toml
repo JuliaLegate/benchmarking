@@ -1,6 +1,6 @@
 # CG weak scaling from 90,000,000 elements on one GPU (10x the NAS Class E 9,000,000).
 [Global]
-models = ["dagger"]
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 n_warmup = 1
 n_iter = 1
 n_trial = 5
@@ -8,7 +8,7 @@ check_correctness = true
 auto_size = false
 
 [[cg]]
-models = ["dagger"]
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 T = "Float64"
 gpus = [1, 2, 4, 8]
 cpus = 8

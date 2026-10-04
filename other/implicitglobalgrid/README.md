@@ -5,7 +5,7 @@ to ImplicitGlobalGrid (IGG 0.17, CUDA 5), one MPI rank per GPU.
 
 ## Setup
 
-`./instantiate_projects.sh` installs `environments/implicitglobalgrid`, creates
+`./deps-install/instantiate_projects.sh` installs `environments/implicitglobalgrid`, creates
 or updates the Conda `igg-mpi` environment (Open MPI 5 + UCX), and points
 MPIPreferences at it. Conda must be on `PATH`, or selected with
 `CUNUMERIC_BENCH_CONDA=/path/to/conda`.
@@ -19,7 +19,7 @@ bash other/implicitglobalgrid/setup_igg.sh
 `IGG_MPI_PREFIX` selects the Conda environment's location, `IGG_CUDA_VERSION`
 picks its CUDA (default `CUDA_VERSION_MAJOR_MINOR`, or `13.0` when unset), and
 `IGG_LOCAL_CUDA=1` uses a local CUDA toolkit. These settings also apply when
-running `instantiate_projects.sh`.
+running `deps-install/instantiate_projects.sh`.
 
 ## Run
 

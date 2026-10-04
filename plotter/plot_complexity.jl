@@ -199,7 +199,7 @@ end
 function complexity_main(args=ARGS)
     cfg = parse_complexity_args(args)
     raw = TOML.parsefile(cfg.config)
-    resolve(p) = isabspath(p) ? p : joinpath(@__DIR__, p)
+    resolve(p) = isabspath(p) ? p : joinpath(BENCH_ROOT, p)
     grid_raw = TOML.parsefile(resolve(get(raw, "grid", "configs/plots/grid.toml")))
     loc = load_loc(resolve(get(raw, "loc", "loc-analysis/results/summary.csv")))
     metrics = string.(get(raw, "metrics", ["cyclomatic", "sloc"]))

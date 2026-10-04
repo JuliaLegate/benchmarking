@@ -285,7 +285,7 @@ esac
                     self.assertGreater(len((output / "planned-cases.csv").read_text().splitlines()), 1)
 
     def test_source_selection(self):
-        script = Path(__file__).resolve().parents[1] / "instantiate_projects.sh"
+        script = Path(__file__).resolve().parents[1] / "deps-install/instantiate_projects.sh"
         for standalone in (False, True):
             with self.subTest(standalone=standalone), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
@@ -295,14 +295,15 @@ esac
                 (source / "lib/CNPreferences/Project.toml").touch()
                 bench = root / "benchmarking" if standalone else source / "benchmark"
                 bench.mkdir()
-                (bench / script.name).write_text(script.read_text(), newline="\n")
+                (bench / "deps-install").mkdir()
+                (bench / "deps-install" / script.name).write_text(script.read_text(), newline="\n")
                 # Keep this source-path test independent of Conda installation.
                 igg_setup = bench / "other/implicitglobalgrid/setup_igg.sh"
                 igg_setup.parent.mkdir(parents=True)
                 igg_setup.write_text('"$JULIA" --project=environments/implicitglobalgrid\n', newline="\n")
                 project = bench / "environments/composability/Project.toml"
                 project.parent.mkdir(parents=True)
-                project.write_text((script.parent / "environments/composability/Project.toml").read_text(), newline="\n")
+                project.write_text((script.parents[1] / "environments/composability/Project.toml").read_text(), newline="\n")
                 log = root / "args"
                 fake = root / "julia"
                 fake.write_text('#!/bin/bash\nprintf "%s\\n" "$@" >> "$SETUP_TEST_LOG"\n', newline="\n")
@@ -313,7 +314,7 @@ esac
                 if standalone:
                     # Relative overrides are relative to the caller, not the script.
                     env["CUNUMERIC_SOURCE"] = source.name
-                result = subprocess.run([BASH, shell_path(bench / script.name)], cwd=root,
+                result = subprocess.run([BASH, shell_path(bench / "deps-install" / script.name)], cwd=root,
                                         env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 args = log.read_text().splitlines()
@@ -325,7 +326,7 @@ esac
                 self.assertFalse((bench / "environments/krylov").exists())
                 log.unlink()
                 env["CUNUMERIC_SOURCE"] = shell_path(root / "missing")
-                result = subprocess.run([BASH, shell_path(bench / script.name)], cwd=root,
+                result = subprocess.run([BASH, shell_path(bench / "deps-install" / script.name)], cwd=root,
                                         env=env, capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("CUNUMERIC_SOURCE", result.stderr)

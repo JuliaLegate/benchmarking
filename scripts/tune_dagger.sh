@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tune main and composability benchmarks. Comment out calls below to disable them.
-#   ./tune_dagger.sh [--dry-run] [benchmark...]
-#   ./tune_dagger.sh krylov_cg ordinarydiffeq
+#   ./scripts/tune_dagger.sh [--dry-run] [benchmark...]
+#   ./scripts/tune_dagger.sh krylov_cg ordinarydiffeq
 # Main results append to tunes/<name>.csv; composability uses tunes/composability/.
 # Weak scaling: gpus[i] runs N[i] -> tunes/<name>.csv.
 # Strong scaling: one size on every GPU count -> tunes/<name>-strong.csv.
@@ -12,7 +12,7 @@ if [[ -n ${DAGGER_TUNE_CONFIG:-} ]]; then
     DAGGER_TUNE_CONFIG=$(realpath "$DAGGER_TUNE_CONFIG") || exit 1
     export DAGGER_TUNE_CONFIG
 fi
-cd "$(dirname "$0")" || exit 1
+cd "$(dirname "$0")/.." || exit 1   # benchmark root
 
 JULIA=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
 CPUS=8
@@ -37,7 +37,7 @@ tune() {
     esac
     echo
     echo "==> $name, $gpus GPU(s): ${*:3}"
-    cmd=(bash run_benchmark.sh --model=dagger --gpus="$gpus" --cpus=$CPUS --
+    cmd=(bash scripts/run_benchmark.sh --model=dagger --gpus="$gpus" --cpus=$CPUS --
         "$JULIA" "${julia_flags[@]}" --project="$project" --threads=$CPUS
         "$worker" "${@:2}" "${extra[@]}")
     if (( DRY )) && [[ $worker == src/dagger/tune.jl ]]; then

@@ -6,7 +6,7 @@ using TOML
 
 # Layout, styles and legend come from the grid plots; the tune parser from the Dagger worker.
 include(joinpath(@__DIR__, "plot_grid.jl"))
-include(joinpath(@__DIR__, "src", "dagger", "tunes.jl"))
+include(joinpath(BENCH_ROOT, "src", "dagger", "tunes.jl"))
 
 # Okabe-Ito (colorblind-safe), plus a distinct marker per GPU count.
 const GPU_STYLES = Dict(1 => ("#E69F00", :circle), 2 => ("#56B4E9", :rect),
@@ -103,7 +103,7 @@ function tunes_main(args=ARGS)
     cfg = parse_tunes_args(args)
     raw = TOML.parsefile(cfg.config)
     dir = get(raw, "tunes", "results-brev/tunes")
-    speedups = tune_speedups(read_dagger_tunes(isabspath(dir) ? dir : joinpath(@__DIR__, dir)))
+    speedups = tune_speedups(read_dagger_tunes(isabspath(dir) ? dir : joinpath(BENCH_ROOT, dir)))
     isempty(speedups) && error("no tune results with a 1 block/GPU baseline in $dir")
     names = filter(n -> haskey(speedups, n), string.(get(raw, "benchmarks", sort(collect(keys(speedups))))))
     columns = min(get(raw, "columns", 2), length(names))

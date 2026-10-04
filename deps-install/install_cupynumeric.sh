@@ -4,9 +4,9 @@
 # so we pin major.minor (patch ignored) and install from the legate channel.
 #
 # Usage:
-#   ./install_cupynumeric.sh                 # create a fresh env named cupynumeric-bench-<ver>
-#   ./install_cupynumeric.sh --name myenv    # override the env name
-#   ./install_cupynumeric.sh --into existing # install into an existing env instead of creating one
+#   ./deps-install/install_cupynumeric.sh                 # create a fresh env named cupynumeric-bench-<ver>
+#   ./deps-install/install_cupynumeric.sh --name myenv    # override the env name
+#   ./deps-install/install_cupynumeric.sh --into existing # install into an existing env instead of creating one
 set -euo pipefail
 CONDA="${CUNUMERIC_BENCH_CONDA:-${CONDA_EXE:-conda}}"
 JULIA="${CUNUMERIC_BENCH_JULIA:-julia}"
@@ -15,7 +15,7 @@ command -v "$CONDA" >/dev/null 2>&1 || {
     exit 1
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # benchmark root
 
 ENV_NAME=""
 INTO_ENV=""

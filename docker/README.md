@@ -12,7 +12,7 @@ docker run --rm --gpus=all cunumeric:benchmark \
   julia --project=. run.jl --config=configs/single_gpu/smoke.toml
 ```
 
-The image build runs `instantiate_projects.sh`, so the composability Julia
+The image build runs `deps-install/instantiate_projects.sh`, so the composability Julia
 environment is already initialized in `environments/composability` within the
 checkout. All composability launchers select it automatically; no external
 environment directory is needed. Build from a cuNumeric base image containing the Krylov
@@ -26,7 +26,7 @@ used for the build. From the image's default working directory,
 `git pull --ff-only` can fetch later commits on the same branch. The build
 requires a clean checkout and the two `BENCHMARK_*` build arguments above;
 the CI workflow supplies them automatically. If package projects change after
-pulling, rerun `./instantiate_projects.sh` to update the Julia environments.
+pulling, rerun `./deps-install/instantiate_projects.sh` to update the Julia environments.
 
 CI is opt-in: push a commit containing `[benchmark-container]` in this repo,
 or run **Benchmark container build and push** manually. Manual runs accept an

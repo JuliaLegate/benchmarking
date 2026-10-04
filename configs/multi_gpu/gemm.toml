@@ -2,7 +2,7 @@
 # (20261001-023020-EgnbwV), pinned so every model runs the same N.
 # N = 43408 * P^(1/3), aligned to 8.
 [Global]
-models = ["dagger"]
+models = ["cunumeric", "cupynumeric", "cudajl", "dagger"]   # JACC: no BLAS-3 GEMM
 n_warmup = 2
 n_iter = 5
 n_trial = 5

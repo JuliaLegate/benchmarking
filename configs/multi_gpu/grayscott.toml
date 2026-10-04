@@ -1,6 +1,6 @@
 # Gray-Scott weak scaling with a single-GPU CUDA.jl baseline.
 [Global]
-models = ["dagger", "cudajl"]
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 n_warmup = 2
 n_iter = 50
 n_trial = 5

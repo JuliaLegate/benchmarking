@@ -41,7 +41,7 @@ function usage(io=stdout)
     PATH/single/<workload> and PATH/multi/<workload>.
     Existing result CSVs are never overwritten.
 
-    Run ./instantiate_projects.sh first. Workers use environments/composability;
+    Run ./deps-install/instantiate_projects.sh first. Workers use environments/composability;
     JULIA or CUNUMERIC_BENCH_JULIA can override the current Julia executable.
     Existing BENCH_*, ODE_*, and INTOPT_* settings still control the workers.
 

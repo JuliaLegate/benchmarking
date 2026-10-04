@@ -262,7 +262,7 @@ def main():
     variants = [v for v in VARIANT_ORDER if v in args.variants]
     version = scc_version(args.scc_bin)
     if not re.search(r"\bv?([4-9]|\d{2,})\.", version):
-        raise SystemExit(f"{version} lacks --uloc/--cognitive; run ./install_scc.sh (v4.0.0).")
+        raise SystemExit(f"{version} lacks --uloc/--cognitive; run ./deps-install/install_scc.sh (v4.0.0).")
 
     with tempfile.TemporaryDirectory() as workdir:
         rows, formatter = summarize(benchmarks, variants, args.scc_bin, Path(workdir))

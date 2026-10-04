@@ -214,7 +214,7 @@ end
         end
     end
 
-    runner = joinpath(@__DIR__, "..", "run_benchmark.sh")
+    runner = joinpath(@__DIR__, "..", "scripts", "run_benchmark.sh")
     ok = `bash $runner --model=jacc --gpus=1 --cpus=0 -- bash -c $("test \"\$CUNUMERIC_BENCH_ACTIVE_MODEL\" = jacc")`
     nested = addenv(`bash $runner --model=jacc --gpus=1 --cpus=0 -- true`,
         "CUNUMERIC_BENCH_ACTIVE_MODEL"=>"cunumeric")

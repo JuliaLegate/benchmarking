@@ -5,7 +5,10 @@
 using Plots
 using Statistics
 
-include(joinpath(@__DIR__, "src", "parse_benchmarks.jl"))
+# The benchmark root (this file lives in plotter/).
+const BENCH_ROOT = dirname(@__DIR__)
+
+include(joinpath(BENCH_ROOT, "src", "parse_benchmarks.jl"))
 
 # GPU nodes often have no display; 100 = PNG. Override with GKSwstype if needed.
 get!(ENV, "GKSwstype", "100")
@@ -29,7 +32,7 @@ function parse_args(args)
     output_suffix = nothing
     fusion = "both"
     format = "png"
-    config = joinpath(@__DIR__, "configs", "multi_gpu", "all.toml")
+    config = joinpath(BENCH_ROOT, "configs", "multi_gpu", "all.toml")
 
     for arg in args
         if startswith(arg, "--out=")
@@ -47,16 +50,16 @@ function parse_args(args)
             results_dir = arg
         end
     end
-    results_dir = isabspath(results_dir) ? results_dir : joinpath(@__DIR__, results_dir)
-    config = isabspath(config) ? config : joinpath(@__DIR__, config)
+    results_dir = isabspath(results_dir) ? results_dir : joinpath(BENCH_ROOT, results_dir)
+    config = isabspath(config) ? config : joinpath(BENCH_ROOT, config)
     if out_dir === nothing
         out_dir = if basename(normpath(results_dir)) == "results"
-            joinpath(@__DIR__, "plots")
+            joinpath(BENCH_ROOT, "plots")
         else
-            joinpath(@__DIR__, "plots", basename(normpath(results_dir)))
+            joinpath(BENCH_ROOT, "plots", basename(normpath(results_dir)))
         end
     else
-        out_dir = isabspath(out_dir) ? out_dir : joinpath(@__DIR__, out_dir)
+        out_dir = isabspath(out_dir) ? out_dir : joinpath(BENCH_ROOT, out_dir)
     end
     # One figure per fusion setting: default file suffix _fused / _unfused.
     if output_suffix === nothing
@@ -113,7 +116,7 @@ const GROUP_TITLES = Dict(
     "nas_mg" => "NAS MG",
 )
 
-include(joinpath(@__DIR__, "src", "result_rows.jl"))
+include(joinpath(BENCH_ROOT, "src", "result_rows.jl"))
 
 _all_rows(runs) = reduce(vcat, runs; init=Row[])
 

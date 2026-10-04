@@ -1,4 +1,4 @@
-# CPU-only coordinator used by ../tune_dagger.sh. GPU packages load in workers.
+# CPU-only coordinator used by ../scripts/tune_dagger.sh. GPU packages load in workers.
 module ComposabilityTuning
 
 using Dates, TOML

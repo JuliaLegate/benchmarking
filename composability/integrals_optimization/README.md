@@ -39,7 +39,7 @@ cuNumeric checkout and its CNPreferences package:
 
 ```sh
 export CUNUMERIC_SOURCE=/path/to/cuNumeric.jl
-./instantiate_projects.sh
+./deps-install/instantiate_projects.sh
 ```
 
 The plume launcher uses the shared `environments/composability` project in local

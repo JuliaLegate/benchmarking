@@ -8,7 +8,7 @@ n_iter = 20
 n_trial = 5
 check_correctness = true
 auto_size = false
-models = ["dagger"]
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
 
 [[nas_mg]]
 T = "Float64"
