@@ -17,7 +17,7 @@ fusion = ["on", "off"]
 # Grids left to the GC per step (function 0, let 0, begin 4, expr 6, plain 22)
 # × ~3.14 GB per grid per GPU (weak scaling keeps it fixed).
 colorbar.label = "Garbage Collector\nResponsibility\n[GB/GPU/Iter]"
-colorbar.values = { function = 0, let = 0, begin = 12.5, expr = 18.8, plain = 69 }
+colorbar.values = { function = 0, let = 0, begin = 13, expr = 19, plain = 69 }
 
 [[figure]]   # Gray-Scott: cuNumeric (fused/unfused), cuPyNumeric, ImplicitGlobalGrid
 config = "configs/multi_gpu/grayscott.toml"
