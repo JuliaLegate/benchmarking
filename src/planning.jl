@@ -93,7 +93,9 @@ function candidate_runs(specs, gs, raw, baseline, budget)
             push!(runs, PlannedRun(s, c.model, n, m, memory_estimate(b, c), run_budget(budget, s)))
         end
     end
-    # Multiple explicit blocks must not create misleading overlays.
+    # Size sweeps intentionally have multiple dimensions at one GPU count.
+    single_gpu_mode(raw) && return runs
+    # Multiple explicit blocks must not create misleading GPU-scaling overlays.
     sizes = Dict{Tuple{String,Int},Tuple{Int,Int}}()
     for r in runs
         key = (r.spec.T, r.spec.gpus)
@@ -107,6 +109,8 @@ end
 function plan_runs(specs, gs, raw, groups, budget)
     isempty(specs) && error("No benchmarks selected")
     foreach(validate_spec, specs)
+    single_gpu_mode(raw) && !all(s -> s.gpus == 1, specs) &&
+        error("Global.single_gpu = true requires exactly one GPU for every run")
     group_for = Dict(member=>group for (group, members) in groups for member in members)
     group_members = Dict(groups)
     buckets = Dict{Any,Vector{BenchmarkSpec}}()

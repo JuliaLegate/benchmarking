@@ -85,8 +85,9 @@ function supports_benchmark(::CUDAJLModel, name::AbstractString)
     return name != "montecarlo_naive" && !endswith(name, "_accelerated")
 end
 # cuPyNumeric reimplements the default "cg" (its solver needs no accelerate macro).
+# Its Gray-Scott worker is registered only as "grayscott".
 function supports_benchmark(::CuPyNumericModel, name::AbstractString)
-    return name ∉ ("cg_plain", "montecarlo_naive") && !endswith(name, "_accelerated")
+    return name ∉ ("cg_plain", "grayscott_plain", "montecarlo_naive") && !endswith(name, "_accelerated")
 end
 function supports_benchmark(::JACCModel, name::AbstractString)
     return name in ("gemm", "montecarlo", "grayscott", "cg", "nas_ep", "nas_ft", "nas_mg")

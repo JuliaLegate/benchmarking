@@ -11,6 +11,7 @@ include("../src/result_rows.jl")
 include("../src/model_worker.jl")
 include("timing.jl")
 include("nas.jl")
+include("single_gpu.jl")
 
 const CONFIG = joinpath(@__DIR__, "..", "configs", "multi_gpu", "all.toml")
 const SMOKE_CONFIG = joinpath(@__DIR__, "..", "configs", "single_gpu", "smoke.toml")

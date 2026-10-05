@@ -142,7 +142,11 @@ function execute_plan(runs, gs, opts, budget, raw; launch=run, prepare=prepare_b
         save_manifest()
     end
     manifest["status"] = failed ? "incomplete" : "complete"
-    if isempty(opts.positional)
+    # The current plotter only supports GPU-count sweeps. Keep size-sweep
+    # results complete and available for plotting separately.
+    if single_gpu_mode(raw)
+        println("Skipping automatic plots for single-GPU size sweeps; CSVs and manifest are saved.")
+    elseif isempty(opts.positional)
         for T in unique(results_subdir(r.spec) for r in runs)
             try
                 plotter = joinpath(root, "plotter", "plot_results.jl")

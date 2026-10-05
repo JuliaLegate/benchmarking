@@ -84,8 +84,16 @@ function size_field(raw)
     return (:pinned, Int[Int(v) for v in vals])
 end
 
+# Single-GPU configs sweep problem sizes instead of GPU counts.
+function single_gpu_mode(raw)
+    value = get(get(raw, "Global", Dict()), "single_gpu", false)
+    value isa Bool || error("Global.single_gpu must be true or false")
+    return value
+end
+
 function parse_config(path; only=nothing, fusion_override=nothing, models_override=nothing)
     raw = TOML.parsefile(path)
+    single_gpu = single_gpu_mode(raw)
 
     g = raw["Global"]
     global_models = if haskey(g, "models")
@@ -124,7 +132,9 @@ function parse_config(path; only=nothing, fusion_override=nothing, models_overri
             any(k->k in ("N", "M", "n_samples"), keys(kwargs)) &&
                 error("$name.kwargs cannot override dimensions; use N and M")
             types = aslist(get(e, "T", "Float32"))
-            gpus = aslist(e["gpus"])
+            single_gpu && haskey(e, "gpus") &&
+                error("benchmark '$name': omit gpus when Global.single_gpu = true")
+            gpus = single_gpu ? [1] : aslist(e["gpus"])
             cpus = aslist(e["cpus"])
             fusion = aslist(fusion_override === nothing ? get(e, "fusion", true) : fusion_override)
             nmode, nvals = size_field(get(e, "N", nothing))
