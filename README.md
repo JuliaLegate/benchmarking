@@ -75,6 +75,25 @@ independently. With `auto_size = true`, an omitted size fills `mem_frac` of the
 smallest GPU. NAS blocks take their sizes from `kwargs.class`. GEMM needs
 per-model scratch bounds under `[workspace.<benchmark>]`.
 
+## Adding a Monte Carlo variant
+
+Start in `src/cunumeric/benchmarks/montecarlo.jl`. Each concrete type owns an
+explicit `run!` beside its registration: `MonteCarloMapReduce` uses `mapreduce`,
+and `MonteCarloBroadcast` materializes the integrand then sums it. Their existing
+config/result names remain `montecarlo` and `montecarlo_naive`.
+
+`src/common/benchmarks/montecarlo.jl` supplies the problem definition, sample
+initialization, sizing, and an independent CPU `run_reference!` for correctness.
+It does not supply a default `run!`: a new subtype must choose its own algorithm.
+The concrete implementations also run on host arrays for CPU-only testing.
+
+To add a cuNumeric variant, define its type with `n_samples::Int`, `name`,
+`register_benchmark`, `benchmark_array_module`, and `run!` in the cuNumeric file.
+Add a block and plot-group entry in `configs/multi_gpu/montecarlo_forms.toml`.
+Check its allocation assumptions in `src/memory.jl`; a new name currently gets
+the broadcast estimate. For configs using other models, update the backend
+support rules in `src/models.jl` so only implemented variants are scheduled.
+
 ## Tune Dagger
 
 ```bash

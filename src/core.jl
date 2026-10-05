@@ -141,6 +141,9 @@ cuda_runnable(b::AbstractBenchmark) = b
 correctness_result(::AbstractBenchmark, state, out) = out === nothing ? state : out
 correctness_atol_rtol(::AbstractBenchmark, ::Type{T}) where {T} = ref_atol_rtol(T)
 correctness_uses_cpu(::AbstractBenchmark) = false
+# Reference evaluation normally reuses the benchmark on the reference backend.
+# Families with an independent oracle can specialize this without a run! fallback.
+run_reference!(b::AbstractBenchmark, state...) = run!(b, state...)
 
 #########################################
 
@@ -247,17 +250,17 @@ function check_benchmark_correctness(
     atol, rtol = correctness_atol_rtol(b, T)
     nstep = correctness_iters(check_problem, gs)
     reference = correctness_uses_cpu(check_problem) ? Base : cuda_backend()
-    run_on(backend, kernel) = begin
+    run_on(backend, kernel; step! = run!) = begin
         state = to_backend_state(backend, seed)
         out = nothing
         for _ in 1:nstep
-            out = run!(kernel, state...)
+            out = step!(kernel, state...)
         end
         return correctness_result(kernel, state, out)
     end
     got = run_on(mod, check_problem)
     reference_kernel = reference === Base ? check_problem : cuda_runnable(check_problem)
-    expected = run_on(reference, reference_kernel)
+    expected = run_on(reference, reference_kernel; step! = run_reference!)
     return _with_autofetch(() -> _all_approx(got, expected, T; atol, rtol)) ? "pass" : "fail"
 end
 

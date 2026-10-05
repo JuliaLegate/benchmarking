@@ -42,15 +42,17 @@ function Base.similar(a::CountedArray, ::Type{T}, dims::Dims) where {T}
     return CountedArray(Array{T}(undef, dims))
 end
 
-@testset "Monte Carlo CPU fallback uses one fused broadcast" begin
-    for T in (Float32, Float64), B in (MonteCarloIntegration, MonteCarloNaive)
+@testset "Monte Carlo variants select their own algorithm" begin
+    for T in (Float32, Float64), B in (MonteCarloMapReduce, MonteCarloBroadcast)
         data = T[0, 0.5, 1, 2, 5]
         x = CountedArray(data)
         b = B{T}(; n_samples=length(x))
         MATERIALIZATIONS[] = 0
         got = run!(b, x)
-        @test MATERIALIZATIONS[] == 1
+        @test MATERIALIZATIONS[] == (B === MonteCarloBroadcast ? 1 : 0)
         @test got ≈ (T(10)/length(data))*sum(exp(-v^2) for v in data)
+        @test got ≈ run_reference!(b, data)
+        @test x.data == data == T[0, 0.5, 1, 2, 5]
         # Reproduce the old expression to prove this test detects the bug.
         MATERIALIZATIONS[] = 0
         sum(exp.(-x .^ 2))
@@ -58,15 +60,39 @@ end
     end
 end
 
+Base.@kwdef struct MissingMonteCarlo{T} <: AbstractMonteCarloIntegration{T}
+    n_samples::Int
+end
+Base.@kwdef struct IncorrectMonteCarlo{T} <: AbstractMonteCarloIntegration{T}
+    n_samples::Int
+end
+run!(::IncorrectMonteCarlo{T}, x) where {T} = zero(T)
+
+@testset "Monte Carlo has no implicit algorithm and an independent oracle" begin
+    gs = GlobalSettings(; n_warmup=0, n_iter=1)
+    for T in (Float32, Float64)
+        missing = MissingMonteCarlo{T}(; n_samples=16)
+        @test_throws MethodError run!(missing, only(correctness_seed(missing)))
+        for B in (MonteCarloMapReduce, MonteCarloBroadcast)
+            @test check_benchmark_correctness(B{T}(; n_samples=1024), gs; mod=Base) == "pass"
+        end
+        @test check_benchmark_correctness(
+            IncorrectMonteCarlo{T}(; n_samples=16), gs; mod=Base,
+        ) == "fail"
+    end
+    gemm = GEMM{Float32}(; N=4, M=4)
+    @test check_benchmark_correctness(gemm, gs; mod=Base) == "pass"
+end
+
 @testset "CPU correctness inputs" begin
-    mc = MonteCarloIntegration{Float32}(; n_samples=2048)
+    mc = MonteCarloMapReduce{Float32}(; n_samples=2048)
     mc_check = correctness_problem(mc)
     @test correctness_uses_cpu(mc)
     @test dims(mc_check) == (1024, 1)
     @test only(correctness_seed(mc_check)) ==
         Float32.(range(0.0f0, 10.0f0; length=1024))
-    @test correctness_problem(MonteCarloNaive{Float32}(; n_samples=2048)) isa
-        MonteCarloNaive{Float32}
+    @test correctness_problem(MonteCarloBroadcast{Float32}(; n_samples=2048)) isa
+        MonteCarloBroadcast{Float32}
 
     gemm = GEMM{Float32}(; N=16, M=12)
     gemm_check = correctness_problem(gemm)
@@ -134,6 +160,8 @@ end
     @test !isempty(specs) && all(spec.name in keys(BENCHMARKS) for spec in specs)
     @test all(spec.models == gs.models for spec in specs)
 end
+
+include("montecarlo_launch.jl")
 
 @testset "Execution model registry and isolation" begin
     @test parse_models(["cuNumeric", "CUDA.jl", "JACC", "Dagger.jl"]) ==
@@ -260,8 +288,8 @@ end
             @test !isempty(estimate.explanation)
         end
     end
-    b = MonteCarloIntegration{Float32}(; n_samples=1024)
-    naive = MonteCarloNaive{Float32}(; n_samples=1024)
+    b = MonteCarloMapReduce{Float32}(; n_samples=1024)
+    naive = MonteCarloBroadcast{Float32}(; n_samples=1024)
     @test peak_bytes(memory_estimate(b, MemoryContext())) == 8192
     @test peak_bytes(memory_estimate(b, MemoryContext(; model=:cupynumeric))) == 12288
     @test peak_bytes(memory_estimate(b, MemoryContext(; fusion=false))) == 8192

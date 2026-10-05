@@ -1,3 +1,5 @@
+# Shared problem definition and setup only. Each concrete backend variant must
+# define run! explicitly; the family does not choose a benchmark algorithm.
 abstract type AbstractMonteCarloIntegration{T} <: AbstractBenchmark{T} end
 
 dims(mci::AbstractMonteCarloIntegration) = (mci.n_samples, 1)
@@ -32,21 +34,8 @@ function initialize(mci::AbstractMonteCarloIntegration{T}; mod=benchmark_array_m
     return (x,)
 end
 
-_domain_volume(mci::AbstractMonteCarloIntegration{T}) where {T} = T(10) / mci.n_samples
+_montecarlo_weight(mci::AbstractMonteCarloIntegration{T}) where {T} = T(10) / mci.n_samples
 @inline _montecarlo_scalar_integrand(x) = exp(-(x*x))
-# Dot the negation too: plain `-` materializes the squared array and prevents
-# the surrounding exponential from sharing one broadcast with the square.
-_montecarlo_integrand(x) = exp.(.-(x .^ 2))
-
-function _montecarlo_mapreduce(mci::AbstractMonteCarloIntegration{T}, x) where {T}
-    total = mapreduce(_montecarlo_scalar_integrand, +, x; init=zero(T))
-    return _domain_volume(mci) * total
-end
-
-function run!(mci::AbstractMonteCarloIntegration, x)
-    integrand = _montecarlo_integrand(x)
-    return _domain_volume(mci) * sum(integrand)
-end
 
 # n_samples comes in as N; M is unused.
 function build_benchmark(
@@ -62,3 +51,12 @@ function correctness_seed(b::AbstractMonteCarloIntegration{T}) where {T}
     return (T.(range(T(0), T(10); length=b.n_samples)),)
 end
 correctness_uses_cpu(::AbstractMonteCarloIntegration) = true
+
+# Independent CPU oracle used only by the correctness checker, never for timing.
+function run_reference!(mci::AbstractMonteCarloIntegration{T}, x::Array) where {T}
+    total = zero(T)
+    for sample in x
+        total += exp(-sample^2)
+    end
+    return _montecarlo_weight(mci) * total
+end

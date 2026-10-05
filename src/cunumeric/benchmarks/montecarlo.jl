@@ -1,28 +1,33 @@
-Base.@kwdef struct MonteCarloIntegration{T} <: AbstractMonteCarloIntegration{T}
+# Keep the existing config/result keys while naming types by their algorithm.
+Base.@kwdef struct MonteCarloMapReduce{T} <: AbstractMonteCarloIntegration{T}
     n_samples::Int
 end
 
-name(::MonteCarloIntegration) = "montecarlo"
-register_benchmark("montecarlo", MonteCarloIntegration)
+name(::MonteCarloMapReduce) = "montecarlo"
+register_benchmark("montecarlo", MonteCarloMapReduce)
 
-Base.@kwdef struct MonteCarloNaive{T} <: AbstractMonteCarloIntegration{T}
+function run!(mci::MonteCarloMapReduce{T}, x) where {T}
+    total = mapreduce(_montecarlo_scalar_integrand, +, x; init=zero(T))
+    return _montecarlo_weight(mci) * total
+end
+
+Base.@kwdef struct MonteCarloBroadcast{T} <: AbstractMonteCarloIntegration{T}
     n_samples::Int
 end
 
-name(::MonteCarloNaive) = "montecarlo_naive"
-register_benchmark("montecarlo_naive", MonteCarloNaive)
+name(::MonteCarloBroadcast) = "montecarlo_naive"
+register_benchmark("montecarlo_naive", MonteCarloBroadcast)
 
-allowed_types(::Type{<:MonteCarloIntegration}) = cuNumeric.SUPPORTED_FLOAT_TYPES
-allowed_types(::Type{<:MonteCarloNaive}) = cuNumeric.SUPPORTED_FLOAT_TYPES
-
-if CUNUMERIC_BENCH_RUNTIME
-    run!(mci::MonteCarloIntegration, x::NDArray) = _montecarlo_mapreduce(mci, x)
-
-    function benchmark_backend_label(
-        ::MonteCarloIntegration, backend::String, default::String
-    )
-        return backend == "cunumeric" ? "cuNumeric (mapreduce)" : default
-    end
+function run!(mci::MonteCarloBroadcast, x)
+    # Dot the negation too so the integrand materializes as one broadcast.
+    integrand = exp.(.-(x .^ 2))
+    return _montecarlo_weight(mci) * sum(integrand)
 end
 
-benchmark_array_module(::Type{<:Union{MonteCarloIntegration,MonteCarloNaive}}) = cuNumeric
+function benchmark_backend_label(
+    ::MonteCarloMapReduce, backend::String, default::String
+)
+    return backend == "cunumeric" ? "cuNumeric (mapreduce)" : default
+end
+
+benchmark_array_module(::Type{<:Union{MonteCarloMapReduce,MonteCarloBroadcast}}) = cuNumeric
