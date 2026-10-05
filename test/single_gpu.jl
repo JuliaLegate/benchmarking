@@ -114,8 +114,8 @@ end
 
 @testset "Single-GPU example configs and execution" begin
     for (file, series_per_size, n_sizes, reference) in (
-        ("grayscott_forms.toml", 4, 6, "grayscott_plain"),
-        ("montecarlo_forms.toml", 5, 5, "montecarlo"),
+        ("grayscott_forms.toml", 4, 8, "grayscott_plain"),
+        ("montecarlo_forms.toml", 5, 9, "montecarlo"),
     )
         path = joinpath(@__DIR__, "..", "configs", "single_gpu", file)
         gs, specs = parse_config(path)
@@ -133,6 +133,14 @@ end
         @test !supports_benchmark(execution_model(:cupynumeric), "grayscott_function_accelerated")
         @test !supports_benchmark(execution_model(:cupynumeric), "montecarlo_naive")
         @test length(unique((r.N, r.M) for r in runs)) == n_sizes
+        # Match existing pinned one-GPU endpoints across all variants/references.
+        _, baseline_specs = parse_config(joinpath(@__DIR__, "..", "configs",
+            "multi_gpu", "$(native_name).toml"))
+        endpoint = only(s.args for s in baseline_specs if s.gpus == 1)
+        @test (maximum(r.N for r in runs), maximum(r.M for r in runs)) == Tuple(endpoint)
+        sizes = Set((r.N, r.M) for r in runs)
+        @test all(Set((r.N, r.M) for r in runs if (r.spec.name, r.model) == key) == sizes
+            for key in unique((r.spec.name, r.model) for r in runs))
         if startswith(file, "grayscott")
             @test all(r.N == r.M for r in runs)
             @test Set(r.spec.name for r in runs) ==

@@ -1,4 +1,5 @@
 # One-GPU size sweep: cuNumeric forms with CUDA.jl and cuPyNumeric references.
+# Powers of two through 16384, then the 28000 one-GPU size from multi_gpu/grayscott.toml.
 # julia --project=. run.jl --config=configs/single_gpu/grayscott_forms.toml
 [Global]
 single_gpu = true
@@ -22,21 +23,21 @@ models = ["cunumeric", "cudajl"]
 T = "Float32"
 cpus = 8
 fusion = "off"
-N = [256, 512, 1024, 2048, 4096, 8192]
-M = [256, 512, 1024, 2048, 4096, 8192]
+N = [256, 512, 1024, 2048, 4096, 8192, 16384, 28000]
+M = [256, 512, 1024, 2048, 4096, 8192, 16384, 28000]
 
 [[grayscott_function_accelerated]]
 models = ["cunumeric"]
 T = "Float32"
 cpus = 8
 fusion = "on"
-N = [256, 512, 1024, 2048, 4096, 8192]
-M = [256, 512, 1024, 2048, 4096, 8192]
+N = [256, 512, 1024, 2048, 4096, 8192, 16384, 28000]
+M = [256, 512, 1024, 2048, 4096, 8192, 16384, 28000]
 
 # cuPyNumeric has one native implementation, not the Julia accelerate forms.
 [[grayscott]]
 models = ["cupynumeric"]
 T = "Float32"
 cpus = 8
-N = [256, 512, 1024, 2048, 4096, 8192]
-M = [256, 512, 1024, 2048, 4096, 8192]
+N = [256, 512, 1024, 2048, 4096, 8192, 16384, 28000]
+M = [256, 512, 1024, 2048, 4096, 8192, 16384, 28000]
