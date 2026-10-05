@@ -114,7 +114,7 @@ end
 
 @testset "Single-GPU example configs and execution" begin
     for (file, series_per_size, n_sizes, reference) in (
-        ("grayscott_forms.toml", 4, 8, "grayscott_plain"),
+        ("grayscott_forms.toml", 3, 8, "grayscott"),
         ("montecarlo_forms.toml", 5, 9, "montecarlo"),
     )
         path = joinpath(@__DIR__, "..", "configs", "single_gpu", file)
@@ -144,9 +144,9 @@ end
         if startswith(file, "grayscott")
             @test all(r.N == r.M for r in runs)
             @test Set(r.spec.name for r in runs) ==
-                Set(("grayscott_plain", "grayscott_function_accelerated", "grayscott"))
-            @test all(r.model == :cupynumeric for r in runs if r.spec.name == "grayscott")
-            @test all(!r.spec.fusion for r in runs if r.spec.name == "grayscott_plain")
+                Set(("grayscott_function_accelerated", "grayscott"))
+            @test all(r.model in (:cudajl, :cupynumeric) for r in runs if r.spec.name == "grayscott")
+            @test !any(r.spec.name == "grayscott_plain" for r in runs)
             @test all(r.spec.fusion for r in runs if r.spec.name == "grayscott_function_accelerated")
         else
             @test all(r.spec.fusion for r in runs if r.spec.name == "montecarlo")

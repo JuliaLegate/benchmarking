@@ -101,9 +101,9 @@ the cuNumeric fusion sweep, and only for variants it implements.
 
 See `configs/single_gpu/grayscott_forms.toml` and
 `configs/single_gpu/montecarlo_forms.toml` for variant comparisons. Gray–Scott
-runs plain with fusion off and function accelerated with fusion on, plus
-CUDA.jl and cuPyNumeric references. The cuPyNumeric reference uses a separate
-`[[grayscott]]` block with `models = ["cupynumeric"]`; it has no Julia forms.
+runs function accelerated with fusion on, plus CUDA.jl and cuPyNumeric
+references in a separate `[[grayscott]]` block with
+`models = ["cudajl", "cupynumeric"]`; these references do not use the Julia forms.
 For Monte Carlo, cuPyNumeric runs its native array-expression-and-sum
 implementation under `[[montecarlo]]`. Each reference runs once per size;
 the fusion toggle applies only to cuNumeric. Select
