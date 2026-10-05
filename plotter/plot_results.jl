@@ -139,6 +139,14 @@ function group_title(group)
     return get(GROUP_TITLES, group, titlecase(replace(group, '_' => ' ')))
 end
 
+# Throughput unit, as the harness reports it (`throughput_label`). Gray-Scott counts
+# grid points updated, not FLOPs.
+function throughput_unit(benchmark)
+    startswith(benchmark, "nas_ep") && return "G random numbers/s"
+    startswith(benchmark, "grayscott") && return "G cells/s"
+    return "GFLOP/s"
+end
+
 # Variants are cuNumeric-only, so every label names the model.
 function variant_label(group, member)
     member == group && return nothing
@@ -286,7 +294,7 @@ function scaling_kind(series)
     return sweep && fixed ? "strong" : "weak"
 end
 
-function weak_scaling_figure(series; plot_title, log_values=false)
+function weak_scaling_figure(series; plot_title, log_values=false, unit="GFLOP/s")
     kind = scaling_kind(series)
     common = (
         xscale=:log2, xticks=([1, 2, 4, 8], ["1", "2", "4", "8"]), xlabel="GPUs",
@@ -312,7 +320,7 @@ function weak_scaling_figure(series; plot_title, log_values=false)
         (series_ymin_positive(series, :t, :tsd) / 1.5,
          series_ymax(series, :t, :tsd) * 1.5) :
         positive_ylim(series_ymax(series, :t, :tsd); pad=0.28)
-    p1 = plot(; ylabel=log_values ? "Throughput (log scale)" : "Throughput",
+    p1 = plot(; ylabel="Throughput ($unit" * (log_values ? ", log scale)" : ")"),
         title="Throughput", yscale=log_values ? :log10 : :identity,
         ylims=throughput_limits, common...)
     for s in series
@@ -381,7 +389,8 @@ function main(args=ARGS)
             kind = scaling_kind(series)
             # Implementations span orders of magnitude; log axes keep all visible.
             fig = weak_scaling_figure(
-                series; plot_title="NAS EP — $kind scaling", log_values=true
+                series; plot_title="NAS EP — $kind scaling", log_values=true,
+                unit=throughput_unit("nas_ep"),
             )
             out = joinpath(cfg.out_dir, "nas_ep_$(kind)_scaling$(cfg.output_suffix).$(cfg.format)")
             savefig(fig, out)
@@ -394,7 +403,8 @@ function main(args=ARGS)
         kind = scaling_kind(series)
         fig = weak_scaling_figure(
             series; plot_title=group_title(group) * " — $kind scaling" *
-                Dict("on" => " (fused)", "off" => " (unfused)", "both" => "")[cfg.fusion]
+                Dict("on" => " (fused)", "off" => " (unfused)", "both" => "")[cfg.fusion],
+            unit=throughput_unit(group),
         )
         out = joinpath(cfg.out_dir, "$(group)_$(kind)_scaling$(cfg.output_suffix).$(cfg.format)")
         savefig(fig, out)

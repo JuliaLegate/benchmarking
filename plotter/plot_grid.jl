@@ -140,12 +140,14 @@ function grid_line!(p, s, y, st; yerror=nothing, kw...)
 end
 
 # Axis labels only on the outer edge of the grid; every panel shares them.
+# `ylabel` (e.g. a throughput unit) labels this panel even off the first column.
 function panel_plot(series, metric; title, log_values, split=nothing, gridlines=true,
-    first_col, last_row, bottom_row, fix, st)
+    ylabel=nothing, first_col, last_row, bottom_row, fix, st)
+    labeled = first_col || ylabel !== nothing
     gpus = sort(unique(x.gpus for s in series for x in s.agg))
     p = plot(;
         title, xlabel=bottom_row ? "GPUs" : "",
-        ylabel=first_col ? METRICS[metric].ylabel : "",
+        ylabel=something(ylabel, first_col ? METRICS[metric].ylabel : ""),
         # GPU ticks are shared, so only the bottom panel of each column labels them.
         xscale=:log2, xticks=(gpus, last_row ? string.(gpus) : fill("", length(gpus))),
         xlims=(minimum(gpus) / 1.15, maximum(gpus) * 1.15), widen=false,
@@ -154,8 +156,8 @@ function panel_plot(series, metric; title, log_values, split=nothing, gridlines=
         grid=gridlines, gridcolor=:gray, gridalpha=0.25, gridlinewidth=0.6st.k, gridstyle=:solid,
         tickfontsize=st.tick, guidefontsize=st.guide, titlefontsize=st.title,
         titlefontfamily="DejaVuSans-Bold",   # TTF bold of the default font; GR built-ins mis-size
-        left_margin=(fix.ticks + (first_col ? fix.guide : 0)) * Plots.px +
-                    (first_col ? 3st.k * Plots.mm : 0Plots.mm),
+        left_margin=(fix.ticks + (labeled ? fix.guide : 0)) * Plots.px +
+                    (labeled ? 3st.k * Plots.mm : 0Plots.mm),
         bottom_margin=last_row ? (fix.bottom + (bottom_row ? fix.guide : 0)) * Plots.px :
                       -1Plots.mm,
         # GR adds 2mm on every side; above the title that is only white space.
@@ -337,7 +339,10 @@ end
 function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=true)
     # Same label always has the same style, so one shared legend covers all panels.
     legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
+    # Panels can differ in unit, so each throughput panel labels its own.
+    ylabel(i) = metric == "throughput" ? panels[i].unit : nothing
     draw(i; kw...) = panel_note!(panel_plot(panels[i].series, metric; title=panels[i].title,
+            ylabel=ylabel(i),
             log_values=panels[i].log, split=get(get(panels[i], :split, Dict()), metric, nothing),
             gridlines, st, kw...),
         get(panels[i], :note, nothing), panels[i].log && metric != "efficiency", st)
@@ -422,6 +427,7 @@ function grid_main(args=ARGS)
     panels = map(get(raw, "panel", [])) do p
         (series=panel_series(p),
          title=get(p, "title", group_title(p["benchmark"])),
+         unit=throughput_unit(p["benchmark"]),
          log=get(p, "log", false),
          split=get(p, "split", Dict()),
          note=get(p, "note", nothing))

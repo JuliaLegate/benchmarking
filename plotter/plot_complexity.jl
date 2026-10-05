@@ -8,9 +8,9 @@ using TOML
 include(joinpath(@__DIR__, "plot_grid.jl"))
 
 const COMPLEXITY_METRICS = Dict(
-    "cyclomatic" => (column="scc_complexity", xlabel="Cyclomatic complexity"),
-    "uloc" => (column="scc_uloc", xlabel="ULOC"),
-    "sloc" => (column="scc_code", xlabel="SLOC"),
+    "cyclomatic" => (column="scc_complexity", name="Cyclomatic complexity"),
+    "uloc" => (column="scc_uloc", name="ULOC"),
+    "sloc" => (column="scc_code", name="SLOC"),
 )
 
 # Series label => loc-analysis variant; other series are skipped.
@@ -99,12 +99,13 @@ function ideal_point!(p, st)
     return p
 end
 
+# Left is simpler; higher is faster (1 = fastest model on that benchmark).
 function complexity_panel(points, metric; show_mean, ideal, first_col, fix, st)
     m = COMPLEXITY_METRICS[metric]
     groups = model_groups(points, m.column)
     hi = maximum(maximum(g.xs) for g in groups)
     p = plot(;
-        xlabel=m.xlabel, ylabel=first_col ? "Relative perf." : "",
+        xlabel=m.name, ylabel=first_col ? "Relative perf." : "",
         # Just left of 0, so markers at 0 show whole.
         xlims=(-0.02hi, 1.08hi), ylims=(0, ideal ? 1.15 : 1.08), widen=false,
         # At most four round ticks, so narrow panels don't crowd them.
@@ -154,44 +155,34 @@ function write_points_csv(path, points, gpus)
     end
 end
 
-# Distance from each model's mean to the ideal (0, 1), with x scaled by the
-# panel's largest count and y already 0..1. Lower is better.
-function ideal_distances(points, metric)
+# Each model's mean count and mean relative performance, simplest first.
+function model_means(points, metric)
     groups = model_groups(points, COMPLEXITY_METRICS[metric].column)
-    hi = maximum(maximum(g.xs) for g in groups)
-    rows = [(label=g.series.label, x=mean(g.xs), y=mean(g.ys),
-             distance=hypot(mean(g.xs) / hi, 1 - mean(g.ys))) for g in groups]
-    return sort(rows; by=r -> r.distance)
+    rows = [(label=g.series.label, x=mean(g.xs), y=mean(g.ys)) for g in groups]
+    return sort(rows; by=r -> r.x)
 end
 
 r3(v) = round(v; digits=3)
 
 function complexity_summary(by_gpus, metrics)
     lines = ["# Complexity vs performance summary", "",
-        "Distance from each model's mean point to the ideal (no complexity, fastest), " *
-        "with x scaled to 0–1 by the panel's largest count. Lower is better.", ""]
-    overall = Dict{Tuple{String,String},Vector{Float64}}()
+        "Per model: mean count over benchmarks (lower = simpler) and mean relative " *
+        "performance (fastest time / model time; 1 = fastest).", ""]
+    perf = Dict{String,Vector{Float64}}()
     for (g, points) in by_gpus, metric in metrics
-        xlabel = COMPLEXITY_METRICS[metric].xlabel
-        push!(lines, "## $g GPU, $xlabel", "",
-            "| Rank | Model | Mean $xlabel | Mean relative performance | Distance |",
-            "|---:|---|---:|---:|---:|")
-        for (i, r) in enumerate(ideal_distances(points, metric))
-            push!(lines, "| $i | $(r.label) | $(round(r.x; digits=2)) | $(r3(r.y)) | $(r3(r.distance)) |")
-            push!(get!(overall, (metric, r.label), Float64[]), r.distance)
+        name = COMPLEXITY_METRICS[metric].name
+        push!(lines, "## $g GPU, $name", "",
+            "| Model | Mean $name | Mean relative performance |", "|---|---:|---:|")
+        for r in model_means(points, metric)
+            push!(lines, "| $(r.label) | $(round(r.x; digits=1)) | $(r3(r.y)) |")
+            metric == first(metrics) && push!(get!(perf, r.label, Float64[]), r.y)
         end
         push!(lines, "")
     end
-    for metric in metrics
-        rows = sort([(label, mean(d), length(d)) for ((m, label), d) in overall if m == metric];
-            by=r -> r[2])
-        push!(lines, "## Overall, $(COMPLEXITY_METRICS[metric].xlabel) " *
-            "(mean distance over $(join(first.(by_gpus), "/")) GPUs)", "",
-            "| Rank | Model | Mean distance | GPU counts |", "|---:|---|---:|---:|")
-        for (i, (label, d, n)) in enumerate(rows)
-            push!(lines, "| $i | $label | $(r3(d)) | $n |")
-        end
-        push!(lines, "")
+    push!(lines, "## Mean relative performance over $(join(first.(by_gpus), "/")) GPUs", "",
+        "| Model | Mean relative performance | GPU counts |", "|---|---:|---:|")
+    for (label, ys) in sort(collect(perf); by=kv -> -mean(kv[2]))
+        push!(lines, "| $label | $(r3(mean(ys))) | $(length(ys)) |")
     end
     return join(lines, "\n")
 end

@@ -7,7 +7,7 @@ include(joinpath(@__DIR__, "plot_grid.jl"))
 const FUSION_TAG = Dict("on" => " (fused)", "off" => " (unfused)", "both" => "")
 
 # One row of metric panels with a shared legend.
-function metric_row(series, metrics, title; panel_w, panel_h, st)
+function metric_row(series, metrics, title; unit, panel_w, panel_h, st)
     width = panel_w * length(metrics)
     rows_legend = legend_rows(series, width, st)
     legend_h = legend_dims(st).row * length(rows_legend) + 4
@@ -17,6 +17,7 @@ function metric_row(series, metrics, title; panel_w, panel_h, st)
     by_metric = isempty(title)
     plots = [panel_plot(series, m; title=by_metric ? METRICS[m].ylabel :
                      i == cld(length(metrics), 2) ? title : "",
+                 ylabel=m == "throughput" ? unit : nothing,
                  log_values=false, first_col=!by_metric, last_row=true, bottom_row=true, fix, st)
              for (i, m) in enumerate(metrics)]
     by_metric || foreach(p -> plot!(p; right_margin=2.5st.k * Plots.mm), plots[1:(end - 1)])
@@ -29,7 +30,7 @@ function metric_row(series, metrics, title; panel_w, panel_h, st)
 end
 
 # One panel with the legend stacked on its right, under optional title lines.
-function legend_right(series, metric; panel_w, panel_h, st, legend_title=String[])
+function legend_right(series, metric; unit, panel_w, panel_h, st, legend_title=String[])
     width = 2panel_w
     d = legend_dims(st)
     widest = max(maximum(s -> entry_px(s, d), series),
@@ -37,6 +38,7 @@ function legend_right(series, metric; panel_w, panel_h, st, legend_title=String[
     legend_frac = clamp((widest + d.gap + 30) / width, 0.25, 0.5)
     fix = gr_margin_fix(width, panel_h, st)
     p = panel_plot(series, metric; title="", log_values=false,
+        ylabel=metric == "throughput" ? unit : nothing,
         first_col=true, last_row=true, bottom_row=true, fix, st)
     plot!(p; top_margin=2Plots.mm)
     rows = length(series) + length(legend_title)
@@ -57,7 +59,7 @@ const VALUE_GRADIENT = cgrad([colorant"#E3A008", colorant"#F28E2B", colorant"#E1
 
 # One panel colored by a per-series value (`vals`), a color bar, and a legend row
 # below. Distinct values are evenly spaced on the gradient; ties share a color.
-function colorbar_figure(series, metric, vals, cbar_label; panel_w, panel_h, st)
+function colorbar_figure(series, metric, vals, cbar_label; unit, panel_w, panel_h, st)
     width = 2panel_w
     series = sort(series; by=s -> get(vals, s.label, Inf))
     tick_vals = unique(get(vals, s.label, NaN) for s in series)
@@ -73,6 +75,7 @@ function colorbar_figure(series, metric, vals, cbar_label; panel_w, panel_h, st)
     height = 1.15panel_h + legend_h
     fix = gr_margin_fix(width, height, st)
     p = panel_plot(series, metric; title="", log_values=false,
+        ylabel=metric == "throughput" ? unit : nothing,
         first_col=true, last_row=true, bottom_row=true, fix, st)
     # Room for the legend under the x label.
     bottom = (fix.bottom + fix.guide + legend_h) * Plots.px
@@ -175,7 +178,8 @@ function figures_main(args=ARGS)
             name = get(f, "name", group)
             if length(panels) == 1
                 row = string.(get(f, "metrics", metrics))
-                fig = metric_row(only(panels).series, row, only(panels).title; sizing(length(row))...)
+                fig = metric_row(only(panels).series, row, only(panels).title;
+                    unit=throughput_unit(group), sizing(length(row))...)
                 out = joinpath(out_dir, "$(name).$(format)")
                 savefig(fig, out)
                 println("wrote $out")
@@ -185,8 +189,8 @@ function figures_main(args=ARGS)
                 isempty(p.series) && continue
                 fig = haskey(f, "colorbar") ?
                     colorbar_figure(p.series, m, f["colorbar"]["values"], f["colorbar"]["label"];
-                        sizing(2)...) :
-                    legend_right(p.series, m; sizing(2)...,
+                        unit=throughput_unit(group), sizing(2)...) :
+                    legend_right(p.series, m; unit=throughput_unit(group), sizing(2)...,
                         legend_title=string.(aslist(get(f, "legend_title", String[]))))
                 tag = Dict("on" => "_fused", "off" => "_unfused", "both" => "")[fusion]
                 out = joinpath(out_dir, "$(name)_$(m)$(tag).$(format)")
