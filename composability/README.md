@@ -142,3 +142,85 @@ Set `BENCH_DRY_RUN=1`, `ODE_DRY_RUN=1`, or `INTOPT_DRY_RUN=1` to write
 (raw samples plus the correctness metric), per-case logs, the
 GPU mask, and a copy of the manifest; plots recompute means and standard errors
 from the samples.
+
+## Publication plots from separate runs
+
+Create one compact 2×2 figure with Krylov above ODE, Single GPU and Multi-GPU
+column headings shown once, and one centered legend at the bottom:
+
+```sh
+julia --project=. plotter/plot_composability.jl combined --results-root=/data/composability
+```
+
+CSV selections are in [`configs/plots/composability.toml`](../configs/plots/composability.toml).
+Edit its backend paths, or pass `--config=PATH` for another selection. Relative
+CSV paths resolve under `--results-root` (or the config's `results_root`, which
+defaults to `results/composability` under the repository). Absolute CSV paths
+are also accepted. Output is `plots/composability/composability.pdf`; use
+`--out=DIR` and `--format=png|svg|pdf` to override. Both scaling modes are required
+for each workload. Sizing and fonts still come from `configs/plots/figures.toml`.
+
+For separate workload figures,
+[`plotter/plot_composability.jl`](../plotter/plot_composability.jl) accepts a
+separate `results.csv` path for each backend and scaling mode. Run it once for
+`krylov` (stock CG) and once for `ode` (OrdinaryDiffEq heat). Paths are relative
+to the working directory, or absolute; quote paths containing spaces. The same
+CSV can supply several backends: each option selects only its own backend,
+ignoring other backends and Krylov's local implementation.
+
+```sh
+julia --project=. plotter/plot_composability.jl krylov \
+  --cuda=/data/KRYLOV_FINAL/single_cuda_dagger/krylov/results.csv \
+  --cunumeric-single=/data/KRYLOV_FINAL/single_cunumeric/krylov/results.csv \
+  --dagger-single=/data/KRYLOV_FINAL/single_cuda_dagger/krylov/results.csv \
+  --cunumeric-multi=/data/KRYLOV_FINAL/multi_cunumeric/results.csv \
+  --dagger-multi=/data/KRYLOV_FINAL/multi_dagger/results.csv
+
+julia --project=. plotter/plot_composability.jl ode \
+  --cuda=/data/ODE_FINAL/single/results.csv \
+  --cunumeric-single=/data/ODE_FINAL/single/results.csv \
+  --dagger-single=/data/ODE_FINAL/single/results.csv \
+  --cunumeric-multi=/data/ODE_FINAL/multi/results.csv
+```
+
+Omit inputs that are unavailable. Single-GPU inputs select `experiment=single`;
+multi-GPU inputs select `experiment=weak`, including their one-GPU baseline.
+ODE's `CuArray` rows are labeled CUDA.jl. The multi-GPU ODE panel includes
+“Dagger.jl: >1 GPU intractable” when no Dagger multi-GPU input is supplied.
+When `--dagger-single` is supplied, its result at the weak-scaling base N is
+also shown as the one-GPU Dagger point in the multi-GPU panel. This requires
+one exact size match, with matching precision and step count; no Dagger points
+are inferred for larger GPU counts. An explicit `--dagger-multi` takes precedence.
+
+Outputs are `plots/composability/{krylov,ode}.pdf`, with Single GPU on the left and
+Multi-GPU on the right and a centered shared legend below. Only supplied scaling
+modes are included. Use `--out=DIR` and `--format=png|svg|pdf` to override.
+Overall titles identify “Krylov.jl CG” and “OrdinaryDiffEq.jl 2D Heat Diffusion”.
+Figures share colors, backend names (including the configured cuNumeric name
+in `plotter/names.jl`), hollow markers, font family, and legend styling with the
+main paper plots. Sizing and fonts are read from `configs/plots/figures.toml`;
+its 3.5-inch width applies to the entire row, with one y-axis label on the left.
+The workload and column headings use the configured base font size, with
+compact heading and legend rows to limit outer whitespace.
+Single-GPU N ticks are labeled as powers of two; measurements
+remain at their actual N values. The x axes are logarithmic. Single-GPU y axes
+use `log(1 + time)`, with ticks labeled in the displayed timing units, so zero is a real
+tick while larger timings remain readable. All y axes start at zero.
+For multi-GPU ODE, timings above `8000 / steps` ms per step use a compressed
+upper segment with visible axis-break marks (400 ms per step for 20 steps),
+preserving room for the lower timing
+range and retaining Dagger's one-GPU point. Other multi-GPU panels use a linear
+y axis. Krylov reports “Time to Solve (ms)”, the mean complete solve duration.
+ODE reports “Time/step (ms)”: each `samples_ms` value is divided by that row's
+positive `steps` count before computing the mean and sample standard deviation. The ODE
+benchmark times a full fixed-step `solve` call, so this average includes
+amortized setup/cache allocation and all internal stages of each time step.
+The step count is read from the CSV, not hardcoded; missing or invalid counts
+are errors. Multi-GPU plots show weak-scaling time against GPU count.
+Legend symbols include visible illustrative error bars; plotted error bars show
+±1 sample standard deviation, matching the main plotting scripts, even when
+smaller than the markers.
+Precision, ODE step
+counts, weak-scaling base sizes, duplicate points, and cross-backend sizes at
+each GPU count are checked before plotting; selected inputs with no matching
+rows are errors. Run `--help` for the options.
