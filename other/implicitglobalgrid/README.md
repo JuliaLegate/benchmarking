@@ -22,13 +22,14 @@ and `IGG_LOCAL_CUDA=1` uses a local toolkit.
 # GPUS N [N_ITER=10] [N_WARMUP=5] [N_TRIALS=5]
 bash other/implicitglobalgrid/run_benchmark.sh 4 14000
 
-# Weak scaling, same sizes as configs/multi_gpu/grayscott.toml
+# Weak scaling, sizes of configs/multi_gpu/grayscott.toml (8 GPUs: N=79198)
 # [N_ITER=50] [N_WARMUP=2] [N_TRIALS=5]
 bash other/implicitglobalgrid/run_weak_scaling.sh
 ```
 
-`N` is the global square grid without halos and must split evenly across the
-process grid. With `IGG_OUTPUT` set, rows are appended to
+`N` is the global array size, as in the harness: the outer ring holds periodic
+copies, so `N-2` cells per dimension are updated, and `N-2` must split evenly
+across the process grid. With `IGG_OUTPUT` set, rows are appended to
 `$IGG_OUTPUT/Float32/grayscott_igg.csv` in the harness's format. The sweep
 defaults it to `results/implicitglobalgrid` and also saves one log per GPU
 count. `IGG_VERBOSE=1` prints startup progress to locate hangs.

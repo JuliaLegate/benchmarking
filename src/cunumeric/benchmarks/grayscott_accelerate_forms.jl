@@ -41,15 +41,16 @@ function _define_grayscott_accelerated_step(type, form=:function; aggressive=fal
 end
 
 if CUNUMERIC_BENCH_ACCELERATE
-    # `grayscott` merges the u/v updates into one launch; the form variants keep
-    # the default so they compare scope forms only.
-    _define_grayscott_accelerated_step(GrayScottAccelerated; aggressive=true)
-    for (type, form) in (
-        (GrayScottFunctionAccelerated, :function),
-        (GrayScottBeginAccelerated, :begin),
-        (GrayScottLetAccelerated, :let),
+    # `aggressive=true` merges the u/v updates into one launch. `begin` cannot:
+    # its named F_v and v_lap stay live; the expression form accelerates each
+    # statement separately.
+    for (type, form, aggressive) in (
+        (GrayScottAccelerated, :function, true),
+        (GrayScottFunctionAccelerated, :function, true),
+        (GrayScottBeginAccelerated, :begin, false),
+        (GrayScottLetAccelerated, :let, true),
     )
-        _define_grayscott_accelerated_step(type, form)
+        _define_grayscott_accelerated_step(type, form; aggressive)
     end
 end
 

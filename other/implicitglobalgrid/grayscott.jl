@@ -85,16 +85,18 @@ MPI.Init()
 igg_startup("MPI initialized")
 nprocs = MPI.Comm_size(MPI.COMM_WORLD)
 nprocs == gpus || error("Expected $gpus MPI ranks, got $nprocs")
-# N counts global simulation cells; each local array also needs two halo cells.
+# N is the global array size, as in the harness: the outer ring holds periodic
+# copies, so N-2 cells per dimension are updated. Local arrays add two halo cells.
+n = N - 2
 dims = MPI.Dims_create(nprocs, [0, 0, 1])
-all(d -> N % d == 0 && N ÷ d >= 2, dims[1:2]) ||
-    error("N=$N must divide evenly across the $(dims[1])x$(dims[2]) process grid, with at least two cells per rank in each dimension")
-nx, ny = N ÷ dims[1] + 2, N ÷ dims[2] + 2
+all(d -> n % d == 0 && n ÷ d >= 2, dims[1:2]) ||
+    error("N-2=$n must divide evenly across the $(dims[1])x$(dims[2]) process grid, with at least two cells per rank in each dimension")
+nx, ny = n ÷ dims[1] + 2, n ÷ dims[2] + 2
 igg_startup("Initializing global grid and selecting GPU")
 me, dims, nprocs, coords, comm = init_global_grid(nx, ny, 1;
     dimx=dims[1], dimy=dims[2], dimz=1, periodx=1, periody=1, init_MPI=false)
-me == 0 && @printf("Periodic simulation domain: %dx%d; local arrays: %dx%d including halos\n",
-    N, N, nx, ny)
+me == 0 && @printf("Periodic domain: %dx%d arrays, %dx%d updated cells; local arrays: %dx%d including halos\n",
+    N, N, n, n, nx, ny)
 times_ms = zeros(n_trials)
 for trial in 1:n_trials
     times_ms[trial] = grayscott(nx, ny, N, coords, n_iter, n_warmup, comm) / n_iter * 1e3
@@ -106,7 +108,7 @@ if me == 0
     std_ms = std(times_ms)
     sem_ms = std_ms / sqrt(n_trials)
     gupdates = Float64(N)^2 / (mean_ms * 1e6)
-    @printf("Gray-Scott: %d GPUs, global %dx%d simulation cells, %d trials, %d iterations/trial, %d warmup steps/trial\n",
+    @printf("Gray-Scott: %d GPUs, global %dx%d arrays, %d trials, %d iterations/trial, %d warmup steps/trial\n",
         gpus, N, N, n_trials, n_iter, n_warmup)
     @printf("Mean time: %.6f ms/step; stddev: %.6f ms; SEM: %.6f ms\n", mean_ms, std_ms, sem_ms)
     @printf("Throughput: %.6f G cell updates/s\n", gupdates)

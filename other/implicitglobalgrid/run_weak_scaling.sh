@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Run the same 1/2/4/8-GPU sizes as configs/multi_gpu/grayscott.toml.
+# Run the 1/2/4/8-GPU sizes of configs/multi_gpu/grayscott.toml. 8 GPUs uses
+# N=79198 (not 79200): N-2 must split across IGG's 4x2 process grid.
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 usage() {
     echo "Usage: bash $0 [N_ITER=50] [N_WARMUP=2] [N_TRIALS=5]" >&2
-    echo "Runs 1/2/4/8 GPUs with global N=28000/39600/56000/79200." >&2
+    echo "Runs 1/2/4/8 GPUs with global N=28000/39600/56000/79198." >&2
     echo "IGG_OUTPUT selects the output directory (default: results/implicitglobalgrid)." >&2
 }
 if [[ ${1:-} == --help || ${1:-} == -h ]]; then usage; exit 0; fi
@@ -26,7 +27,7 @@ export IGG_CUDAAWARE_MPI=${IGG_CUDAAWARE_MPI:-1}
 trap 'unset IGG_CUDAAWARE_MPI' EXIT
 
 gpus=(1 2 4 8)
-sizes=(28000 39600 56000 79200)
+sizes=(28000 39600 56000 79198)
 mkdir -p "$IGG_OUTPUT"
 for i in "${!gpus[@]}"; do
     bash "$script_dir/run_benchmark.sh" "${gpus[$i]}" "${sizes[$i]}" "$n_iter" "$n_warmup" "$n_trials" \
