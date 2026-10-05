@@ -200,6 +200,8 @@ Figures share colors, backend names (including the configured cuNumeric name
 in `plotter/names.jl`), hollow markers, font family, and legend styling with the
 main paper plots. Sizing and fonts are read from `configs/plots/figures.toml`;
 its 3.5-inch width applies to the entire row, with one y-axis label on the left.
+The workload and column headings use the configured base font size, with
+compact heading and legend rows to limit outer whitespace.
 Single-GPU N ticks are labeled as powers of two; measurements
 remain at their actual N values. The x axes are logarithmic. Single-GPU y axes
 use `log(1 + time)`, with ticks labeled in the displayed timing units, so zero is a real

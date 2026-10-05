@@ -159,6 +159,8 @@ function composability_sizing(columns)
     end
     width = panel_w * columns
     st = grid_style(font_size; legend_scale=get(sizing, "legend_scale", 1.0))
+    # Two levels of headings share the configured base size in this compact grid.
+    st = merge(st, (; title=st.tick))
     return (; width, panel_h, st)
 end
 
@@ -166,9 +168,9 @@ function composability_figure(workload, panels)
     (; width, panel_h, st) = composability_sizing(length(panels))
     series = unique(s -> s.label, [s for (_, panel) in panels for s in panel.series])
     legend = legend_rows(series, width, st)
-    legend_h = legend_dims(st).row * length(legend) + 4
+    legend_h = legend_dims(st).row * length(legend)
     body_h = panel_h + legend_h
-    title_h = 2.5st.title
+    title_h = 1.5st.title
     height = body_h + title_h
     title = workload == "krylov" ? "Krylov.jl CG" : "OrdinaryDiffEq.jl 2D Heat Diffusion"
     fix = gr_margin_fix(width, height, st)
@@ -177,10 +179,10 @@ function composability_figure(workload, panels)
              for (i, (mode, panel)) in enumerate(panels)]
     body = plot(plots...; layout=grid(1, length(plots)))
     return plot(body, grid_legend(legend, width, st; center=true, errorbars=true,
-        shift=length(legend) == 1 ? 0.17 : 0.0);
+        shift=length(legend) == 1 ? 0.10 : 0.0);
         layout=grid(2, 1; heights=[panel_h, legend_h] ./ body_h),
         size=(width, round(Int, height)), dpi=200, background_color=:white,
-        plot_title=title, plot_titlefontsize=st.title + 2, plot_titlevspan=title_h / height,
+        plot_title=title, plot_titlefontsize=st.title, plot_titlevspan=title_h / height,
         plot_titlefontfamily=Sys.iswindows() ? "Helvetica Bold" : "DejaVuSans-Bold")
 end
 
@@ -188,8 +190,8 @@ function combined_figure(workloads)
     (; width, panel_h, st) = composability_sizing(2)
     series = unique(s -> s.label, [s for (_, panels) in workloads for (_, panel) in panels for s in panel.series])
     legend = legend_rows(series, width, st)
-    legend_h = legend_dims(st).row * length(legend) + 4
-    heading_h = 2st.title
+    legend_h = legend_dims(st).row * length(legend)
+    heading_h = 1.5st.title
     height = length(workloads) * (heading_h + panel_h) + legend_h
     fix = gr_margin_fix(width, height, st)
     sections, heights = [], Float64[]
@@ -206,7 +208,7 @@ function combined_figure(workloads)
         append!(heights, [heading_h, panel_h])
     end
     push!(sections, grid_legend(legend, width, st; center=true, errorbars=true,
-        shift=length(legend) == 1 ? 0.17 : 0.0))
+        shift=length(legend) == 1 ? 0.10 : 0.0))
     push!(heights, legend_h)
     return plot(sections...; layout=grid(length(sections), 1; heights=heights ./ height),
         size=(width, round(Int, height)), dpi=200, background_color=:white)
