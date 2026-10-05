@@ -75,6 +75,45 @@ independently. With `auto_size = true`, an omitted size fills `mem_frac` of the
 smallest GPU. NAS blocks take their sizes from `kwargs.class`. GEMM needs
 per-model scratch bounds under `[workspace.<benchmark>]`.
 
+For a problem-size sweep on one GPU, set `single_gpu = true` in `[Global]`
+and omit `gpus` from every benchmark block (setting it is an error):
+
+```toml
+[Global]
+single_gpu = true
+models = ["cunumeric", "cudajl"]
+n_warmup = 2
+n_iter = 20
+n_trial = 5
+
+[[montecarlo]]
+T = "Float32"
+cpus = 8
+fusion = "on"
+N = [1024, 65536, 1048576, 16777216]
+```
+
+`N`, `M`, and `cpus` retain the existing zipped sweep behavior; scalars
+broadcast, and `T` and `fusion` sweep independently. Omitted `M` defaults to
+1; square Gray–Scott grids need matching `N` and `M` lists. Autosizing remains
+available for a single fitted size. CUDA.jl runs once per size regardless of
+the cuNumeric fusion sweep, and only for variants it implements.
+
+See `configs/single_gpu/grayscott_forms.toml` and
+`configs/single_gpu/montecarlo_forms.toml` for variant comparisons. Gray–Scott
+runs plain with fusion off and function accelerated with fusion on, plus
+CUDA.jl and cuPyNumeric references. The cuPyNumeric reference uses a separate
+`[[grayscott]]` block with `models = ["cupynumeric"]`; it has no Julia forms.
+For Monte Carlo, cuPyNumeric runs its native array-expression-and-sum
+implementation under `[[montecarlo]]`. Each reference runs once per size;
+the fusion toggle applies only to cuNumeric. Select
+variants with `--only` and override fusion with `--fusion=on`, `off`, or `both`.
+Monte Carlo mapreduce (`montecarlo`) requires fusion on; apply `off` or `both`
+only when selecting other variants, such as `--only=montecarlo_naive`.
+This mode saves CSVs and a manifest but skips automatic plots until the
+plotter supports problem-size sweeps. Omitting `single_gpu` or setting it to
+`false` preserves the existing GPU-count configuration and plotting behavior.
+
 ## Tune Dagger
 
 ```bash
