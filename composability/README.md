@@ -210,13 +210,14 @@ preserving room for the lower timing
 range and retaining Dagger's one-GPU point. Other multi-GPU panels use a linear
 y axis. Krylov reports “Time to Solve (ms)”, the mean complete solve duration.
 ODE reports “Time/step (ms)”: each `samples_ms` value is divided by that row's
-positive `steps` count before computing the mean and ± standard error. The ODE
+positive `steps` count before computing the mean and sample standard deviation. The ODE
 benchmark times a full fixed-step `solve` call, so this average includes
 amortized setup/cache allocation and all internal stages of each time step.
 The step count is read from the CSV, not hardcoded; missing or invalid counts
 are errors. Multi-GPU plots show weak-scaling time against GPU count.
 Legend symbols include visible illustrative error bars; plotted error bars show
-±1 standard error, even when smaller than the markers.
+±1 sample standard deviation, matching the main plotting scripts, even when
+smaller than the markers.
 Precision, ODE step
 counts, weak-scaling base sizes, duplicate points, and cross-backend sizes at
 each GPU count are checked before plotting; selected inputs with no matching

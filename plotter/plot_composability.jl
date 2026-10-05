@@ -49,10 +49,10 @@ function read_source(path, workload, experiment, backend)
             steps = workload == "ode" ? parse(Int, value("steps")) : nothing
             steps === nothing || steps > 0 || error("nonpositive step count in $path")
             # ODE samples time the full fixed-step solve, including setup.
-            # Normalize each sample before computing its mean and standard error.
+            # Normalize each sample before computing its mean and standard deviation.
             workload == "ode" && (samples ./= steps)
             push!(rows, (; backend, n, gpus, base_n, steps, eltype=value("eltype"),
-                t=mean(samples), tsd=std(samples) / sqrt(length(samples))))
+                t=mean(samples), tsd=std(samples)))
         end
     end
     isempty(rows) && error("no $workload $experiment $backend results in $path")
@@ -272,7 +272,7 @@ function usage(io=stdout)
     Omitted scaling modes are skipped. Single uses log(1 + time); all y axes start at zero.
     ODE samples are divided by their CSV step count to report average ms per step.
     Multi-GPU ODE splits the time axis at 8000 / steps ms per step when needed.
-    Means and standard errors are recomputed from samples_ms; Krylov uses stock CG.
+    Means and sample standard deviations are recomputed from samples_ms; Krylov uses stock CG.
     """)
 end
 
