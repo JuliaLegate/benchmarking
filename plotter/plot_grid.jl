@@ -140,7 +140,7 @@ function grid_line!(p, s, y, st; yerror=nothing, kw...)
 end
 
 # Axis labels only on the outer edge of the grid; every panel shares them.
-function panel_plot(series, metric; title, log_values, split=nothing, gridlines=true,
+function panel_plot(series, metric; title, log_values, zero_log=false, split=nothing, split_pad=0.05, gridlines=true,
     first_col, last_row, bottom_row, fix, st)
     gpus = sort(unique(x.gpus for s in series for x in s.agg))
     p = plot(;
@@ -170,21 +170,38 @@ function panel_plot(series, metric; title, log_values, split=nothing, gridlines=
         return p
     end
     y, e = metric == "throughput" ? (:h, :hsd) : (:t, :tsd)
+    if zero_log
+        hi = 1.5series_ymax(series, y, e)
+        # Transform the data and error-bar endpoints, while labeling real values.
+        exponent = floor(Int, log10(hi))
+        ticks = filter(v -> log1p(v) / log1p(hi) >= 0.18,
+            10.0 .^ collect(min(0, exponent):exponent))
+        isempty(ticks) && push!(ticks, hi)
+        ticks = [0.0; ticks]
+        plot!(p; ylims=(0, log1p(hi)), yscale=:identity,
+            yticks=(log1p.(ticks), compact_tick.(ticks)))
+        grid_lines!(p, map(series) do s
+            v, err = getfield.(s.agg, y), getfield.(s.agg, e)
+            (s, log1p.(v), (log1p.(v) .- log1p.(max.(v .- err, 0)),
+                log1p.(v .+ err) .- log1p.(v)))
+        end, st)
+        return p
+    end
     ylims = log_values ?
         (series_ymin_positive(series, y, e) / 1.5, series_ymax(series, y, e) * 1.5) :
         positive_ylim(series_ymax(series, y, e); pad=0.2)
     plot!(p; ylims, yscale=log_values ? :log10 : :identity)
     plot!(p; yformatter=compact_tick)
     above = [getfield(x, y) for s in series for x in s.agg if split !== nothing && getfield(x, y) > split]
-    (log_values || isempty(above)) || return split_panel(p, series, y, e, split, gpus, st)
+    (log_values || isempty(above)) || return split_panel(p, series, y, e, split, gpus, st; pad=split_pad)
     grid_lines!(p, [(s, getfield.(s.agg, y), getfield.(s.agg, e)) for s in series], st)
     return p
 end
 
 # Broken y axis in one panel: 0..split fills the bottom 70%, split..max is
 # compressed into the top 30%, and a mark on the left axis shows the break.
-function split_panel(p, series, y, e, split, gpus, st; frac=0.7)
-    hi = series_ymax(series, y, e) * 1.05
+function split_panel(p, series, y, e, split, gpus, st; frac=0.7, pad=0.05)
+    hi = series_ymax(series, y, e) * (1 + pad)
     # Data never lands in the gap: 0..split ends at its bottom, split..max starts at its top.
     gap = 0.045
     t(v) = v <= split ? (frac - gap) * v / split :
@@ -256,7 +273,7 @@ end
 # `center` centers the columns horizontally; `justify` spreads one row across the width. `nrows` spaces rows as if there
 # were that many (room for extra lines, like a legend title).
 function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false, nrows=length(rows), pad=0,
-        justify=false, char=nothing)
+        justify=false, char=nothing, errorbars=false)
     d = legend_dims(st)
     # `char`: per-character width override, where the default estimate runs short.
     d = merge(d, (; gap=d.gap + pad, char=something(char, d.char)))
@@ -283,6 +300,17 @@ function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false, n
             plot!(pl, [x, x + d.swatch], [y, y]; color=s.color, lw=0.9scale * st.lw, ls=s.ls,
                 label="")
             hollow_marker!(pl, [x + d.swatch / 2], [y], s, 0.65scale * st.ms)
+            if errorbars
+                # Illustrative whiskers extend beyond the marker, even when
+                # the measured errors in the panels are too small to see.
+                mid, cap, err = x + d.swatch / 2, 0.10d.swatch, 0.32step
+                plot!(pl, [mid, mid], [y - err, y + err];
+                    color=s.color, lw=0.6scale * st.lw, label="")
+                for endpoint in (y - err, y + err)
+                    plot!(pl, [mid - cap, mid + cap], [endpoint, endpoint];
+                        color=s.color, lw=0.6scale * st.lw, label="")
+                end
+            end
             annotate!(pl, x + d.swatch + 4, y, text(s.label, st.legend, :black, :left))
         end
     end
