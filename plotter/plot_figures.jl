@@ -134,7 +134,7 @@ function combined_figure(f, sizing)
     ylabel(i) = shared && i > 1 ? nothing : get(f, "ylabel",
         panels[i].metric == "throughput" ? panels[i].unit : METRICS[panels[i].metric].ylabel)
     draw(i; first_col, last_row, bottom_row, fix) = panel_plot(panels[i].series, panels[i].metric;
-        title=panels[i].title, log_values=panels[i].log, pow10=true, first_col=!shared || i == 1, last_row, bottom_row,
+        title=panels[i].title, log_values=panels[i].log, pow10=true, tight=shared, first_col=!shared || i == 1, last_row, bottom_row,
         fix, st=sz.st, ylabel=ylabel(i))
     return grid_layout(draw, length(panels), legend_series, length(panels);
         panel_w=sz.panel_w, panel_h=sz.panel_h, st=sz.st, center=true,

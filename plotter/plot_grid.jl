@@ -204,7 +204,8 @@ end
 # Axis labels only on the outer edge of the grid; every panel shares them.
 # `ylabel` (e.g. a throughput unit) labels this panel even off the first column.
 function panel_plot(series, metric; title, log_values, zero_log=false, split=nothing, split_pad=0.05,
-    gridlines=true, ylabel=nothing, pow10=false, first_col, last_row, bottom_row, fix, st)
+    gridlines=true, ylabel=nothing, pow10=false, tight=nothing, first_col, last_row, bottom_row, fix, st)
+    tight = something(tight, st.compact)
     labeled = !st.compact && (first_col || ylabel !== nothing)
     gpus = sort(unique(x.gpus for s in series for x in s.agg))
     p = plot(;
@@ -224,11 +225,13 @@ function panel_plot(series, metric; title, log_values, zero_log=false, split=not
                     (st.compact && first_col ? 4Plots.mm : 0Plots.mm),
         # Ticks above an empty slot hang into it; cancelling GR's padding for
         # them keeps their row's gap the same as the others.
-        # Compact: trimmed into GR's padding under the x label (white space only).
-        bottom_margin=bottom_row ? (fix.bottom + fix.guide) * Plots.px - (st.compact ? 3Plots.mm : 0Plots.mm) :
+        # `tight` (default: compact): trimmed into GR's padding under the x label
+        # (white space only), and a narrower gap between columns below.
+        bottom_margin=bottom_row ? (fix.bottom + fix.guide) * Plots.px - (tight ? 3Plots.mm : 0Plots.mm) :
                       last_row ? -text_px(st.tick) * Plots.px - 1Plots.mm : -1Plots.mm,
         # GR adds 2mm on every side; above the title that is only white space.
-        top_margin=fix.top * Plots.px - 2Plots.mm, right_margin=2Plots.mm,
+        top_margin=fix.top * Plots.px - 2Plots.mm,
+        right_margin=tight && first_col ? 0.5Plots.mm : 2Plots.mm,
     )
     if metric == "efficiency"
         effs = filter(!isnothing, efficiency.(series))
