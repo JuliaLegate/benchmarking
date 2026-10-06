@@ -5,10 +5,10 @@
 results_root = "results/composability"
 
 [krylov]
-cuda = "KRYLOV_FINAL/single_cuda_dagger/krylov/results.csv"
+cuda = "KRYLOV_FINAL/single_dagger_cuda/krylov/results.csv"
 cunumeric-single = "KRYLOV_FINAL/single_cunumeric/krylov/results.csv"
 cunumeric-multi = "KRYLOV_FINAL/multi_cunumeric/results.csv"
-dagger-single = "KRYLOV_FINAL/single_cuda_dagger/krylov/results.csv"
+dagger-single = "KRYLOV_FINAL/single_dagger_cuda/krylov/results.csv"
 dagger-multi = "KRYLOV_FINAL/multi_dagger/results.csv"
 
 [ode]

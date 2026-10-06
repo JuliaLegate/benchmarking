@@ -185,6 +185,10 @@ julia --project=. plotter/plot_composability.jl ode \
 
 Omit inputs that are unavailable. Single-GPU inputs select `experiment=single`;
 multi-GPU inputs select `experiment=weak`, including their one-GPU baseline.
+When `--cuda` is supplied, its largest single-GPU case is also shown at one GPU
+in each multi-GPU panel, with its measured standard-deviation error bar. Its
+size must match the weak-scaling base N, with matching precision and ODE step
+count; no CUDA points are inferred for larger GPU counts.
 ODE's `CuArray` rows are labeled CUDA.jl. The multi-GPU ODE panel includes
 “Dagger.jl: >1 GPU intractable” when no Dagger multi-GPU input is supplied.
 When `--dagger-single` is supplied, its result at the weak-scaling base N is
