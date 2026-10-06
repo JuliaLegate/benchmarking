@@ -120,6 +120,8 @@ function composability_panel(workload, experiment, panel; first_col, last_col, s
     # Reuse the paper grid's broken-axis styling for the slow Dagger baseline.
     split_at = workload == "ode" ? 8000.0 / first(rows).steps : Inf
     split = workload == "ode" && experiment == "weak" && any(r -> r.t > split_at, rows) ? split_at : nothing
+    # PIE.jl drawn last, over the other models (the legend keeps its own order).
+    series = sort(series; by=s -> startswith(s.label, CUNUMERIC_NAME))
     p = panel_plot(series, "time"; title, split, split_pad=0.50,
         log_values=false, zero_log=experiment == "single",
         first_col, last_row=true, bottom_row=true, fix, st)
