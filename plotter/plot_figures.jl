@@ -59,7 +59,7 @@ const VALUE_GRADIENT = cgrad([colorant"#E3A008", colorant"#F28E2B", colorant"#E1
 
 # One panel colored by a per-series value (`vals`), a color bar, and a legend row
 # below. Distinct values are evenly spaced on the gradient; ties share a color.
-function colorbar_figure(series, metric, vals, cbar_label; unit, panel_w, panel_h, st)
+function colorbar_figure(series, metric, vals, cbar_label; unit, log_values=false, panel_w, panel_h, st)
     width = 2panel_w
     series = sort(series; by=s -> get(vals, s.label, Inf))
     tick_vals = unique(get(vals, s.label, NaN) for s in series)
@@ -74,7 +74,7 @@ function colorbar_figure(series, metric, vals, cbar_label; unit, panel_w, panel_
     # Taller, for the color bar's title.
     height = 1.15panel_h + legend_h
     fix = gr_margin_fix(width, height, st)
-    p = panel_plot(series, metric; title="", log_values=false,
+    p = panel_plot(series, metric; title="", log_values,
         ylabel=metric == "throughput" ? unit : nothing,
         first_col=true, last_row=true, bottom_row=true, fix, st)
     # Room for the legend under the x label.
@@ -119,10 +119,7 @@ function legend_row!(f, series, width, height, legend_h, st, d; below_axis)
     for (s, wi) in zip(series, widths)
         plot!(f, [x, x + d.swatch], [0.5, 0.5]; subplot=3, color=s.color,
             lw=0.9scale * st.lw, label="")
-        scatter!(f, [x + d.swatch / 2], [0.5]; subplot=3, marker=s.marker,
-            ms=0.65scale * st.ms, color=s.color, markerstrokewidth=0, label="")
-        scatter!(f, [x + d.swatch / 2], [0.5]; subplot=3, marker=s.marker,
-            ms=0.39scale * st.ms, color=:white, markerstrokewidth=0, label="")
+        hollow_marker!(f, [x + d.swatch / 2], [0.5], s, 0.65scale * st.ms; subplot=3)
         annotate!(f, x + d.swatch + 4, 0.5, text(s.label, st.legend, :black, :left); subplot=3)
         x += wi + gap
     end
@@ -181,7 +178,7 @@ function figures_main(args=ARGS)
                 fig = metric_row(only(panels).series, row, only(panels).title;
                     unit=throughput_unit(group), sizing(length(row))...)
                 out = joinpath(out_dir, "$(name).$(format)")
-                savefig(fig, out)
+                savefig(scale_open_markers!(fig), out)
                 println("wrote $out")
                 continue
             end
@@ -189,12 +186,13 @@ function figures_main(args=ARGS)
                 isempty(p.series) && continue
                 fig = haskey(f, "colorbar") ?
                     colorbar_figure(p.series, m, f["colorbar"]["values"], f["colorbar"]["label"];
-                        unit=throughput_unit(group), sizing(2)...) :
+                        unit=throughput_unit(group), log_values=m in aslist(get(f, "log", String[])),
+                        sizing(2)...) :
                     legend_right(p.series, m; unit=throughput_unit(group), sizing(2)...,
                         legend_title=string.(aslist(get(f, "legend_title", String[]))))
                 tag = Dict("on" => "_fused", "off" => "_unfused", "both" => "")[fusion]
                 out = joinpath(out_dir, "$(name)_$(m)$(tag).$(format)")
-                savefig(fig, out)
+                savefig(scale_open_markers!(fig), out)
                 println("wrote $out")
             end
         end

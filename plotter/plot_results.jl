@@ -121,18 +121,18 @@ include(joinpath(BENCH_ROOT, "src", "result_rows.jl"))
 
 _all_rows(runs) = reduce(vcat, runs; init=Row[])
 
-function make_series(label, color, marker, ls, runs)
+function make_series(label, color, marker, ls, runs; by=:gpus)
     isempty(runs) && return nothing
     return (label=label, color=color, marker=marker, ls=ls,
-        agg=aggregate(_all_rows(runs)))
+        agg=aggregate(_all_rows(runs); by))
 end
 
-function load_csv_series(results_dir, bench, key, label, color, marker, ls)
+function load_csv_series(results_dir, bench, key, label, color, marker, ls; by=:gpus)
     path = joinpath(results_dir, "$(bench)_$(key).csv")
     isfile(path) || return nothing
     runs = load_runs(path)
     isempty(runs) && return nothing
-    return make_series(label, color, marker, ls, runs)
+    return make_series(label, color, marker, ls, runs; by)
 end
 
 function group_title(group)
@@ -160,14 +160,14 @@ function cunumeric_series_label(group, member, fused)
     return isempty(notes) ? CUNUMERIC_NAME : "$CUNUMERIC_NAME ($(join(notes, ", ")))"
 end
 
-function overlay_refs(results_dir, members)
+function overlay_refs(results_dir, members; by=:gpus)
     series = []
     seen = Set{String}()
     order = unique!(vcat([plot_baseline(members)], members))
     for (key, label, color, marker) in REF_FAMILIES
         key in seen && continue
         for member in order
-            s = load_csv_series(results_dir, member, key, label, color, marker, :solid)
+            s = load_csv_series(results_dir, member, key, label, color, marker, :solid; by)
             s === nothing && continue
             push!(series, s)
             push!(seen, key)
@@ -177,7 +177,7 @@ function overlay_refs(results_dir, members)
     return series
 end
 
-function group_series(results_dir, group, members; fusion="both")
+function group_series(results_dir, group, members; fusion="both", by=:gpus)
     series = []
     n_members = length(members)
     for (i, member) in enumerate(members)
@@ -199,11 +199,11 @@ function group_series(results_dir, group, members; fusion="both")
                 label = replace(stem, " accelerated" => "", "expression" => "expr")
                 ls = :solid
             end
-            s = load_csv_series(results_dir, member, key, label, color, marker, ls)
+            s = load_csv_series(results_dir, member, key, label, color, marker, ls; by)
             s === nothing || push!(series, s)
         end
     end
-    append!(series, overlay_refs(results_dir, members))
+    append!(series, overlay_refs(results_dir, members; by))
     return filter(!isnothing, series)
 end
 

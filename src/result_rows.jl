@@ -32,21 +32,22 @@ function load_runs(path)
     return runs
 end
 
-function aggregate(rows)
-    by = Dict{Int,Vector{Row}}()
+# One point per GPU count, or per problem size with `by=:N` (single-GPU sweeps).
+function aggregate(rows; by=:gpus)
+    groups = Dict{Int,Vector{Row}}()
     for r in rows
-        push!(get!(by, r.gpus, Row[]), r)
+        push!(get!(groups, getfield(r, by), Row[]), r)
     end
-    for (g, rs) in by
-        length(unique((r.N, r.M) for r in rs)) == 1 ||
-            error("Cannot combine different dimensions at $g GPUs; select one invocation")
+    for (k, rs) in groups
+        length(unique((r.gpus, r.N, r.M) for r in rs)) == 1 ||
+            error("Cannot combine different dimensions at $by=$k; select one invocation")
     end
     sd(x) = length(x)>1 ? std(x) : 0.0
     return [
-        (gpus=g, N=first(by[g]).N, M=first(by[g]).M,
-            t=mean(getfield.(by[g], :time_ms)), tsd=sd(getfield.(by[g], :time_ms)),
-            h=mean(getfield.(by[g], :thr)), hsd=sd(getfield.(by[g], :thr))) for
-        g in sort(collect(keys(by)))
+        (gpus=first(groups[k]).gpus, N=first(groups[k]).N, M=first(groups[k]).M,
+            t=mean(getfield.(groups[k], :time_ms)), tsd=sd(getfield.(groups[k], :time_ms)),
+            h=mean(getfield.(groups[k], :thr)), hsd=sd(getfield.(groups[k], :thr))) for
+        k in sort(collect(keys(groups)))
     ]
 end
 

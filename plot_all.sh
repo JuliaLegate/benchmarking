@@ -1,7 +1,7 @@
 #!/bin/bash
-# Each configs/plots/grid*.toml -> plots/<name>/ (grid + speedup summary),
-# then the standalone figures in configs/plots/figures.toml -> plots/figures/,
-# the complexity plots -> plots/complexity/ and the Dagger tunes -> plots/tunes/.
+# Every paper figure: each configs/plots/grid*.toml -> plots/<name>/, then
+# figures, complexity, tunes and size sweeps, and last the composability figure
+# (its CSVs are under configs/plots/composability.toml's results_root).
 set -euo pipefail
 cd "$(dirname "$0")"
 julia=${JULIA:-${CUNUMERIC_BENCH_JULIA:-julia}}
@@ -11,3 +11,5 @@ done
 "$julia" --project=. plotter/plot_figures.jl
 "$julia" --project=. plotter/plot_complexity.jl
 "$julia" --project=. plotter/plot_tunes.jl
+"$julia" --project=. plotter/plot_sweeps.jl
+"$julia" --project=. plotter/plot_composability.jl combined

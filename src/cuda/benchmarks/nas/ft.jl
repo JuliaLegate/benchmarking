@@ -1,37 +1,18 @@
 # LIMITATION: NPB-GPU uses a hand-written Stockham FFT, whereas this CUDA.jl
-# baseline uses cuFFT through AbstractFFTs. Initial-condition generation,
-# index-map construction, evolution, and 1024-point checksum sampling use
-# device kernels. Plane-start seeds are computed/uploaded on the host inside
-# timing; one GPU thread generates each plane's RNG sequence. CUDA.jl is
-# intentionally single-GPU. Unlike NPB's FFT, ifft! normalizes the full array.
+# baseline uses cuFFT through AbstractFFTs. The initial field (one GPU thread
+# per plane's RNG sequence) and twiddle are built in `initialize` (untimed);
+# `run!` restarts from a device copy of the field. Evolution and 1024-point
+# checksum sampling use device kernels. CUDA.jl is intentionally single-GPU.
+# Unlike NPB's FFT, ifft! normalizes the full array.
 
-struct CUDANASFTState{A,T,S,I,C}
+struct CUDANASFTState{A,T,I,C}
+    initial::A
     u0::A
     u1::A
     twiddle::T
-    starts::S
-    host_starts::Vector{Float64}
     indices::I
     samples::C
     checksums::Vector{C}
-end
-
-function initialize(b::CUDANASFT{Float64}; mod=CUDA)
-    p = validate_nas_ft(b)
-    shape = (p.nx, p.ny, p.nz)
-    u0 = CUDA.zeros(ComplexF64, shape)
-    u1 = similar(u0)
-    twiddle = CUDA.zeros(Float64, shape)
-    starts = CUDA.zeros(Float64, p.nz)
-    indices = CUDA.CuArray(Int64.(nas_ft_checksum_indices(p)))
-    samples = CUDA.zeros(ComplexF64, NAS_FT_CHECKSUM_SAMPLES)
-    checksums = [CUDA.zeros(ComplexF64, 1) for _ in 1:p.niter]
-    return (
-        CUDANASFTState(
-            u0, u1, twiddle, starts, Vector{Float64}(undef, p.nz),
-            indices, samples, checksums,
-        ),
-    )
 end
 
 @inline function cuda_nas_ft_randlc(x, a)
@@ -89,18 +70,36 @@ function cuda_nas_ft_gather_kernel!(samples, values, indices)
     return nothing
 end
 
-function run!(b::CUDANASFT, s::CUDANASFTState)
-    p = nas_ft_parameters(b.class)
-    nas_ft_plane_starts!(s.host_starts, p.nx, p.ny)
-    copyto!(s.starts, s.host_starts)
+function initialize(b::CUDANASFT{Float64}; mod=CUDA)
+    p = validate_nas_ft(b)
+    shape = (p.nx, p.ny, p.nz)
+    initial = CUDA.zeros(ComplexF64, shape)
+    twiddle = CUDA.zeros(Float64, shape)
+    starts = CUDA.CuArray(nas_ft_plane_starts!(Vector{Float64}(undef, p.nz), p.nx, p.ny))
     threads = 256
     CUDA.@cuda threads=threads blocks=cld(p.nz, threads) cuda_nas_ft_initial_kernel!(
-        s.u0, s.starts, p.nx*p.ny
+        initial, starts, p.nx*p.ny
     )
-    CUDA.@cuda threads=threads blocks=cld(length(s.twiddle), threads) cuda_nas_ft_twiddle_kernel!(
-        s.twiddle, p.nx, p.ny, p.nz, -4.0*NAS_FT_ALPHA*pi^2
+    CUDA.@cuda threads=threads blocks=cld(length(twiddle), threads) cuda_nas_ft_twiddle_kernel!(
+        twiddle, p.nx, p.ny, p.nz, -4.0*NAS_FT_ALPHA*pi^2
     )
+    CUDA.synchronize()
+    CUDA.unsafe_free!(starts)
+    indices = CUDA.CuArray(Int64.(nas_ft_checksum_indices(p)))
+    samples = CUDA.zeros(ComplexF64, NAS_FT_CHECKSUM_SAMPLES)
+    checksums = [CUDA.zeros(ComplexF64, 1) for _ in 1:p.niter]
+    return (
+        CUDANASFTState(
+            initial, similar(initial), similar(initial), twiddle, indices, samples, checksums,
+        ),
+    )
+end
+
+function run!(b::CUDANASFT, s::CUDANASFTState)
+    p = nas_ft_parameters(b.class)
+    copyto!(s.u0, s.initial)
     fft!(s.u0)
+    threads = 256
     for iter in 1:p.niter
         s.u0 .*= s.twiddle
         copyto!(s.u1, s.u0)

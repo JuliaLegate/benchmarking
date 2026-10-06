@@ -81,12 +81,12 @@ end
 text_px(pt) = 1.4 * pt * 100 / 72   # GR line height; Plots' px is 1/100 inch
 
 # All sizes scale with the tick font, so proportions hold at print width.
-function grid_style(font_size; legend_scale=1.0)
+function grid_style(font_size; legend_scale=1.0, marker_scale=1.0)
     k = font_size / 11
     return (tick=font_size, guide=font_size + 1, title=font_size + 2,
             # Int: Plots reads a Float text size as a rotation angle.
             legend=round(Int, legend_scale * (font_size - 1)), legend_k=legend_scale * k,
-            lw=2.4k, ms=6k, k)
+            lw=2.4k, ms=4k * marker_scale, k)
 end
 
 # GR sizes margins as if text were normalized per side, but it is normalized
@@ -117,9 +117,24 @@ end
 # A colored marker with a smaller white one on top. GR's PDF output scales marker
 # outlines (markerstrokewidth) with canvas height, so tall figures got near-solid
 # markers; filled markers keep the same size in every figure.
-function hollow_marker!(p, x, y, s, ms)
-    scatter!(p, x, y; marker=s.marker, ms, color=s.color, markerstrokewidth=0, label="")
-    return scatter!(p, x, y; marker=s.marker, ms=0.6ms, color=:white, markerstrokewidth=0, label="")
+# Open marker: clear fill, so lines and other markers show through. The stroke is
+# set for a 500 px canvas; `scale_open_markers!` fits it to the final canvas.
+const OPEN_STROKE = 0.4   # stroke / marker size
+function hollow_marker!(p, x, y, s, ms; kw...)
+    return scatter!(p, x, y; marker=s.marker, ms, color=Plots.RGBA(1, 1, 1, 0), msc=s.color,
+        markerstrokewidth=OPEN_STROKE * ms, label="", kw...)
+end
+
+# GR divides line widths and marker sizes by min(canvas)/500 but not marker
+# strokes, so open-marker strokes would grow with the canvas. Call once, before saving.
+function scale_open_markers!(fig)
+    nominal = minimum(fig[:size]) / 500
+    for sp in fig.subplots, s in sp.series_list
+        c = s[:markercolor]
+        c isa Plots.Colorant && Plots.alpha(c) == 0 || continue
+        s.plotattributes[:markerstrokewidth] = s[:markerstrokewidth] / nominal
+    end
+    return fig
 end
 
 # One series' line and thin error bars (Plots would draw them at the line width).
@@ -438,7 +453,8 @@ function grid_dimensions(raw, columns)
         panel_w, panel_h = w, panel_h * w / panel_w
         font_size *= 2
     end
-    return panel_w, panel_h, grid_style(font_size; legend_scale=get(raw, "legend_scale", 1.0))
+    return panel_w, panel_h, grid_style(font_size; legend_scale=get(raw, "legend_scale", 1.0),
+        marker_scale=get(raw, "marker_scale", 1.0))
 end
 
 function grid_main(args=ARGS)
@@ -467,7 +483,7 @@ function grid_main(args=ARGS)
         out = joinpath(cfg.out_dir, "grid_$(m).$(format)")
         fig = grid_figure(panels, m, columns; panel_w, panel_h, st,
             gridlines=get(raw, "gridlines", true))
-        savefig(fig, out)
+        savefig(scale_open_markers!(fig), out)
         println("wrote $out")
     end
     summary = speedup_summary(panels)

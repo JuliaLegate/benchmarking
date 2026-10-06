@@ -3,7 +3,7 @@
 
 grid = "configs/plots/grid.toml"           # runs to plot
 loc = "loc-analysis/results/summary.csv"   # scc counts
-metrics = ["cyclomatic", "sloc"]           # also "uloc"
+metrics = ["cyclomatic"]           # also "uloc" and "sloc"
 gpus = [1, 2, 4, 8]
 hide = ["cuPyNumeric"]
 mean = true    # mean marker per model

@@ -1,17 +1,15 @@
 # Host and device arrays use (nx, ny, nz). Each 3-D FFT is one pass.
+# The initial field and twiddle are built in `initialize` (untimed); `run!`
+# restarts from a device copy of the field.
 # Checksums use a masked reduction whose scale accounts for `bfft!`.
 
-struct CuNumericNASFTState{A,M,X,Y,Z,H,R,C}
+struct CuNumericNASFTState{A,M,C}
+    initial::A
     u0::A
     u1::A
     twiddle::A
     mask::M
     product::A
-    ix2::X
-    iy2::Y
-    iz2::Z
-    host_initial::H
-    rng_scratch::R
     checksums::C
 end
 
@@ -37,28 +35,27 @@ end
 function initialize(b::NASFourierTransform{Float64}; mod=cuNumeric)
     p = validate_nas_ft(b)
     shape = (p.nx, p.ny, p.nz)
-    u0 = mod.zeros(ComplexF64, shape)
-    u1 = mod.zeros(ComplexF64, shape)
-    # Matching element types avoid promoted temporaries.
-    twiddle = mod.zeros(ComplexF64, shape)
-    mask = mod.NDArray(cunumeric_nas_ft_checksum_mask(p))
-    product = mod.zeros(ComplexF64, shape)
+    host = Array{ComplexF64}(undef, shape)
+    scratch = Vector{UInt64}(undef, min(2length(host), 1 << 20))
+    initial = mod.zeros(ComplexF64, shape)
+    copyto!(initial, nas_ft_initial_conditions_uint64!(host, scratch))
     ix2 = mod.NDArray(reshape(cunumeric_nas_ft_frequency_squares(p.nx), p.nx, 1, 1))
     iy2 = mod.NDArray(reshape(cunumeric_nas_ft_frequency_squares(p.ny), 1, p.ny, 1))
     iz2 = mod.NDArray(reshape(cunumeric_nas_ft_frequency_squares(p.nz), 1, 1, p.nz))
-    host = Array{ComplexF64}(undef, p.nx, p.ny, p.nz)
-    scratch = Vector{UInt64}(undef, min(2length(host), 1 << 20))
+    # Matching element types avoid promoted temporaries.
+    twiddle = mod.zeros(ComplexF64, shape)
+    ap = -4.0*NAS_FT_ALPHA*pi^2
+    cuNumeric.@allowpromotion twiddle .= exp.(ap .* (ix2 .+ iy2 .+ iz2))
+    foreach(cuNumeric.destroy!, (ix2, iy2, iz2))
     return (CuNumericNASFTState(
-        u0, u1, twiddle, mask, product, ix2, iy2, iz2, host, scratch, Any[],
+        initial, mod.zeros(ComplexF64, shape), mod.zeros(ComplexF64, shape), twiddle,
+        mod.NDArray(cunumeric_nas_ft_checksum_mask(p)), mod.zeros(ComplexF64, shape), Any[],
     ),)
 end
 
 function run!(b::NASFourierTransform, s::CuNumericNASFTState)
     p = nas_ft_parameters(b.class)
-    nas_ft_initial_conditions_uint64!(s.host_initial, s.rng_scratch)
-    copyto!(s.u0, s.host_initial)
-    ap = -4.0*NAS_FT_ALPHA*pi^2
-    cuNumeric.@allowpromotion s.twiddle .= exp.(ap .* (s.ix2 .+ s.iy2 .+ s.iz2))
+    copyto!(s.u0, s.initial)
     fft!(s.u0)
     for _ in 1:p.niter
         map!(*, s.u0, s.u0, s.twiddle)
@@ -72,8 +69,7 @@ end
 function cleanup!(::NASFourierTransform, s::CuNumericNASFTState)
     foreach(cuNumeric.destroy!, s.checksums)
     empty!(s.checksums)
-    foreach(cuNumeric.destroy!,
-        (s.u0, s.u1, s.twiddle, s.mask, s.product, s.ix2, s.iy2, s.iz2))
+    foreach(cuNumeric.destroy!, (s.initial, s.u0, s.u1, s.twiddle, s.mask, s.product))
     return nothing
 end
 

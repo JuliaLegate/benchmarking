@@ -1,9 +1,8 @@
 """NAS FT using cuPyNumeric's full 3-D FFT.
 
 LIMITATION: cuPyNumeric has no NPB 46-bit RNG primitive, so the exact initial
-field is generated with compiled NumPy operations and copied to Legate.
-Host generation and transfer are timed, unlike CUDA/JACC's device RNG.
-Each 3-D FFT is one fftn/ifftn pass. Native take gathers
+field is generated with compiled NumPy operations and copied to Legate in
+initialize (untimed), with the twiddle. Each 3-D FFT is one fftn/ifftn pass. Native take gathers
 the prescribed 1024 checksum samples. ifftn normalizes the full array; FFT and
 evolution temporaries are allocated inside timing. Official verification is kept.
 """
@@ -142,26 +141,25 @@ class NASFourierTransform:
         j = host_np.arange(1, CHECKSUM_SAMPLES+1, dtype=host_np.int64)
         # C-order flattened indices; keep repeated samples (not a set).
         indices = ((5*j) % nz * ny + (3*j) % ny) * nx + j % nx
+        host = host_np.empty(shape, dtype=host_np.complex128)
+        scratch = host_np.empty(
+            min(2*host_np.prod(shape), RNG_SCRATCH_STATES), dtype=host_np.uint64,
+        )
+        initial_conditions(host, scratch)
+        ix2 = np.asarray(frequency_squares(nx)).reshape(1, 1, nx)
+        iy2 = np.asarray(frequency_squares(ny)).reshape(1, ny, 1)
+        iz2 = np.asarray(frequency_squares(nz)).reshape(nz, 1, 1)
         return {
             "indices": np.asarray(indices),
-            "ix2": np.asarray(frequency_squares(nx)).reshape(1, 1, nx),
-            "iy2": np.asarray(frequency_squares(ny)).reshape(1, ny, 1),
-            "iz2": np.asarray(frequency_squares(nz)).reshape(nz, 1, 1),
-            "host_initial": host_np.empty(shape, dtype=host_np.complex128),
-            "rng_scratch": host_np.empty(
-                min(2*host_np.prod(shape), RNG_SCRATCH_STATES),
-                dtype=host_np.uint64,
-            ),
+            "initial": np.array(host),
+            "twiddle": np.exp((-4.0*ALPHA*math.pi**2) * (ix2+iy2+iz2)),
         }
     def run(self, state):
         niter = CLASSES[self.class_name][3]
-        initial_conditions(state["host_initial"], state["rng_scratch"])
-        u0 = np.asarray(state["host_initial"])
-        twiddle = np.exp((-4.0*ALPHA*math.pi**2) *
-            (state["ix2"]+state["iy2"]+state["iz2"]))
-        u0, checksums = np.fft.fftn(u0), []
+        # fftn is out of place, so the initial field is never modified.
+        u0, checksums = np.fft.fftn(state["initial"]), []
         for _ in range(niter):
-            u0 *= twiddle
+            u0 *= state["twiddle"]
             u1 = np.fft.ifftn(u0)
             # All indices are valid; clip avoids a host-side bounds check.
             samples = np.take(u1, state["indices"], mode="clip")

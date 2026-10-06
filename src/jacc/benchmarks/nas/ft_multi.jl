@@ -6,6 +6,8 @@
 # kernels and exchanges blocks with custom GPU-to-GPU copies (JACC.Multi has no
 # all-to-all). Inverse FFTs are unnormalized; the checksum applies 1/N.
 # Checksums use the 1-D Multi.parallel_reduce and are fetched every iteration.
+# The initial field and twiddle are built at setup (untimed); a run restarts
+# from a per-GPU copy of the field.
 # Kernels are @inline: JACC.Multi does not inline `f`, costing 3-5x.
 
 @inline function ftm_randlc(x, a)
@@ -150,14 +152,13 @@ struct JACCMultiFT{O}
     ops::O
     class::String
     L::FTLayout
+    initial::Any
     u::Any
     w0::Any
     w1::Any
     tw::Any
     send::Any
     recv::Any
-    starts::Any
-    host_starts::Vector{Float64}
     checksums::Vector{ComplexF64}
 end
 
@@ -165,26 +166,26 @@ function jacc_multi_ft(ops, class)
     p, nd = nas_ft_parameters(class), jm_ndev(ops)
     L = FTLayout(p, nd)
     arr(T, m, cols) = jm_array(ops, zeros(T, m, cols); ghost_dims=0)
+    initial, tw = arr(ComplexF64, p.nx*p.ny, p.nz), arr(Float64, p.nx*p.nz, p.ny)
+    starts = jm_array(ops, nas_ft_plane_starts!(Vector{Float64}(undef, p.nz), L.nx, L.ny);
+        ghost_dims=0)
+    jm_for(ops, L.nz, ftm_initial, initial, starts, L.nx*L.ny)
+    ftm_launch(ops, L.nx*L.nz, L.ny, ftm_twiddle, tw, L, -4.0*NAS_FT_ALPHA*pi^2)
     return JACCMultiFT(
-        ops, class, L,
+        ops, class, L, initial,
         arr(ComplexF64, p.nx*p.ny, p.nz),
-        arr(ComplexF64, p.nx*p.nz, p.ny), arr(ComplexF64, p.nx*p.nz, p.ny),
-        arr(Float64, p.nx*p.nz, p.ny),
+        arr(ComplexF64, p.nx*p.nz, p.ny), arr(ComplexF64, p.nx*p.nz, p.ny), tw,
         arr(ComplexF64, p.nx*p.ny*L.Pz, nd), arr(ComplexF64, p.nx*p.ny*L.Pz, nd),
-        jm_array(ops, zeros(Float64, p.nz); ghost_dims=0),
-        Vector{Float64}(undef, p.nz), ComplexF64[],
+        ComplexF64[],
     )
 end
 
 function ftm_run!(s::JACCMultiFT)
     ops, L = s.ops, s.L
     p = nas_ft_parameters(s.class)
-    nas_ft_plane_starts!(s.host_starts, L.nx, L.ny)
-    for (d, part) in enumerate(jm_parts(ops, s.starts))
-        jm_upload!(ops, part, d, s.host_starts[((d - 1)*L.Pz + 1):(d*L.Pz)], L.Pz)
+    for (d, (dst, src)) in enumerate(zip(jm_parts(ops, s.u), jm_parts(ops, s.initial)))
+        jm_copy!(ops, dst, d, 1, src, d, 1, L.nx*L.ny*L.Pz)
     end
-    jm_for(ops, L.nz, ftm_initial, s.u, s.starts, L.nx*L.ny)
-    ftm_launch(ops, L.nx*L.nz, L.ny, ftm_twiddle, s.tw, L, -4.0*NAS_FT_ALPHA*pi^2)
     jm_fft!(ops, s.u, (L.nx, L.ny, L.Pz), (1, 2), false)
     ftm_z_to_y!(ops, s.w0, s.u, s)
     jm_fft!(ops, s.w0, (L.nz, L.nx, L.Py), 1, false)
