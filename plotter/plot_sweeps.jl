@@ -52,8 +52,9 @@ function sweep_panel(panel, metric; first_col, last_row, bottom_row, fix, st, lo
         # last column needs it, the others sit next to a panel.
         top_margin=fix.top * Plots.px - 2Plots.mm, right_margin=first_col ? -1.5Plots.mm : 2.5st.k * Plots.mm,
     )
-    # Dashed (unfused) last: they track MosaicPIE closely and would hide under it.
-    for s in sort(panel.series; by=s -> s.ls != :solid)
+    # Other models first, then PIE.jl over them; dashed (unfused) last: they
+    # track MosaicPIE closely and would hide under it.
+    for s in sort(panel.series; by=s -> (s.ls != :solid, startswith(s.label, CUNUMERIC_NAME)))
         xs, ys = getfield.(s.agg, :N), getfield.(s.agg, y)
         hollow_marker!(p, xs, ys, s, st.ms)
         plot!(p, xs, ys; color=s.color, lw=st.lw, ls=s.ls, label=s.label)

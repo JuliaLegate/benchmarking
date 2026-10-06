@@ -2,13 +2,13 @@
 # Relative CSV paths are resolved under results_root; override it with
 # --results-root=DIR. Relative results_root is relative to the repository.
 # Figure sizing and fonts remain in figures.toml.
-results_root = "results/composability"
+results_root = "results-brev/composability"
 
 [krylov]
-cuda = "KRYLOV_FINAL/single_cuda_dagger/krylov/results.csv"
+cuda = "KRYLOV_FINAL/single_dagger_cuda/krylov/results.csv"
 cunumeric-single = "KRYLOV_FINAL/single_cunumeric/krylov/results.csv"
 cunumeric-multi = "KRYLOV_FINAL/multi_cunumeric/results.csv"
-dagger-single = "KRYLOV_FINAL/single_cuda_dagger/krylov/results.csv"
+dagger-single = "KRYLOV_FINAL/single_dagger_cuda/krylov/results.csv"
 dagger-multi = "KRYLOV_FINAL/multi_dagger/results.csv"
 
 [ode]

@@ -128,6 +128,10 @@ function combined_figure(f, sizing)
     style = Dict(s.label => (; s.color, s.marker, s.ls) for p in panels for s in p.series if !s.relabeled)
     panels = [merge(p, (; series=[merge(s, get(style, s.label, (;))) for s in p.series])) for p in panels]
     legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
+    # Draw order (the legend keeps its own): other models, then PIE.jl over them,
+    # then dotted (unfused) lines, which track MosaicPIE and would hide under it.
+    panels = [merge(p, (; series=sort(p.series; by=s -> (s.ls != :solid, startswith(s.label, CUNUMERIC_NAME)))))
+              for p in panels]
     sz = sizing(length(panels))
     # Panels sharing a non-throughput metric share one y label, on the first panel.
     shared = length(unique(p.metric for p in panels)) == 1 && panels[1].metric != "throughput"

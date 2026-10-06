@@ -511,7 +511,10 @@ function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=tr
     short(u) = replace(u, "random numbers" => "randoms")
     title(i) = st.compact && metric == "throughput" && panels[i].unit != unit ?
         "$(panels[i].title) ($(short(panels[i].unit)))" : panels[i].title
-    draw(i; kw...) = panel_note!(panel_plot(panels[i].series, metric; title=title(i),
+    # Draw order (the legend keeps its own): other models, then PIE.jl over them,
+    # so it shows where it coincides with MosaicPIE (GEMM); dashed lines last.
+    order(ss) = sort(ss; by=s -> (s.ls != :solid, startswith(s.label, CUNUMERIC_NAME)))
+    draw(i; kw...) = panel_note!(panel_plot(order(panels[i].series), metric; title=title(i),
             ylabel=ylabel(i),
             log_values=panels[i].log, split=get(get(panels[i], :split, Dict()), metric, nothing),
             gridlines, st, kw...),
