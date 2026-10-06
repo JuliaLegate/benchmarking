@@ -275,10 +275,11 @@ function legend_col_widths(series, cols, d)
 end
 
 # `pad` adds that many px between columns (for fonts the width estimate runs short on).
-function legend_rows(series, width, st; pad=0)
+# `cols` forces the column count instead of fitting the width.
+function legend_rows(series, width, st; pad=0, cols=nothing)
     d = legend_dims(st)
     d = merge(d, (; gap=d.gap + pad))
-    cols = something(findlast(c -> sum(legend_col_widths(series, c, d)) <= width - LEGEND_INSET_PX,
+    cols = something(cols, findlast(c -> sum(legend_col_widths(series, c, d)) <= width - LEGEND_INSET_PX,
         1:length(series)), 1)
     # Same row count, entries spread evenly (5 -> 3 + 2, not 4 + 1).
     cols = cld(length(series), cld(length(series), cols))
@@ -336,12 +337,13 @@ end
 
 # `n` panels in `columns` columns plus a shared legend. `make_panel(i; first_col,
 # last_row, bottom_row, fix)` draws panel i. `center` centers a legend row.
-function grid_layout(make_panel, n, legend_series, columns; panel_w, panel_h, st, center=false)
+function grid_layout(make_panel, n, legend_series, columns; panel_w, panel_h, st, center=false,
+        legend_cols=nothing)
     rows = cld(n, columns)
     width = panel_w * columns
     # An empty grid slot holds the legend; otherwise it gets a row underneath.
     in_slot = rows * columns > n
-    rows_legend = legend_rows(legend_series, in_slot ? panel_w : width, st)
+    rows_legend = legend_rows(legend_series, in_slot ? panel_w : width, st; cols=legend_cols)
     # No figure title: the y-axis label already names the metric.
     legend_h = in_slot ? 0 : legend_dims(st).row * length(rows_legend) + 4
     height = rows * panel_h + legend_h

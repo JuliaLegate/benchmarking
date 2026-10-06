@@ -50,10 +50,11 @@ untimed.
 
 ## FT
 
-Each sample generates the initial field, runs one forward 3-D FFT, then for
-each of `NITER` iterations evolves the spectrum, inverse transforms it and
-takes the 1024-point checksum. Verification (relative tolerance `1e-12`) is
-untimed.
+The initial field and twiddle are built before timing (NPB times them; here
+host vs device RNG would dominate). Each sample copies the field on the device,
+runs one forward 3-D FFT, then for each of `NITER` iterations evolves the
+spectrum, inverse transforms it and takes the 1024-point checksum.
+Verification (relative tolerance `1e-12`) is untimed.
 
 - **cuNumeric**: host RNG, one `fft!`/`bfft!` per 3-D transform, masked
   checksum reduction.

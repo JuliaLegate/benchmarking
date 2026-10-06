@@ -28,3 +28,19 @@ fusion = "both"
 name = "grayscott_compare"
 metrics = ["throughput", "time"]
 title = ""
+
+[[figure]]   # Monte Carlo: fused mapreduce vs broadcast + sum (naive), fused and unfused
+config = "configs/multi_gpu/montecarlo_forms.toml"
+results = "results-brev/20261005-224227-evLB1b"
+fusion = "both"
+name = "montecarlo_forms"
+metrics = ["throughput", "time"]
+title = ""
+
+[[figure]]   # Fusion: Gray-Scott comparison and Monte Carlo forms, time per step
+name = "fusion_time"
+legend_columns = 2
+panels = [
+    { config = "configs/multi_gpu/grayscott.toml", results = "results-brev/grayscott-compare", title = "Gray-Scott", log = true },
+    { config = "configs/multi_gpu/montecarlo_forms.toml", results = "results-brev/20261005-224227-evLB1b", title = "Monte Carlo" },
+]

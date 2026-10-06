@@ -93,23 +93,38 @@ end
 
 # Drawn behind the points, so a point at the ideal stays visible.
 function ideal_point!(p, st)
-    scatter!(p, [0], [1.0]; marker=:star5, ms=2st.ms, color=:white, msc=COLOR_IDEAL,
+    scatter!(p, [0], [1.0]; marker=:star5, ms=2.5st.ms, color=:white, msc=COLOR_IDEAL,
         markerstrokewidth=2.4st.k, label="")
-    annotate!(p, 0, 1.0, text("  Ideal", st.tick, COLOR_IDEAL, :left, :bottom))
+    annotate!(p, 0, 1.0, text("   Ideal", st.tick, COLOR_IDEAL, :left, :bottom))
     return p
 end
 
 # Left is simpler; higher is faster (1 = fastest model on that benchmark).
-function complexity_panel(points, metric; show_mean, ideal, first_col, fix, st)
+# At most four round ticks, so narrow panels don't crowd them. With capped points,
+# the edge tick shows their largest value instead.
+function complexity_xticks(hi, clipped)
+    ticks = collect(0:first(filter(t -> hi / t <= 4, [m * 10.0^k for k in 0:6 for m in (1, 2, 5)])):hi)
+    isempty(clipped) && return ticks
+    labels = compact_tick.(ticks)
+    ticks[end] == hi ? (labels[end] = string(maximum(first, clipped))) :
+        (push!(ticks, hi); push!(labels, string(maximum(first, clipped))))
+    return (ticks, labels)
+end
+
+# `xmax` caps the axis: points past it sit on the edge, which is labeled with their value.
+function complexity_panel(points, metric; show_mean, ideal, first_col, fix, st, xmax=nothing)
     m = COMPLEXITY_METRICS[metric]
     groups = model_groups(points, m.column)
-    hi = maximum(maximum(g.xs) for g in groups)
+    hi = something(xmax, maximum(maximum(g.xs) for g in groups))
+    clipped = [(x, y, g.series) for g in groups for (x, y) in zip(g.xs, g.ys) if x > hi]
+    # Means use the true counts; hulls and points use the capped ones.
+    means = [(mean(g.xs), mean(g.ys)) for g in groups]
+    groups = [merge(g, (; xs=min.(g.xs, hi))) for g in groups]
     p = plot(;
         xlabel=m.name, ylabel=first_col ? "Relative perf." : "",
         # Just left of 0, so markers at 0 show whole.
-        xlims=(-0.02hi, 1.08hi), ylims=(0, ideal ? 1.15 : 1.08), widen=false,
-        # At most four round ticks, so narrow panels don't crowd them.
-        xticks=0:first(filter(t -> hi / t <= 4, [m * 10.0^k for k in 0:6 for m in (1, 2, 5)])):hi,
+        xlims=(-0.045hi, 1.08hi), ylims=(0, ideal ? 1.15 : 1.08), widen=false,
+        xticks=complexity_xticks(hi, clipped),
         # The panels share the 0..1 y scale, so only the first labels it.
         xformatter=compact_tick, yformatter=first_col ? compact_tick : (_ -> ""),
         framestyle=:box, legend=false,
@@ -119,7 +134,7 @@ function complexity_panel(points, metric; show_mean, ideal, first_col, fix, st)
         bottom_margin=(fix.bottom + fix.guide) * Plots.px,
         top_margin=1Plots.mm, right_margin=1Plots.mm,
     )
-    hline!(p, [1.0]; color=IDEALCOL, ls=:dashdot, lw=1.4st.k, label="")
+    hline!(p, [1.0]; color=IDEALCOL, lw=1.0st.k, label="")
     ideal && ideal_point!(p, st)
     # Clouds, then points, then means on top.
     foreach(g -> hull!(p, g, st), groups)
@@ -127,21 +142,24 @@ function complexity_panel(points, metric; show_mean, ideal, first_col, fix, st)
         scatter!(p, g.xs, g.ys; color=g.series.color, marker=g.series.marker,
             ms=0.65st.ms, msc=:white, markerstrokewidth=0.4st.k, label="")
     end
-    for g in groups
+    # Axis break just before the capped edge.
+    !isempty(clipped) && annotate!(p, 0.9hi, 0, text("//", st.tick, :black, :center))
+    for (g, (mx, my)) in zip(groups, means)
         show_mean || break
-        scatter!(p, [mean(g.xs)], [mean(g.ys)]; color=g.series.color, marker=g.series.marker,
-            ms=1.6st.ms, msc=:black, markerstrokewidth=2st.k, label="")
+        scatter!(p, [mx], [my]; color=g.series.color, marker=g.series.marker,
+            ms=2.0st.ms, msc=:black, markerstrokewidth=2st.k, label="")
     end
     return p
 end
 
 # One row of panels with the legend centered underneath.
-function complexity_figure(points, metrics; show_mean, ideal, panel_w, panel_h, st)
+function complexity_figure(points, metrics; show_mean, ideal, panel_w, panel_h, st, legend_cols=nothing,
+        xmax=nothing)
     draw(i; first_col, fix, _...) =
-        complexity_panel(points, metrics[i]; show_mean, ideal, first_col, fix, st)
+        complexity_panel(points, metrics[i]; show_mean, ideal, first_col, fix, st, xmax)
     legend_series = unique(s -> s.label, [pt.series for pt in points])
     return grid_layout(draw, length(metrics), legend_series, length(metrics);
-        panel_w, panel_h, st, center=true)
+        panel_w, panel_h, st, center=true, legend_cols)
 end
 
 function write_points_csv(path, points, gpus)
@@ -201,6 +219,8 @@ function complexity_main(args=ARGS)
     hide = Set(display_name.(string.(get(raw, "hide", String[]))))
     show_mean = get(raw, "mean", true)
     ideal = get(raw, "ideal", true)
+    legend_cols = get(raw, "legend_columns", nothing)
+    xmax = get(raw, "xmax", nothing)
     panel_w, panel_h, st = grid_dimensions(raw, length(metrics))
     format = get(raw, "format", "png")
     panels = [(series=panel_series(p), benchmark=p["benchmark"]) for p in get(grid_raw, "panel", [])]
@@ -212,7 +232,7 @@ function complexity_main(args=ARGS)
         points = complexity_points(panels, loc, g, hide)
         isempty(points) && (println("no results at $g GPUs; skipped"); continue)
         out = joinpath(cfg.out_dir, "complexity_$(g)gpu.$(format)")
-        savefig(complexity_figure(points, metrics; show_mean, ideal, panel_w, panel_h, st), out)
+        savefig(complexity_figure(points, metrics; show_mean, ideal, panel_w, panel_h, st, legend_cols, xmax), out)
         println("wrote $out")
         write_points_csv(joinpath(cfg.out_dir, "complexity_$(g)gpu.csv"), points, g)
         push!(by_gpus, g => points)

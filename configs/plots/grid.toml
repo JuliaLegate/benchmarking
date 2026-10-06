@@ -34,7 +34,7 @@ log = true
 [[panel]]
 benchmark = "nas_ft"
 results = "results-brev/20261001-001153-TBPDeB"
-split = { time = 2000 }   # Dagger's 8-GPU time
+split = { time = 350 }   # Dagger at 2+ GPUs
 
 [[panel]]
 benchmark = "nas_mg"

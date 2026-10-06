@@ -43,7 +43,8 @@ function sweep_panel(panel, metric; first_col, last_row, bottom_row, fix, st)
         # Room for the last x tick label (10^10), which is centered on the edge.
         top_margin=fix.top * Plots.px - 2Plots.mm, right_margin=4st.k * Plots.mm,
     )
-    for s in panel.series
+    # Dashed (unfused) last: they track MosaicPIE closely and would hide under it.
+    for s in sort(panel.series; by=s -> s.ls != :solid)
         xs, ys = getfield.(s.agg, :N), getfield.(s.agg, y)
         hollow_marker!(p, xs, ys, s, st.ms)
         plot!(p, xs, ys; color=s.color, lw=st.lw, ls=s.ls, label=s.label)
@@ -63,6 +64,12 @@ function sweeps_main(args=ARGS)
     end
     isempty(panels) && error("no [[panel]] entries in $(cfg.config)")
     legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
+    # One style per label across panels (a relabeled series takes the legend's style).
+    # Dashes become dots: GR's dashes are too long to read over the solid lines.
+    legend_series = [merge(s, (; ls=s.ls == :dash ? :dot : s.ls)) for s in legend_series]
+    style = Dict(s.label => s for s in legend_series)
+    panels = [merge(p, (; series=[merge(s, (; color=style[s.label].color,
+        marker=style[s.label].marker, ls=style[s.label].ls)) for s in p.series])) for p in panels]
     mkpath(cfg.out_dir)
     for m in string.(get(raw, "metrics", ["time", "throughput"]))
         draw(i; kw...) = sweep_panel(panels[i], m; st, kw...)

@@ -8,9 +8,11 @@ gpus = [1, 2, 4, 8]
 hide = ["cuPyNumeric"]
 mean = true    # mean marker per model
 ideal = true   # ideal point (0 complexity, fastest)
+xmax = 20     # cap x; points past it sit on the edge, labeled with their value
 
-panel_size = [400, 340]
-legend_scale = 1.0
+panel_size = [400, 220]
+legend_scale = 0.85
+legend_columns = 4   # one row
 format = "pdf"
 width_in = 3.5   # one IEEE column
 font_size = 6

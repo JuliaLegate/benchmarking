@@ -126,6 +126,29 @@ function legend_row!(f, series, width, height, legend_h, st, d; below_axis)
     return f
 end
 
+# `panels`: one panel per entry ({ config, results, fusion, metric, title, log }),
+# each from its own results, with one shared legend (`legend_columns` wide).
+function combined_figure(f, sizing)
+    panels = map(f["panels"]) do pf
+        cfg = isabspath(pf["config"]) ? pf["config"] : joinpath(BENCH_ROOT, pf["config"])
+        group, members = first(parse_plot_groups(cfg))
+        series = group_series(csv_dir(pf["results"]), group, members; fusion=get(pf, "fusion", "both"))
+        validate_series_sizes(series)
+        # Short dashes: GR's long ones are hard to read over nearby solid lines.
+        series = [merge(s, (; ls=s.ls == :dash ? :dot : s.ls)) for s in series]
+        (; series, metric=get(pf, "metric", "time"), title=get(pf, "title", group_title(group)),
+            unit=throughput_unit(group), log=get(pf, "log", false))
+    end
+    legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
+    sz = sizing(length(panels))
+    draw(i; first_col, last_row, bottom_row, fix) = panel_plot(panels[i].series, panels[i].metric;
+        title=panels[i].title, log_values=panels[i].log, first_col=true, last_row, bottom_row, fix, st=sz.st,
+        ylabel=panels[i].metric == "throughput" ? panels[i].unit : METRICS[panels[i].metric].ylabel)
+    return grid_layout(draw, length(panels), legend_series, length(panels);
+        panel_w=sz.panel_w, panel_h=sz.panel_h, st=sz.st, center=true,
+        legend_cols=get(f, "legend_columns", nothing))
+end
+
 function figures_main(args=ARGS)
     config = joinpath(BENCH_ROOT, "configs", "plots", "figures.toml")
     out_dir = joinpath(BENCH_ROOT, "plots", "figures")
@@ -155,6 +178,12 @@ function figures_main(args=ARGS)
     end
     mkpath(out_dir)
     for f in get(raw, "figure", [])
+        if haskey(f, "panels")
+            out = joinpath(out_dir, "$(f["name"]).$(format)")
+            savefig(scale_open_markers!(combined_figure(f, sizing)), out)
+            println("wrote $out")
+            continue
+        end
         dir = csv_dir(f["results"])
         cfg_path = isabspath(f["config"]) ? f["config"] : joinpath(BENCH_ROOT, f["config"])
         for (group, members) in parse_plot_groups(cfg_path)
