@@ -50,9 +50,11 @@ function aggregate(rows)
     ]
 end
 
+# IGG is exempt: its 8-GPU run uses N=79198 (N-2 must split across its process grid).
 function validate_series_sizes(series)
     sizes = Dict{Int,Tuple{Int,Int}}()
     for s in series, r in s.agg
+        s.label == "ImplicitGlobalGrid.jl" && continue
         previous = get!(sizes, r.gpus, (r.N, r.M))
         previous == (r.N, r.M) ||
             error("Comparison series use different dimensions at $(r.gpus) GPUs")
