@@ -1,0 +1,30 @@
+# One-GPU size sweep: cuNumeric forms, CUDA.jl mapreduce, and native cuPyNumeric.
+# Powers of two, then the 7537741000 one-GPU size from multi_gpu/montecarlo.toml.
+# The unfused broadcast estimate at that endpoint is about 120.6 GB (112.3 GiB).
+# julia --project=. run.jl --config=configs/single_gpu/montecarlo_forms.toml
+[Global]
+single_gpu = true
+models = ["cunumeric", "cudajl", "cupynumeric"]
+n_warmup = 2
+n_iter = 20
+n_trial = 5
+check_correctness = true
+auto_size = false
+
+[plot.groups]
+montecarlo = ["montecarlo", "montecarlo_naive"]
+
+[[montecarlo]]
+T = "Float32"
+cpus = 8
+# Mapreduce requires fusion; only the broadcast variant sweeps on/off.
+fusion = "on"
+N = [1024, 4096, 65536, 1048576, 16777216, 268435456, 1073741824, 4294967296, 7537741000]
+M = 1
+
+[[montecarlo_naive]]
+T = "Float32"
+cpus = 8
+fusion = ["on", "off"]
+N = [1024, 4096, 65536, 1048576, 16777216, 268435456, 1073741824, 4294967296, 7537741000]
+M = 1
