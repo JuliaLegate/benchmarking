@@ -88,6 +88,20 @@ function load_panel(workload, experiment, inputs)
         push!(series, (; b.label, b.color, b.marker, ls=:solid, agg))
     end
     isempty(rows) && return nothing
+    if experiment == "weak" && haskey(inputs, "cuda")
+        # CUDA runs on one GPU only; reuse its largest measured single-GPU case.
+        b = first(BACKENDS)
+        single = read_source(inputs["cuda"], workload, "single", b.backend)
+        largest_n = maximum(r.n for r in single)
+        base_n = first(rows).base_n
+        largest_n == base_n || error("largest single-GPU CUDA size N=$largest_n does not match $workload weak-scaling base N=$base_n")
+        baseline = filter(r -> r.n == largest_n, single)
+        length(baseline) == 1 || error("expected one single-GPU CUDA result at N=$largest_n")
+        r = merge(only(baseline), (; base_n))
+        pushfirst!(rows, r)
+        agg = [(gpus=r.gpus, t=r.t, tsd=r.tsd)]
+        pushfirst!(series, (; b.label, b.color, b.marker, ls=:solid, agg))
+    end
     length(unique((r.eltype, r.steps) for r in rows)) == 1 ||
         error("mixed precision or ODE step counts in $workload $experiment")
     if experiment == "weak"
@@ -106,7 +120,7 @@ function composability_panel(workload, experiment, panel; first_col, last_col, s
     # Reuse the paper grid's broken-axis styling for the slow Dagger baseline.
     split_at = workload == "ode" ? 8000.0 / first(rows).steps : Inf
     split = workload == "ode" && experiment == "weak" && any(r -> r.t > split_at, rows) ? split_at : nothing
-    p = panel_plot(series, "time"; title, split, split_pad=0.30,
+    p = panel_plot(series, "time"; title, split, split_pad=0.50,
         log_values=false, zero_log=experiment == "single",
         first_col, last_row=true, bottom_row=true, fix, st)
     xlabel = experiment == "single" ?
@@ -140,8 +154,9 @@ function composability_panel(workload, experiment, panel; first_col, last_col, s
     end
     if panel.dagger_multi_missing
         lo_x, hi_x = Plots.xlims(p)
-        annotate!(p, exp(log(lo_x) + 0.90 * log(hi_x / lo_x)), 0.94hi,
-            text("Dagger.jl: >1 GPU\nintractable", st.legend - 2, COLOR_DAGGER, :right, :top))
+        # Dark ochre keeps the Dagger hue readable as small text on white.
+        annotate!(p, exp(log(lo_x) + 0.90 * log(hi_x / lo_x)), 0.84hi,
+            text("Dagger.jl: >1 GPU\nintractable", st.legend - 1, "#806400", :right, :top))
     end
     return p
 end
@@ -259,7 +274,7 @@ function usage(io=stdout)
     Usage: julia --project=. plotter/plot_composability.jl {krylov|ode} [options]
            julia --project=. plotter/plot_composability.jl combined [--config=PATH] [--results-root=DIR] [--out=DIR] [--format=pdf|png|svg]
 
-      --cuda=PATH               Single-GPU CUDA results.csv (CuArray for ODE)
+      --cuda=PATH               Single-GPU CUDA results.csv (also supplies the multi-GPU baseline)
       --cunumeric-single=PATH   Single-GPU cuNumeric results.csv
       --cunumeric-multi=PATH    Weak-scaling cuNumeric results.csv
       --dagger-single=PATH      Single-GPU Dagger results.csv
@@ -268,6 +283,8 @@ function usage(io=stdout)
       --format=pdf|png|svg      Output format (default: pdf)
 
     Paths may contain other backends; only the requested backend is selected.
+    CUDA's largest single-GPU case is shown at one GPU in multi-GPU panels;
+    its size must match the weak-scaling base N. ODE selects CUDA's CuArray rows.
     Combined mode reads configs/plots/composability.toml for the CSV paths and
     writes one 2×2 figure with workload rows, scaling columns, and a shared legend.
     One titled figure per workload: Single GPU on the left, Multi-GPU on the right.
