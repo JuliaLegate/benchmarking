@@ -57,8 +57,9 @@ end
 const VALUE_GRADIENT = cgrad([colorant"#E3A008", colorant"#F28E2B", colorant"#E15759",
     colorant"#C0307A", colorant"#7B3294", colorant"#3A4FB4", colorant"#0B1F4F"])
 
-# One panel colored by a per-series value (`vals`), a color bar, and a legend row
-# below. Distinct values are evenly spaced on the gradient; ties share a color.
+# One panel colored by a per-series value (`vals`), a color bar, and the legend
+# as a column right of the bar. Distinct values are evenly spaced on the
+# gradient; ties share a color.
 function colorbar_figure(series, metric, vals, cbar_label; unit, log_values=false, panel_w, panel_h, st)
     width = 2panel_w
     series = sort(series; by=s -> get(vals, s.label, Inf))
@@ -70,80 +71,71 @@ function colorbar_figure(series, metric, vals, cbar_label; unit, log_values=fals
               for s in series]
     lst = merge(st, (; legend=st.legend - 1, legend_k=0.7st.legend_k))
     d = legend_dims(lst)
-    legend_h = 0.8d.row
     # Taller, for the color bar's title.
-    height = 1.15panel_h + legend_h
+    height = 1.15panel_h
     fix = gr_margin_fix(width, height, st)
     p = panel_plot(series, metric; title="", log_values,
         ylabel=metric == "throughput" ? unit : nothing,
         first_col=true, last_row=true, bottom_row=true, fix, st)
-    # Room for the legend under the x label.
-    bottom = (fix.bottom + fix.guide + legend_h) * Plots.px
+    bottom = (fix.bottom + fix.guide) * Plots.px
     plot!(p; top_margin=2Plots.mm, bottom_margin=bottom)
     ys = range(0, 1; length=200)
     cbar = heatmap([0, 1], ys, repeat(collect(ys), 1, 2); c=VALUE_GRADIENT, clims=(0, 1),
         colorbar=false, legend=false, xticks=false, ymirror=true, widen=false,
         ylims=(0, 1), framestyle=:box, yticks=(tick_pos, compact_tick.(tick_vals)),
-        yguide=cbar_label, yguidefontsize=st.tick, tickfontsize=st.tick,
+        yguide=cbar_label, yguidefontsize=st.tick - 2, tickfontsize=st.tick,
         left_margin=-2Plots.mm, top_margin=2Plots.mm,
-        right_margin=1.2text_px(st.tick) * Plots.px,
+        right_margin=0.3text_px(st.tick) * Plots.px,   # the label sits close to the legend
         bottom_margin=bottom)
-    f = plot(p, cbar; layout=grid(1, 2; widths=[0.9, 0.1]), size=(width, height), dpi=200,
-        background_color=:white)
-    legend_row!(f, series, width, height, legend_h, lst, d;
-        below_axis=1.15 * (text_px(st.tick) + text_px(st.guide)))
-    return f
-end
-
-# Legend row in an inset under subplot 1, spanning the figure: a stacked subplot
-# would share the panel's margins and get only its plot width.
-function legend_row!(f, series, width, height, legend_h, st, d; below_axis)
-    Plots.prepare_output(f)
-    pa = Plots.plotarea(f[1])
-    l, t, w, h = (x.value for x in (Plots.left(pa), Plots.top(pa), Plots.width(pa), Plots.height(pa)))
-    mm(px) = px * 25.4 / 100   # Plots px are 1/100 inch
-    edge = 2.0                 # mm
-    strip_mm = mm(width) - 2edge
-    top = t + h + mm(below_axis)
-    plot!(f; inset=(1, bbox((edge - l) / w, (top - t) / h, strip_mm / w, mm(legend_h) / h,
-            :left, :top)),
-        subplot=3, framestyle=:none, grid=false, ticks=false, legend=false,
-        xlims=(0, strip_mm * 100 / 25.4), ylims=(0, 1), widen=false,
-        background_color_subplot=:transparent)
-    strip = strip_mm * 100 / 25.4
-    char = 0.85st.legend   # px per character
-    widths = [d.swatch + 4 + char * length(s.label) for s in series]
-    gap = 16.0   # px
-    x = max(0, (strip - sum(widths) - gap * (length(widths) - 1)) / 2)
-    scale = st.legend_k / st.k
-    for (s, wi) in zip(series, widths)
-        plot!(f, [x, x + d.swatch], [0.5, 0.5]; subplot=3, color=s.color,
-            lw=0.9scale * st.lw, label="")
-        hollow_marker!(f, [x + d.swatch / 2], [0.5], s, 0.65scale * st.ms; subplot=3)
-        annotate!(f, x + d.swatch + 4, 0.5, text(s.label, st.legend, :black, :left); subplot=3)
-        x += wi + gap
+    # Legend column: the longest label at ~1 em per character (measured), plus the swatch.
+    leg_w = (d.swatch + 8 + 1.0lst.legend * maximum(length(s.label) for s in series)) / width
+    leg = plot(; framestyle=:none, grid=false, ticks=false, legend=false, widen=false,
+        xlims=(0, leg_w * width), ylims=(0, 1), margin=0Plots.mm, top_margin=2Plots.mm,
+        bottom_margin=bottom)
+    scale = lst.legend_k / lst.k
+    step = 1.6d.row / height
+    # Highest value on top, as on the color bar.
+    for (i, s) in enumerate(reverse(series))
+        y = 0.5 + ((length(series) + 1) / 2 - i) * step
+        plot!(leg, [0, d.swatch], [y, y]; color=s.color, lw=0.9scale * lst.lw, label="")
+        hollow_marker!(leg, [d.swatch / 2], [y], s, 0.65scale * lst.ms)
+        annotate!(leg, d.swatch + 4, y, text(s.label, lst.legend, :black, :left))
     end
-    return f
+    cbar_w = 0.085
+    return plot(p, cbar, leg; layout=grid(1, 3; widths=[1 - cbar_w - leg_w, cbar_w, leg_w]),
+        size=(width, height), dpi=200, background_color=:white)
 end
 
-# `panels`: one panel per entry ({ config, results, fusion, metric, title, log }),
-# each from its own results, with one shared legend (`legend_columns` wide).
+# `panels`: one panel per entry ({ config, results, fusion, metric, title, log,
+# hide = [labels], relabel = { label = new label } }), each from its own results,
+# with one shared legend (`legend_columns` wide). `ylabel` overrides the y label. A series relabeled to a label
+# another panel has takes that series' style, so the legend lists it once.
 function combined_figure(f, sizing)
     panels = map(f["panels"]) do pf
         cfg = isabspath(pf["config"]) ? pf["config"] : joinpath(BENCH_ROOT, pf["config"])
         group, members = first(parse_plot_groups(cfg))
         series = group_series(csv_dir(pf["results"]), group, members; fusion=get(pf, "fusion", "both"))
         validate_series_sizes(series)
+        hide = Set(string.(get(pf, "hide", String[])))
+        relabel = Dict(string(k) => string(v) for (k, v) in get(pf, "relabel", Dict()))
+        series = [merge(s, (; label=get(relabel, s.label, s.label), relabeled=haskey(relabel, s.label)))
+                  for s in series if !(s.label in hide)]
         # Short dashes: GR's long ones are hard to read over nearby solid lines.
         series = [merge(s, (; ls=s.ls == :dash ? :dot : s.ls)) for s in series]
         (; series, metric=get(pf, "metric", "time"), title=get(pf, "title", group_title(group)),
             unit=throughput_unit(group), log=get(pf, "log", false))
     end
+    style = Dict(s.label => (; s.color, s.marker, s.ls) for p in panels for s in p.series if !s.relabeled)
+    panels = [merge(p, (; series=[merge(s, get(style, s.label, (;))) for s in p.series])) for p in panels]
     legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
     sz = sizing(length(panels))
+    # Panels sharing a non-throughput metric share one y label, on the first panel.
+    shared = length(unique(p.metric for p in panels)) == 1 && panels[1].metric != "throughput"
+    ylabel(i) = shared && i > 1 ? nothing : get(f, "ylabel",
+        panels[i].metric == "throughput" ? panels[i].unit : METRICS[panels[i].metric].ylabel)
     draw(i; first_col, last_row, bottom_row, fix) = panel_plot(panels[i].series, panels[i].metric;
-        title=panels[i].title, log_values=panels[i].log, first_col=true, last_row, bottom_row, fix, st=sz.st,
-        ylabel=panels[i].metric == "throughput" ? panels[i].unit : METRICS[panels[i].metric].ylabel)
+        title=panels[i].title, log_values=panels[i].log, pow10=true, first_col=!shared || i == 1, last_row, bottom_row,
+        fix, st=sz.st, ylabel=ylabel(i))
     return grid_layout(draw, length(panels), legend_series, length(panels);
         panel_w=sz.panel_w, panel_h=sz.panel_h, st=sz.st, center=true,
         legend_cols=get(f, "legend_columns", nothing))
@@ -165,9 +157,10 @@ function figures_main(args=ARGS)
     raw = TOML.parsefile(config)
     metrics = string.(get(raw, "metrics", ["throughput", "time", "efficiency"]))
     format = get(raw, "format", "pdf")
-    # With width_in, a row prints at that width (as in the grid).
-    function sizing(columns)
-        w, h = get(raw, "panel_size", [400, 300])
+    # With width_in, a row prints at that width (as in the grid). A figure's own
+    # `panel_size` overrides the file's.
+    function sizing(columns; panel_size=nothing)
+        w, h = something(panel_size, get(raw, "panel_size", [400, 300]))
         font_size = get(raw, "font_size", 11)
         if haskey(raw, "width_in")
             w, h = 144raw["width_in"] / columns, h * (144raw["width_in"] / columns) / w
@@ -180,7 +173,8 @@ function figures_main(args=ARGS)
     for f in get(raw, "figure", [])
         if haskey(f, "panels")
             out = joinpath(out_dir, "$(f["name"]).$(format)")
-            savefig(scale_open_markers!(combined_figure(f, sizing)), out)
+            fig = combined_figure(f, n -> sizing(n; panel_size=get(f, "panel_size", nothing)))
+            save_plot(scale_open_markers!(fig), out)
             println("wrote $out")
             continue
         end
@@ -207,7 +201,7 @@ function figures_main(args=ARGS)
                 fig = metric_row(only(panels).series, row, only(panels).title;
                     unit=throughput_unit(group), sizing(length(row))...)
                 out = joinpath(out_dir, "$(name).$(format)")
-                savefig(scale_open_markers!(fig), out)
+                save_plot(scale_open_markers!(fig), out)
                 println("wrote $out")
                 continue
             end
@@ -221,7 +215,7 @@ function figures_main(args=ARGS)
                         legend_title=string.(aslist(get(f, "legend_title", String[]))))
                 tag = Dict("on" => "_fused", "off" => "_unfused", "both" => "")[fusion]
                 out = joinpath(out_dir, "$(name)_$(m)$(tag).$(format)")
-                savefig(scale_open_markers!(fig), out)
+                save_plot(scale_open_markers!(fig), out)
                 println("wrote $out")
             end
         end

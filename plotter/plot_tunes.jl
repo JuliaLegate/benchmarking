@@ -113,7 +113,7 @@ function tunes_main(args=ARGS)
 
     mkpath(cfg.out_dir)
     out = joinpath(cfg.out_dir, "tunes.$(get(raw, "format", "png"))")
-    savefig(grid_layout(draw, length(names), legend_series, columns; panel_w, panel_h, st), out)
+    save_plot(grid_layout(draw, length(names), legend_series, columns; panel_w, panel_h, st), out)
     println("wrote $out")
     out = joinpath(cfg.out_dir, "tunes_summary.md")
     write(out, tunes_summary(speedups, names))

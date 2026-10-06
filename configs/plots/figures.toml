@@ -17,8 +17,9 @@ results = "results-brev/20261001-042330-0ADaZK"
 fusion = ["on", "off"]
 # Grids left to the GC per step (function 0, let 0, begin 4, expr 6, plain 22)
 # × ~3.14 GB per grid per GPU (weak scaling keeps it fixed).
-colorbar.label = "Garbage Collector\nResponsibility\n[GB/GPU/Iter]"
-colorbar.values = { function = 0, let = 0, begin = 13, expr = 19, plain = 69 }
+colorbar.label = "Garbage Collector\nBurden [GB/GPU/Iter]"
+colorbar.values = { func = 0, let = 0, begin = 13, expr = 19, plain = 69 }
+labels = { on = { function = "func" }, off = { function = "func" } }   # fits the legend column
 log = ["time"]   # forms span ~12 ms to ~840 ms
 
 [[figure]]   # Gray-Scott: cuNumeric (fused/unfused), cuPyNumeric, ImplicitGlobalGrid
@@ -40,7 +41,9 @@ title = ""
 [[figure]]   # Fusion: Gray-Scott comparison and Monte Carlo forms, time per step
 name = "fusion_time"
 legend_columns = 2
+panel_size = [400, 215]   # shorter: less empty space between the line groups
+ylabel = "Time (ms)"   # short enough for the short panels
 panels = [
     { config = "configs/multi_gpu/grayscott.toml", results = "results-brev/grayscott-compare", title = "Gray-Scott", log = true },
-    { config = "configs/multi_gpu/montecarlo_forms.toml", results = "results-brev/20261005-224227-evLB1b", title = "Monte Carlo" },
+    { config = "configs/multi_gpu/montecarlo_forms.toml", results = "results-brev/20261005-224227-evLB1b", title = "Monte Carlo", hide = ["PIE.jl (naive)"], relabel = { "PIE.jl (naive, unfused)" = "PIE.jl (unfused)" } },
 ]

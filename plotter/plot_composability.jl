@@ -249,7 +249,7 @@ function combined_main(args)
     figure = combined_figure(workloads)
     mkpath(out_dir)
     out = joinpath(out_dir, "composability.$format")
-    savefig(figure, out)
+    save_plot(figure, out)
     println("wrote $out")
     return nothing
 end
@@ -311,7 +311,7 @@ function main(args=ARGS)
     figure = composability_figure(workload, panels)
     mkpath(out_dir)
     out = joinpath(out_dir, "$(workload).$(format)")
-    savefig(figure, out)
+    save_plot(figure, out)
     println("wrote $out")
     for (mode, panel) in panels
         println("  $mode: $(first(panel.rows).eltype)" *

@@ -7,6 +7,38 @@ using TOML
 # Series loading and colors come from the single-benchmark plots.
 include(joinpath(@__DIR__, "plot_results.jl"))
 
+# Save; a PDF is then cropped to its ink plus `pad` pt, since GR pads every
+# outer edge with white. The background is painted white, so the ink box comes
+# from a render (poppler's pdftoppm), and Ghostscript crops the vector PDF.
+function save_plot(fig, out; pad=1.5)
+    savefig(fig, out)
+    endswith(out, ".pdf") || return out
+    if Sys.which("pdftoppm") === nothing || Sys.which("gs") === nothing
+        @warn "pdftoppm or gs missing; $out keeps its white border"
+        return out
+    end
+    # Two pixels per pt; P5 PGM: header lines, then one byte per pixel.
+    io = IOBuffer(read(`pdftoppm -r 144 -gray -singlefile $out`))
+    readline(io) == "P5" || error("unexpected pdftoppm output")
+    w, h = parse.(Int, split(readline(io)))
+    readline(io)
+    px = reshape(read(io, w * h), w, h)
+    ink = findall(<(245), px)
+    isempty(ink) && return out
+    x0, x1 = extrema(i[1] for i in ink) ./ 2
+    y0, y1 = extrema(i[2] for i in ink) ./ 2   # from the top
+    H = h / 2
+    left, right = max(0, x0 - pad), min(w / 2, x1 + 1 + pad)
+    top, bottom = max(0, y0 - pad), min(H, y1 + 1 + pad)
+    cw, ch = round.(Int, (right - left, bottom - top), RoundUp)
+    tmp = out * ".tmp.pdf"
+    run(pipeline(`gs -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pdfwrite -dDEVICEWIDTHPOINTS=$cw
+        -dDEVICEHEIGHTPOINTS=$ch -dFIXEDMEDIA -sOutputFile=$tmp
+        -c "<</PageOffset [$(-left) $(-(H - bottom))]>> setpagedevice" -f $out`; stdout=devnull))
+    mv(tmp, out; force=true)
+    return out
+end
+
 const METRICS = Dict(
     "throughput" => (ylabel="Throughput",),
     "time" => (ylabel="Time/step (ms)",),
@@ -78,12 +110,20 @@ function compact_tick(v)
     return (endswith(t, ".0") ? t[1:(end - 2)] : t) * suffix
 end
 
+# Log-axis tick label: 10^n (GR draws the superscript), but plain 1 and 10.
+function pow10_tick(v)
+    e = round(Int, log10(v))
+    return e == 0 ? "1" : e == 1 ? "10" : "10^{$e}"
+end
+
 text_px(pt) = 1.4 * pt * 100 / 72   # GR line height; Plots' px is 1/100 inch
 
 # All sizes scale with the tick font, so proportions hold at print width.
-function grid_style(font_size; legend_scale=1.0, marker_scale=1.0)
+# `compact`: one shared y label beside the grid, at most three y tick steps per panel.
+# `tight_legend`: shorter swatches and measured glyph widths (on with `compact`).
+function grid_style(font_size; legend_scale=1.0, marker_scale=1.0, compact=false, tight_legend=compact)
     k = font_size / 11
-    return (tick=font_size, guide=font_size + 1, title=font_size + 2,
+    return (compact, tight_legend, tick=font_size, guide=font_size + 1, title=font_size,   # bold titles at tick size
             # Int: Plots reads a Float text size as a rotation angle.
             legend=round(Int, legend_scale * (font_size - 1)), legend_k=legend_scale * k,
             lw=2.4k, ms=4k * marker_scale, k)
@@ -154,15 +194,22 @@ function grid_line!(p, s, y, st; yerror=nothing, kw...)
     return p
 end
 
+# 0, step, ... up to `hi`, with a round step giving at most `n` intervals.
+function linear_ticks(hi; n=3)
+    step = first(filter(s -> hi / s <= n, [m * 10.0^k for k in -2:9 for m in (1, 2, 5)]))
+    ticks = collect(0:step:hi)
+    return (ticks, compact_tick.(ticks))
+end
+
 # Axis labels only on the outer edge of the grid; every panel shares them.
 # `ylabel` (e.g. a throughput unit) labels this panel even off the first column.
 function panel_plot(series, metric; title, log_values, zero_log=false, split=nothing, split_pad=0.05,
-    gridlines=true, ylabel=nothing, first_col, last_row, bottom_row, fix, st)
-    labeled = first_col || ylabel !== nothing
+    gridlines=true, ylabel=nothing, pow10=false, first_col, last_row, bottom_row, fix, st)
+    labeled = !st.compact && (first_col || ylabel !== nothing)
     gpus = sort(unique(x.gpus for s in series for x in s.agg))
     p = plot(;
         title, xlabel=bottom_row ? "GPUs" : "",
-        ylabel=something(ylabel, first_col ? METRICS[metric].ylabel : ""),
+        ylabel=labeled ? something(ylabel, METRICS[metric].ylabel) : "",
         # GPU ticks are shared, so only the bottom panel of each column labels them.
         xscale=:log2, xticks=(gpus, last_row ? string.(gpus) : fill("", length(gpus))),
         xlims=(minimum(gpus) / 1.15, maximum(gpus) * 1.15), widen=false,
@@ -172,16 +219,23 @@ function panel_plot(series, metric; title, log_values, zero_log=false, split=not
         tickfontsize=st.tick, guidefontsize=st.guide, titlefontsize=st.title,
         titlefontfamily="DejaVuSans-Bold",   # TTF bold of the default font; GR built-ins mis-size
         left_margin=(fix.ticks + (labeled ? fix.guide : 0)) * Plots.px +
-                    (labeled ? 3st.k * Plots.mm : 0Plots.mm),
-        bottom_margin=last_row ? (fix.bottom + (bottom_row ? fix.guide : 0)) * Plots.px :
-                      -1Plots.mm,
+                    (labeled ? 3st.k * Plots.mm : 0Plots.mm) -
+                    # Compact: pull the first column in toward the shared label.
+                    (st.compact && first_col ? 4Plots.mm : 0Plots.mm),
+        # Ticks above an empty slot hang into it; cancelling GR's padding for
+        # them keeps their row's gap the same as the others.
+        # Compact: trimmed into GR's padding under the x label (white space only).
+        bottom_margin=bottom_row ? (fix.bottom + fix.guide) * Plots.px - (st.compact ? 3Plots.mm : 0Plots.mm) :
+                      last_row ? -text_px(st.tick) * Plots.px - 1Plots.mm : -1Plots.mm,
         # GR adds 2mm on every side; above the title that is only white space.
         top_margin=fix.top * Plots.px - 2Plots.mm, right_margin=2Plots.mm,
     )
     if metric == "efficiency"
         effs = filter(!isnothing, efficiency.(series))
         hi = max(1.0, maximum(maximum, effs; init=0.0))
-        plot!(p; ylims=positive_ylim(hi; pad=0.12))
+        lims = positive_ylim(hi; pad=0.12)
+        plot!(p; ylims=lims)
+        st.compact && plot!(p; yticks=linear_ticks(lims[2]))
         hline!(p, [1.0]; color=IDEALCOL, ls=:dashdot, lw=1.4st.k, label="")
         grid_lines!(p, [(s, efficiency(s), nothing) for s in series if efficiency(s) !== nothing], st)
         return p
@@ -208,7 +262,9 @@ function panel_plot(series, metric; title, log_values, zero_log=false, split=not
         (series_ymin_positive(series, y, e) / 1.5, series_ymax(series, y, e) * 1.5) :
         positive_ylim(series_ymax(series, y, e); pad=0.2)
     plot!(p; ylims, yscale=log_values ? :log10 : :identity)
-    plot!(p; yformatter=compact_tick)
+    st.compact && !log_values && plot!(p; yticks=linear_ticks(ylims[2]))
+    # `pow10`: a log axis labels its ticks 10^n, like the log x axes.
+    plot!(p; yformatter=log_values && pow10 ? pow10_tick : compact_tick)
     above = [getfield(x, y) for s in series for x in s.agg if split !== nothing && getfield(x, y) > split]
     (log_values || isempty(above)) || return split_panel(p, series, y, e, split, gpus, st; pad=split_pad)
     grid_lines!(p, [(s, getfield.(s.agg, y), getfield.(s.agg, e)) for s in series], st)
@@ -224,9 +280,10 @@ function split_panel(p, series, y, e, split, gpus, st; frac=0.7, pad=0.05)
     t(v) = v <= split ? (frac - gap) * v / split :
         frac + gap + (1 - frac - gap) * (v - split) / (hi - split)
     step(lo, hi, n) = first(filter(s -> (hi - lo) / s <= n, [m * 10.0^k for k in 0:9 for m in (1, 2, 5)]))
-    below = collect(0:step(0, split, 4):(0.999split))
-    s_hi = step(split, hi, 3)
-    ticks = [below; collect((ceil(split / s_hi) * s_hi):s_hi:hi)]
+    below = collect(0:step(0, split, st.compact ? 3 : 4):(0.999split))
+    s_hi = step(split, hi, st.compact ? 1 : 3)
+    above = collect((ceil(split / s_hi) * s_hi):s_hi:hi)
+    ticks = [below; isempty(above) ? [round(hi; sigdigits=1)] : above]
     plot!(p; ylims=(0, 1), yticks=(t.(ticks), compact_tick.(ticks)))
     grid_lines!(p, map(series) do s
         v, err = getfield.(s.agg, y), getfield.(s.agg, e)
@@ -236,27 +293,24 @@ function split_panel(p, series, y, e, split, gpus, st; frac=0.7, pad=0.05)
     # top and bottom lines, left and right lines cut at the break with // marks,
     # and inward tick marks like the :box frame of the other panels.
     plot!(p; framestyle=:grid)
-    # The drawn frame sits at the usual x limits; the plot area extends a little
-    # past it so the outer half of each slash isn't clipped.
+    # The frame sits on the usual x limits, so GR clips half of each line: draw
+    # them doubled. The // marks are text, which is not clipped.
     (x0, x1), lw = (minimum(gpus) / 1.15, maximum(gpus) * 1.15), 0.7st.k
-    edge(xs, ys) = plot!(p, xs, ys; color=INK, lw, label="")
+    edge(xs, ys; w=2lw) = plot!(p, xs, ys; color=INK, lw=w, label="")
     tick = 2^(0.02 * log2(x1 / x0))   # inward tick length on the log2 x axis
-    slash = 2^0.08
-    plot!(p; xlims=(x0 / slash^1.2, x1 * slash^1.2))
     edge([x0, x1], [0, 0]); edge([x0, x1], [1, 1])
     for (x, inward) in ((x0, tick), (x1, 1 / tick))
         edge([x, x], [0, frac - gap]); edge([x, x], [frac + gap, 1])
         # Each slash is centered on the axis line, at the start and the end of the gap.
         for dy in (-gap, gap)
-            plot!(p, [x / slash, x * slash], [frac + dy - 0.025, frac + dy + 0.025];
-                color=INK, lw=1.8lw, label="")
+            annotate!(p, x, frac + dy, text("—", st.tick - 2, INK, :center; rotation=25))
         end
         for v in t.(ticks)
-            edge([x, x * inward], [v, v])
+            edge([x, x * inward], [v, v]; w=lw)
         end
     end
     for g in gpus
-        edge([g, g], [0, 0.03]); edge([g, g], [0.97, 1])
+        edge([g, g], [0, 0.03]; w=lw); edge([g, g], [0.97, 1]; w=lw)
     end
     return p
 end
@@ -267,7 +321,16 @@ legend_dims(st) = (swatch=34st.legend_k, char=0.8st.legend, gap=10st.legend_k, r
 # GR padding around an axis-less subplot; excluding it keeps px ≈ plot units.
 const LEGEND_INSET_PX = 90
 
-entry_px(s, d) = d.swatch + 4 + d.char * length(s.label)
+# DejaVu Sans advance widths as fractions of an average lowercase letter.
+const GLYPH_WIDTHS = merge(Dict(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        [684, 686, 698, 770, 632, 575, 775, 752, 295, 295, 656, 557, 863, 748, 787, 603, 787, 695,
+         635, 611, 732, 684, 989, 685, 611, 685] ./ 600)),
+    Dict(c => 0.53 for c in ".,:; |/"), Dict(c => 0.65 for c in "()[]"),
+    Dict(c => 0.46 for c in "ijl"), Dict(c => 0.62 for c in "frt"))
+glyph_width(c) = get(GLYPH_WIDTHS, c, 1.0)
+
+# `d.glyphs`: sum measured glyph widths instead of counting characters.
+entry_px(s, d) = d.swatch + 4 + d.char * (get(d, :glyphs, false) ? sum(glyph_width, s.label) : length(s.label))
 
 # Each column is as wide as its own longest entry (rows fill left to right).
 function legend_col_widths(series, cols, d)
@@ -291,10 +354,14 @@ end
 # `center` centers the columns horizontally; `justify` spreads one row across the width. `nrows` spaces rows as if there
 # were that many (room for extra lines, like a legend title).
 function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false, nrows=length(rows), pad=0,
-        justify=false, char=nothing, errorbars=false)
+        justify=false, char=nothing, errorbars=false, into=nothing)
     d = legend_dims(st)
     # `char`: per-character width override, where the default estimate runs short.
     d = merge(d, (; gap=d.gap + pad, char=something(char, d.char)))
+    # Tight: measured glyph width and shorter swatches, so more columns fit.
+    # GR draws a lowercase letter ~0.84 em wide (measured).
+    st.tight_legend && (d = merge(d, (; swatch=0.4d.swatch, gap=1.5d.gap, char=something(char, 0.84st.legend),
+        glyphs=true)))
     col_x = cumsum([0.0; legend_col_widths(reduce(vcat, rows), length(first(rows)), d)])
     center && (col_x .+= max(0, (width - LEGEND_INSET_PX - col_x[end]) / 2))
     # `justify` (one row): spread the entries over the full width, equal gaps between.
@@ -303,42 +370,54 @@ function grid_legend(rows, width, st; slot_h=nothing, shift=0.0, center=false, n
         extra = max(0, (width - LEGEND_INSET_PX - sum(w)) / (length(w) - 1))
         col_x = cumsum([0.0; w .+ extra])
     end
-    pl = plot(; framestyle=:none, grid=false, ticks=false, legend=false,
+    # `into` = (plot, subplot): draw into that existing subplot instead.
+    pl, sp = something(into, (plot(; framestyle=:none, grid=false, ticks=false, legend=false,
         xlims=(0, width - LEGEND_INSET_PX), ylims=(0, 1), widen=false,
         # Cancel GR's 2mm padding; at the canvas bottom, stop short so rounding
         # cannot push the viewport off the canvas (GR then draws it elsewhere).
-        margin=0Plots.mm, top_margin=-2Plots.mm, bottom_margin=-1.9Plots.mm)
+        margin=0Plots.mm, top_margin=-2Plots.mm, bottom_margin=-1.9Plots.mm), 1))
     for (r, row) in enumerate(rows)
         # In a slot, GR padding shrinks the height; spread rows instead.
-        step = slot_h === nothing ? 1 / nrows : min(1 / nrows, 1.6d.row / slot_h)
-        y = 1 - (r - 0.5) * step + shift
+        step = slot_h === nothing ? 1 / nrows : min(1 / nrows, (st.compact ? 1.2 : 1.6) * d.row / slot_h)
+        # Shifted down only as far as keeps the last row inside the slot.
+        y = 1 - (r - 0.5) * step + max(shift, min(0, nrows * step - 1))
         for (c, s) in enumerate(row)
             x = col_x[c]
             scale = st.legend_k / st.k
             plot!(pl, [x, x + d.swatch], [y, y]; color=s.color, lw=0.9scale * st.lw, ls=s.ls,
-                label="")
-            hollow_marker!(pl, [x + d.swatch / 2], [y], s, 0.65scale * st.ms)
+                label="", subplot=sp)
+            hollow_marker!(pl, [x + d.swatch / 2], [y], s, 0.65scale * st.ms; subplot=sp)
             if errorbars
                 # Illustrative whiskers extend beyond the marker, even when
                 # the measured errors in the panels are too small to see.
                 mid, cap, err = x + d.swatch / 2, 0.10d.swatch, 0.32step
-                plot!(pl, [mid, mid], [y - err, y + err];
+                plot!(pl, [mid, mid], [y - err, y + err]; subplot=sp,
                     color=s.color, lw=0.6scale * st.lw, label="")
                 for endpoint in (y - err, y + err)
-                    plot!(pl, [mid - cap, mid + cap], [endpoint, endpoint];
+                    plot!(pl, [mid - cap, mid + cap], [endpoint, endpoint]; subplot=sp,
                         color=s.color, lw=0.6scale * st.lw, label="")
                 end
             end
-            annotate!(pl, x + d.swatch + 4, y, text(s.label, st.legend, :black, :left))
+            annotate!(pl, x + d.swatch + 4, y, text(s.label, st.legend, :black, :left); subplot=sp)
         end
     end
     return pl
 end
 
+# "GPUs" under the tick labels, placed in axis fractions.
+function gpus_below!(p, panel_h, st)
+    (x0, x1), (y0, y1) = xlims(p), ylims(p)
+    logy = p[1][:yaxis][:scale] == :log10
+    f = -(text_px(st.tick) + 0.75text_px(st.guide)) / (0.72panel_h)
+    y = logy ? exp10(log10(y0) + f * (log10(y1) - log10(y0))) : y0 + f * (y1 - y0)
+    annotate!(p, sqrt(x0 * x1), y, text("GPUs", st.guide, :black, :center))
+    return p
+end
+
 # `n` panels in `columns` columns plus a shared legend. `make_panel(i; first_col,
 # last_row, bottom_row, fix)` draws panel i. `center` centers a legend row.
 function grid_layout(make_panel, n, legend_series, columns; panel_w, panel_h, st, center=false,
-        legend_cols=nothing)
+        legend_cols=nothing, ylabel=nothing)
     rows = cld(n, columns)
     width = panel_w * columns
     # An empty grid slot holds the legend; otherwise it gets a row underneath.
@@ -352,16 +431,53 @@ function grid_layout(make_panel, n, legend_series, columns; panel_w, panel_h, st
     plots = Any[make_panel(i; first_col=(i - 1) % columns == 0, last_row=i > n - columns,
                     bottom_row=i > (rows - 1) * columns, fix)
                 for i in 1:n]
-    in_slot && push!(plots, grid_legend(rows_legend, panel_w, st; slot_h=panel_h))
+    # A panel above an empty slot shows GPU ticks too; label them without a
+    # real xlabel, whose margin would shrink every row.
+    for i in (n - columns + 1):n
+        i > (rows - 1) * columns || i < 1 || gpus_below!(plots[i], panel_h, st)
+    end
+    # Below the GPU ticks and label hanging from the panel above.
+    shift = -(text_px(st.tick) + text_px(st.guide)) / panel_h
+    # Compact: the slot stays empty; the legend floats over it (added below).
+    in_slot && push!(plots, st.compact ? plot(; framestyle=:none, background_color_subplot=:transparent) :
+        grid_legend(rows_legend, panel_w, st; slot_h=panel_h, shift))
     for _ in (length(plots) + 1):(rows * columns)
         push!(plots, plot(; framestyle=:none))
     end
     # One grid for all panels, so margins align per column (same panel widths).
     fig_kw = (size=(width, height), dpi=200, background_color=:white)
-    in_slot && return plot(plots...; layout=grid(rows, columns), fig_kw...)
     body = plot(plots...; layout=grid(rows, columns))
-    return plot(body, grid_legend(rows_legend, width, st; center);
-        layout=grid(2, 1; heights=[rows * panel_h, legend_h] ./ height), fig_kw...)
+    fig = in_slot ? body : plot(body, grid_legend(rows_legend, width, st; center);
+        layout=grid(2, 1; heights=[rows * panel_h, legend_h] ./ height))
+    st.compact || return plot(fig; fig_kw...)
+    if ylabel === nothing
+        fig = plot(fig; fig_kw...)
+    else
+        fig = with_ylabel_strip(fig, ylabel, rows * panel_h / height, width; st, fig_kw)
+    end
+    in_slot && floating_legend!(fig, (ylabel !== nothing) + n + 1, rows_legend, panel_w, panel_h, st, shift)
+    return fig
+end
+
+# Compact slot legend: an inset over the empty slot, reaching left of the
+# column's axis line (a slot subplot would be clipped there).
+function floating_legend!(fig, slot, rows_legend, panel_w, panel_h, st, shift; reach=0.15)
+    k = length(fig.subplots) + 1
+    plot!(fig; inset=(slot, bbox(-reach, 0, 1 + reach, 1)), subplot=k, framestyle=:none,
+        grid=false, ticks=false, legend=false, widen=false, margin=0Plots.mm,
+        xlims=(0, (1 + reach) * (panel_w - LEGEND_INSET_PX)), ylims=(0, 1),
+        background_color_subplot=:transparent)
+    grid_legend(rows_legend, panel_w, st; slot_h=panel_h, shift, into=(fig, k))
+    return fig
+end
+
+# One y label for the whole grid, centered on the panels (top `frac` of the height).
+function with_ylabel_strip(fig, ylabel, frac, width; st, fig_kw)
+    strip_w = 1.0text_px(st.guide) / width
+    strip = plot(; framestyle=:none, grid=false, ticks=false, legend=false,
+        xlims=(0, 1), ylims=(0, 1), margin=0Plots.mm)
+    annotate!(strip, 0.5, 1 - frac / 2, text(ylabel, st.guide, :black, :center; rotation=90))
+    return plot(strip, fig; layout=grid(1, 2; widths=[strip_w, 1 - strip_w]), fig_kw...)
 end
 
 # Panel `note`: { text, model (colors it like that model's series), at = [x, y] as
@@ -377,21 +493,28 @@ function panel_note!(p, note, log_y, st)
                        lims[1] + f * (lims[2] - lims[1])
     y = log_y ? exp10(log10(ylims(p)[1]) + fy * (log10(ylims(p)[2]) - log10(ylims(p)[1]))) :
         at(ylims(p), fy, false)
-    annotate!(p, at(xlims(p), fx, true), y, text(note["text"], st.tick, color, fx > 0.5 ? :right : :left, :bottom))
+    annotate!(p, at(xlims(p), fx, true), y, text(note["text"], st.tick - st.compact, color, fx > 0.5 ? :right : :left, :bottom))
     return p
 end
 
-function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=true)
+function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=true, legend_cols=nothing)
     # Same label always has the same style, so one shared legend covers all panels.
     legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
     # Panels can differ in unit, so each throughput panel labels its own.
     ylabel(i) = metric == "throughput" ? panels[i].unit : nothing
-    draw(i; kw...) = panel_note!(panel_plot(panels[i].series, metric; title=panels[i].title,
+    # Compact grids share one y label with the most common unit; others go in the title.
+    units = [p.unit for p in panels]
+    unit = argmax(u -> count(==(u), units), units)
+    short(u) = replace(u, "random numbers" => "randoms")
+    title(i) = st.compact && metric == "throughput" && panels[i].unit != unit ?
+        "$(panels[i].title) ($(short(panels[i].unit)))" : panels[i].title
+    draw(i; kw...) = panel_note!(panel_plot(panels[i].series, metric; title=title(i),
             ylabel=ylabel(i),
             log_values=panels[i].log, split=get(get(panels[i], :split, Dict()), metric, nothing),
             gridlines, st, kw...),
         get(panels[i], :note, nothing), panels[i].log && metric != "efficiency", st)
-    return grid_layout(draw, length(panels), legend_series, columns; panel_w, panel_h, st)
+    return grid_layout(draw, length(panels), legend_series, columns; panel_w, panel_h, st, legend_cols,
+        ylabel=metric == "throughput" ? "Throughput ($unit)" : METRICS[metric].ylabel)
 end
 
 # cuNumeric speedups for the paper text: (label, GPU counts compared).
@@ -456,7 +579,8 @@ function grid_dimensions(raw, columns)
         font_size *= 2
     end
     return panel_w, panel_h, grid_style(font_size; legend_scale=get(raw, "legend_scale", 1.0),
-        marker_scale=get(raw, "marker_scale", 1.0))
+        marker_scale=get(raw, "marker_scale", 1.0), compact=get(raw, "compact", false),
+        tight_legend=get(raw, "tight_legend", get(raw, "compact", false)))
 end
 
 function grid_main(args=ARGS)
@@ -484,8 +608,8 @@ function grid_main(args=ARGS)
     for m in metrics
         out = joinpath(cfg.out_dir, "grid_$(m).$(format)")
         fig = grid_figure(panels, m, columns; panel_w, panel_h, st,
-            gridlines=get(raw, "gridlines", true))
-        savefig(scale_open_markers!(fig), out)
+            gridlines=get(raw, "gridlines", true), legend_cols=get(raw, "legend_columns", nothing))
+        save_plot(scale_open_markers!(fig), out)
         println("wrote $out")
     end
     summary = speedup_summary(panels)

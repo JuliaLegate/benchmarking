@@ -5,14 +5,18 @@
 metrics = ["throughput", "time", "efficiency"]
 gridlines = true
 columns = 2
-legend_scale = 1.6
+legend_scale = 1.0
 panel_size = [400, 220]
 format = "pdf"
+width_in = 3.5   # one IEEE column
+font_size = 6
+compact = true   # shared y label, fewer y ticks
+legend_columns = 2
 
 [[panel]]
 benchmark = "gemm"
 results = "results-brev/20261001-023020-EgnbwV"
-note = { text = "JACC omitted: no BLAS-3 GEMM", model = "JACC.jl" }
+note = { text = "JACC omitted:\nno BLAS-3 GEMM", model = "JACC.jl" }
 
 [[panel]]
 benchmark = "montecarlo"

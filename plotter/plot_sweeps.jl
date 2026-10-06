@@ -27,21 +27,30 @@ function sweep_series(panel)
     return series
 end
 
-# Log x (sizes span decades), linear y; every panel labels its own y unit.
-function sweep_panel(panel, metric; first_col, last_row, bottom_row, fix, st)
+# Log x (sizes span decades), linear y. Throughput panels label their own unit;
+# other metrics share one y label, on the first column.
+function sweep_panel(panel, metric; first_col, last_row, bottom_row, fix, st, log_y=false)
     y = metric == "throughput" ? :h : :t
+    vals = [v for s in panel.series for v in getfield.(s.agg, y) if v > 0]
+    labeled = metric == "throughput" || first_col
     p = plot(;
         title=panel.title, xlabel=bottom_row ? panel.xlabel : "",
-        ylabel=metric == "throughput" ? panel.unit : METRICS[metric].ylabel,
-        xscale=:log10, yformatter=compact_tick, framestyle=:box, legend=false,
-        ylims=positive_ylim(maximum(maximum(getfield.(s.agg, y)) for s in panel.series); pad=0.1),
+        ylabel=!labeled ? "" : metric == "throughput" ? panel.unit : METRICS[metric].ylabel,
+        # A log y axis labels its ticks 10^n, like the x axis.
+        xscale=:log10, yformatter=log_y ? pow10_tick : compact_tick, framestyle=:box, legend=false,
+        yscale=log_y ? :log10 : :identity,
+        ylims=log_y ? (minimum(vals) / 1.5, maximum(vals) * 1.5) : positive_ylim(maximum(vals); pad=0.1),
         grid=true, gridcolor=:gray, gridalpha=0.25, gridlinewidth=0.6st.k, gridstyle=:solid,
         tickfontsize=st.tick, guidefontsize=st.guide, titlefontsize=st.title,
         titlefontfamily="DejaVuSans-Bold",
-        left_margin=(fix.ticks + fix.guide) * Plots.px + 3st.k * Plots.mm,
+        # Cut GR's padding left of the y label, and between columns when the
+        # next one has no label (white space only).
+        left_margin=fix.ticks * Plots.px + (labeled ? fix.guide * Plots.px : 0Plots.mm) -
+                    (first_col || !labeled ? 2Plots.mm : 0Plots.mm),
         bottom_margin=(fix.bottom + (bottom_row ? fix.guide : 0)) * Plots.px,
-        # Room for the last x tick label (10^10), which is centered on the edge.
-        top_margin=fix.top * Plots.px - 2Plots.mm, right_margin=4st.k * Plots.mm,
+        # Room for the last x tick label (10^10), centered on the edge; only the
+        # last column needs it, the others sit next to a panel.
+        top_margin=fix.top * Plots.px - 2Plots.mm, right_margin=first_col ? -1.5Plots.mm : 2.5st.k * Plots.mm,
     )
     # Dashed (unfused) last: they track MosaicPIE closely and would hide under it.
     for s in sort(panel.series; by=s -> s.ls != :solid)
@@ -72,10 +81,11 @@ function sweeps_main(args=ARGS)
         marker=style[s.label].marker, ls=style[s.label].ls)) for s in p.series])) for p in panels]
     mkpath(cfg.out_dir)
     for m in string.(get(raw, "metrics", ["time", "throughput"]))
-        draw(i; kw...) = sweep_panel(panels[i], m; st, kw...)
+        draw(i; kw...) = sweep_panel(panels[i], m; st, log_y=m in string.(get(raw, "log", String[])), kw...)
         out = joinpath(cfg.out_dir, "sweep_$(m).$(format)")
-        fig = grid_layout(draw, length(panels), legend_series, columns; panel_w, panel_h, st)
-        savefig(scale_open_markers!(fig), out)
+        fig = grid_layout(draw, length(panels), legend_series, columns; panel_w, panel_h, st,
+            center=true, legend_cols=get(raw, "legend_columns", nothing))
+        save_plot(scale_open_markers!(fig), out)
         println("wrote $out")
     end
     return nothing

@@ -2,9 +2,12 @@
 
 metrics = ["time", "throughput"]
 columns = 2
-panel_size = [400, 320]
+panel_size = [400, 265]
 legend_scale = 1.0
+legend_columns = 4   # one row
+tight_legend = true   # so one row fits
 marker_scale = 0.6   # dense x points
+log = ["time", "throughput"]   # log y for these metrics
 format = "pdf"
 width_in = 3.5   # one IEEE column
 font_size = 6
