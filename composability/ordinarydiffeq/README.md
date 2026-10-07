@@ -181,7 +181,7 @@ ODE_ADAPTIVE=1 ODE_TIMED_SAMPLES=5 julia --project="$ODE_PROJECT" \
   composability/ordinarydiffeq/integrator_smoke.jl 4096
 ```
 
-The adaptive case scopes `cuNumeric.allowautofetch()` around `solve`, because
+The adaptive case scopes `cuNumeric.allowfetch()` around `solve`, because
 the step-size controller makes host-side scalar decisions. The timed benchmark
 above continues to use the fixed-step CarpenterKennedy2N54 method.
 

@@ -22,7 +22,7 @@ positive parameters without gradients; log parameters enforce positivity.
 evaluation builds a backend concentration image, runs `Integrals.jl` on that
 image for every band, and reduces the error to one scalar loss. The expensive
 image arithmetic and integrals use `CuArray`, Dagger `DArray`, or `NDArray` storage. The scalar
-loss reaches the optimizer through ordinary `allowautofetch` conversion; no
+loss reaches the optimizer through ordinary `allowfetch` conversion; no
 `all(isfinite, NDArray)` shim or `CNBool` conversion is defined.
 
 The default single-GPU comparison is CUDA.jl, Dagger, and cuNumeric. Each backend
