@@ -46,7 +46,7 @@ if BACKEND == "cuNumeric"
     @eval make_operator(a::Matrix) = cuNumeric.nda_attach_external(a; shape=reverse(size(a)))
     @eval sync(w) = cuNumeric.issue_execution_fence(; block=true)
     @eval host_array(x) = Array(x)
-    @eval permitted_solve!(w, A, b) = @allowpromotion @allowautofetch solve!(w, A, b)
+    @eval permitted_solve!(w, A, b) = @allowpromotion @allowfetch solve!(w, A, b)
     MODE == "local" && include("local.jl")
 elseif BACKEND == "CuArray"
     @eval using CUDA

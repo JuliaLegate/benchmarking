@@ -228,9 +228,9 @@ if CUNUMERIC_BENCH_RUNTIME
 end
 
 # Newer cuNumeric returns reductions as CNScalars, which unwrap to host values
-# only inside allowautofetch. Older releases (e.g. 0.2) and other backends lack it.
-const _AUTOFETCH = CUNUMERIC_BENCH_RUNTIME && isdefined(cuNumeric, :allowautofetch)
-_with_autofetch(f) = _AUTOFETCH ? cuNumeric.allowautofetch(f) : f()
+# only inside allowfetch. Older releases (e.g. 0.2) and other backends lack it.
+const _ALLOWFETCH = CUNUMERIC_BENCH_RUNTIME && isdefined(cuNumeric, :allowfetch)
+_with_fetch(f) = _ALLOWFETCH ? cuNumeric.allowfetch(f) : f()
 
 _all_approx(a, b, ::Type{T}; kwargs...) where {T} = isapprox_ref(a, b, T; kwargs...)
 function _all_approx(a::Tuple, b::Tuple, ::Type{T}; kwargs...) where {T}
@@ -258,7 +258,7 @@ function check_benchmark_correctness(
     got = run_on(mod, check_problem)
     reference_kernel = reference === Base ? check_problem : cuda_runnable(check_problem)
     expected = run_on(reference, reference_kernel)
-    return _with_autofetch(() -> _all_approx(got, expected, T; atol, rtol)) ? "pass" : "fail"
+    return _with_fetch(() -> _all_approx(got, expected, T; atol, rtol)) ? "pass" : "fail"
 end
 
 # One timed trial: warmup, then time `n_iter` iterations of `run!`.

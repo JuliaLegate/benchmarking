@@ -52,7 +52,7 @@ for (name, algorithm) in ALGORITHMS
     )
     # Adaptive controllers need host decisions; keep fetching scoped to solve.
     permitted_solve() = if ADAPTIVE
-        cuNumeric.allowautofetch() do
+        cuNumeric.allowfetch() do
             run_solve()
         end
     else

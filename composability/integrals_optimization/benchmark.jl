@@ -47,7 +47,7 @@ elseif backend == "cuNumeric"
     make_state(a) = NDArray(a)
     synchronized_time_ns() = cuNumeric.get_time_nanoseconds()
     correct_storage(a) = a isa NDArray{T,2}
-    run_with_scalar_fetch(f) = cuNumeric.allowautofetch(f)
+    run_with_scalar_fetch(f) = cuNumeric.allowfetch(f)
 elseif backend == "Dagger"
     using Dagger, CUDA
     const BLOCKS_PER_GPU = parse(Int, get(ENV, "DAGGER_BLOCKS_PER_GPU", "1"))
