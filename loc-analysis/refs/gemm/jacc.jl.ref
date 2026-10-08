@@ -5,7 +5,6 @@ function init(T, N, M, gpus)
     A = rand(T, N, M)
     B = rand(T, M, N)
     C = zeros(T, N, N)
-    # MultiArray partitions by columns; replicate A so every GPU holds all of it.
     return JACC.Multi.array(C), JACC.Multi.array(repeat(A, 1, gpus)), JACC.Multi.array(B)
 end
 

@@ -4,15 +4,12 @@ import Dagger: @stencil, Wrap
 
 const NAS_MG_A = (-8.0/3.0, 0.0, 1.0/6.0, 1.0/12.0)
 
-# p = (; dims=(nx, ny, nz), niter, c); c is the class smoother.
-
 function nas_mg_level_shapes(p)
     d = p.dims
     lt = round(Int, log2(minimum(d)))
     return [d .÷ 2^(lt - level) .+ 2 for level in 1:lt]
 end
 
-# Unghosted (nx, ny, nz) per level; Dagger stencils wrap periodically instead.
 level_dims(p) = [shape .- 2 for shape in nas_mg_level_shapes(p)]
 
 function mg_array(host, procs)
@@ -32,7 +29,6 @@ function init(p, gpus)
         r = [mg_array(zeros(Float64, d), procs) for d in dims]
         ghosted_rhs = nas_mg_rhs(p)
         rhs = mg_array(copy(@view ghosted_rhs[2:(end - 1), 2:(end - 1), 2:(end - 1)]), procs)
-        foreach(a -> foreach(wait, a.chunks), (u..., r..., rhs))
         return (; scope, procs, u, r, rhs)
     end
 end
@@ -238,7 +234,6 @@ function run!(s, p)
             dagger_mg_cycle!(s, p.c)
             dagger_mg_resid!(s.r[end], s.u[end], s.rhs)
         end
-        foreach(wait, s.r[end].chunks)
-        return norm_tasks(s, s.r[end])
+        return sum(task -> only(fetch(task)), norm_tasks(s, s.r[end]))
     end
 end

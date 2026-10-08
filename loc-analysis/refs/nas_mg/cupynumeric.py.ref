@@ -5,7 +5,6 @@ import cupynumeric as np
 A = (-8.0 / 3.0, 0.0, 1.0 / 6.0, 1.0 / 12.0)
 
 def level_shapes(dims):
-    """Ghosted shapes per level, coarsest first; every axis halves per level."""
     lt = int(math.log2(min(dims)))
     return [tuple(d // 2 ** (lt - level) + 2 for d in dims) for level in range(1, lt + 1)]
 
@@ -99,8 +98,6 @@ def restrict_axis(array, axis):
     back, inverse = axis_last(array, axis)
     d1, d2, n = back.shape
     physical = n - 2
-    # Legate cannot reshape a sliced store. Materialize two contiguous slabs,
-    # pair neighboring cells in the last dimension, then reduce each pair.
     left = back[:, :, 1 : n - 1].copy()
     right = back[:, :, 2:n].copy()
     paired_shape = (d1, d2, physical // 2, 2)
@@ -135,7 +132,6 @@ def norm2(residual):
     interior = residual[1:-1, 1:-1, 1:-1]
     return np.sum(interior * interior)
 
-# rhs_host(dims) is the NPB RNG input generator (not counted).
 def init(dims):
     shapes = level_shapes(dims)
     return {

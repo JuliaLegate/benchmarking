@@ -1,9 +1,6 @@
 using JACC: JACC
 JACC.@init_backend
-using CUDA
 
-# The periodic N×M grid is stored as N×(ndev*P) columns: a halo column, data
-# columns 1..M, a halo column, then padding. Device d owns columns (d-1)P+1:dP.
 struct GSLayout
     N::Int
     M::Int
@@ -53,16 +50,6 @@ end
     return nothing
 end
 
-# JACC.Multi only copies within one GPU; cross-GPU copies need CUDA.jl.
-function multi_copy!(dst, doff, src, ds, soff, n)
-    CUDA.device!(ds - 1)
-    copyto!(dst, doff, src, soff, n)
-    CUDA.synchronize()
-    CUDA.device!(0)
-    return dst
-end
-
-# Periodic wrap: halo 1 <- data column M, halo M+2 <- data column 1.
 function gsm_halo!(a, L::GSLayout)
     ps = a.a2
     for (dst, src) in ((1, L.M + 1), (L.M + 2, 2))

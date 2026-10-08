@@ -1,14 +1,12 @@
 using JACC: JACC
 JACC.@init_backend
 
-# Solve tridiag(1,4,1)*x = 1/2 from zero.
 function init(T, N)
     lower = JACC.Multi.array(ones(T, N))
     diagonal = JACC.Multi.array(fill(T(4), N))
     upper = JACC.Multi.array(ones(T, N))
     x = JACC.Multi.array(zeros(T, N))
     r = JACC.Multi.array(zeros(T, N))
-    # Only the search direction needs neighboring values for the stencil.
     p = JACC.Multi.array(zeros(T, N); ghost_dims=1)
     Ap = JACC.Multi.array(zeros(T, N))
     return (; A=(lower, diagonal, upper), x, work=(r, p, Ap))
@@ -31,9 +29,7 @@ function cg_reset(i, x, r, p, value)
     @inbounds r[i] = p[JACC.Multi.ghost_shift(i, p)] = value
 end
 
-# Exchange only the two values adjacent to every partition boundary.
 function cg_sync_halos!(p)
-    length(p.a2) == 1 && return nothing
     for i in 1:(length(p.a2) - 1)
         left, right = p.a2[i], p.a2[i + 1]
         copyto!(right, 1, left, length(left) - 1, 1)
@@ -59,7 +55,9 @@ function run!(s, ::Type{T}, N; check_every=10, max_iter=1000) where {T}
         next = dot(r, r)
         JACC.Multi.parallel_for(N, cg_direction, p, r, next / max(rho, floatmin(T)))
         rho = next
-        (k % check_every == 0 || k == max_iter) && rho <= target && return k
+        if k % check_every == 0 || k == max_iter
+            rho <= target && return k
+        end
     end
     return max_iter
 end

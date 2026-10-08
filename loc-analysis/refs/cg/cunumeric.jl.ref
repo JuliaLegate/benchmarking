@@ -1,7 +1,6 @@
 using cuNumeric
 using LinearAlgebra: dot
 
-# Solve tridiag(1,4,1)*x = 1/2 from zero.
 function init(T, N)
     lower = cuNumeric.ones(T, N)
     diagonal = cuNumeric.ones(T, N)

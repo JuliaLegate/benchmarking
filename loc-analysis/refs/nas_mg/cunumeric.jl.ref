@@ -2,16 +2,12 @@ using cuNumeric
 
 const NAS_MG_A = (-8.0/3.0, 0.0, 1.0/6.0, 1.0/12.0)
 
-# p = (; dims=(nx, ny, nz), niter, c); c is the class smoother.
-
 function nas_mg_level_shapes(p)
     d = p.dims
     lt = round(Int, log2(minimum(d)))
     return [d .÷ 2^(lt - level) .+ 2 for level in 1:lt]
 end
 
-# Disjoint slice-to-slice assignments take cuNumeric's native copy path;
-# @accelerate releases each temporary view.
 cuNumeric.@accelerate function nas_mg_comm3!(u::cuNumeric.NDArray{T,3}) where {T}
     n1, n2, n3 = size(u)
     yi, zi = 2:(n2 - 1), 2:(n3 - 1)
@@ -78,9 +74,6 @@ cuNumeric.@accelerate function cunumeric_mg_psinv!(
     return u
 end
 
-# Restriction and interpolation are separable axis passes. cuNumeric reshapes in
-# C order, so each pass moves its axis last; one function per axis keeps every
-# scope straight-line for @accelerate, which frees each named temporary.
 cuNumeric.@accelerate function cunumeric_mg_pair_sum(back::cuNumeric.NDArray{T,3}) where {T}
     left = cuNumeric.reshape(
         back[:, :, 2:(end - 1)], size(back, 1), size(back, 2), (size(back, 3) - 2) ÷ 2, 2
@@ -128,8 +121,6 @@ cuNumeric.@accelerate function cunumeric_mg_interp_last(
     return cuNumeric.reshape(mixed, size(back, 1), size(back, 2), 2(size(back, 3) - 1))
 end
 
-# Legate cannot slice the composed reshape/transpose in the next pass, so the
-# x and y passes copy their result.
 cuNumeric.@accelerate function cunumeric_mg_interp_x(
     coarse::cuNumeric.NDArray{T,3}, weights,
 ) where {T}

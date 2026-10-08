@@ -1,7 +1,6 @@
 using CUDA: CUDA
 using Dagger: Dagger
 
-# NPB EP per-batch kernel (shared by every Julia model).
 const NAS_EP_MK = 8
 
 nas_ep_batches(m) = Int(1) << (m - NAS_EP_MK)
@@ -68,14 +67,11 @@ function init(m, gpus)
     scope = Dagger.scope(; cuda_gpus=collect(1:gpus))
     procs = sort!(collect(Dagger.compatible_processors(scope)); by=string)
     block = cld(n, gpus)
-    nchunks = cld(n, block)
-    assignment = [procs[cld(i * gpus, nchunks)] for i in 1:nchunks]
     return Dagger.with_options(; scope) do
         partials = Dagger.DArray(
-            fill(NASEPPartial(ntuple(_ -> 0.0, 12)...), n), Dagger.Blocks(block), assignment
+            fill(NASEPPartial(ntuple(_ -> 0.0, 12)...), n), Dagger.Blocks(block), procs
         )
-        indices = Dagger.DArray(collect(Int64, 0:(n - 1)), Dagger.Blocks(block), assignment)
-        foreach(a -> foreach(wait, a.chunks), (partials, indices))
+        indices = Dagger.DArray(collect(Int64, 0:(n - 1)), Dagger.Blocks(block), procs)
         return (; scope, partials, indices)
     end
 end

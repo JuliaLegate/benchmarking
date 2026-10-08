@@ -15,9 +15,6 @@ def init(T, N, M):
 
 def run(state, p):
     u, v, u_new, v_new = state
-    # Copy: slice views alias the ping-pong buffers under deferred execution.
-    u = u.copy()
-    v = v.copy()
     ui = u[1:-1, 1:-1]
     vi = v[1:-1, 1:-1]
 

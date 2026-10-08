@@ -2,8 +2,6 @@ using CUDA
 
 const NAS_MG_A = (-8.0/3.0, 0.0, 1.0/6.0, 1.0/12.0)
 
-# p = (; dims=(nx, ny, nz), niter, c); c is the class smoother.
-
 function nas_mg_level_shapes(p)
     d = p.dims
     lt = round(Int, log2(minimum(d)))

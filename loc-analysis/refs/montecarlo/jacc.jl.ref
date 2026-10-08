@@ -9,5 +9,6 @@ init(T, n) = JACC.Multi.array(T(10) .* rand(T, n))
 end
 
 function run(samples, T, n)
-    return (T(10) / n) * JACC.Multi.parallel_reduce(n, integrand, samples)
+    integral = JACC.Multi.parallel_reduce(n, integrand, samples)
+    return (T(10) / n) * integral
 end

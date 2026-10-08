@@ -1,6 +1,4 @@
 import cupynumeric as np
-import numpy as host_np
-from legate.core import TaskTarget, get_legate_runtime
 
 MK, NQ = 8, 10
 SEED, MULTIPLIER = 271828183.0, 1220703125.0
@@ -19,17 +17,11 @@ def reset(state):
 
 def run(state):
     values = state["values"]
-    seed, power = values[0], ipow46(MULTIPLIER, 2*(1 << MK))
-    for mask in state["masks"]:
-        candidate = mul_mod46(seed, power)
-        seed = seed + mask*(candidate-seed)
-        power, _ = randlc_scalar(power, power)
+    seed = start_seeds(values[0], state["masks"])
 
     powers = pair_powers()
     q, sx, sy = values[1:11], values[11], values[12]
-    # Cap each slab at 2^25 pairs per GPU.
-    gpus = max(1, get_legate_runtime().get_machine().count(TaskTarget.GPU))
-    chunk = min(1 << MK, max(1, (gpus << 25)//state["batches"]))
+    chunk = min(1 << MK, max(1, (1 << 25)//state["batches"]))
     for lo in range(0, 1 << MK, chunk):
         hi = min(lo + chunk, 1 << MK)
         seed1 = mul_mod46_powers(seed[None, :], powers[lo:hi, None])

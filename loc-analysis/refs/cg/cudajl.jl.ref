@@ -1,7 +1,6 @@
 using CUDA
 using LinearAlgebra: dot
 
-# Solve tridiag(1,4,1)*x = 1/2 from zero.
 function init(T, N)
     lower = CUDA.ones(T, N)
     diagonal = CUDA.ones(T, N)

@@ -1,7 +1,6 @@
 import cupynumeric as np
 import numpy as host_np
 
-# Solve tridiag(1,4,1)*x = 1/2 from zero.
 def init(T, N):
     lower = np.ones(N, dtype=T)
     diagonal = np.full(N, T(4), dtype=T)

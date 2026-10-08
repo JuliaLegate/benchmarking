@@ -2,8 +2,6 @@ using CUDA: CUDA
 using Dagger: Dagger
 using LinearAlgebra
 
-wait_for_darray(array) = (foreach(wait, array.chunks); array)
-
 function init(T, N, M, gpus)
     scope = Dagger.scope(; cuda_gpus=collect(1:gpus))
     procs = sort!(collect(Dagger.compatible_processors(scope)); by=string)
@@ -17,7 +15,6 @@ function init(T, N, M, gpus)
             assignment=reshape([owner(j) for j in 1:nb], 1, nb))
         C = zeros(Dagger.Blocks(block, block), T, N, N;
             assignment=[owner(j) for _ in 1:nb, j in 1:nb])
-        foreach(wait_for_darray, (C, A, B))
         return (; scope, C, A, B)
     end
 end
@@ -26,5 +23,4 @@ function run!(s)
     Dagger.with_options(; scope=s.scope) do
         return mul!(s.C, s.A, s.B)
     end
-    return wait_for_darray(s.C)
 end

@@ -1,6 +1,5 @@
 using CUDA
 
-# NPB EP per-batch kernel (shared by every Julia model).
 const NAS_EP_MK = 8
 
 nas_ep_batches(m) = Int(1) << (m - NAS_EP_MK)

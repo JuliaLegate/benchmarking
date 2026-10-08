@@ -6,24 +6,6 @@ using AbstractFFTs
 const NAS_FT_ALPHA = 1.0e-6
 const NAS_FT_CHECKSUM_SAMPLES = 1024
 
-# JACC.Multi only copies within one GPU; cross-GPU copies need CUDA.jl.
-function multi_copy!(dst, dd, doff, src, ds, soff, n)
-    CUDA.device!(ds - 1)
-    copyto!(dst, doff, src, soff, n)
-    CUDA.synchronize()
-    CUDA.device!(0)
-    return dst
-end
-
-function multi_upload!(part, d, host, n)
-    CUDA.device!(d - 1)
-    copyto!(part, 1, host, 1, n)
-    CUDA.synchronize()
-    CUDA.device!(0)
-    return part
-end
-
-# In-place cuFFT over `dims` of each part viewed as `shape` (JACC has no FFT).
 function multi_fft!(a, shape, dims, inverse)
     for (d, part) in enumerate(a.a2)
         CUDA.device!(d - 1)
@@ -38,8 +20,6 @@ function multi_fft!(a, shape, dims, inverse)
     return a
 end
 
-# Local sizes: Pz planes per GPU in U, Py columns per GPU in W, B elements per
-# (source, destination) block of the transpose.
 struct FTLayout
     nx::Int
     ny::Int
@@ -77,8 +57,6 @@ end
     return nothing
 end
 
-# z->y blocks are x-fastest (matching U); y->z blocks are z-fastest (matching
-# W). Each pack is then contiguous and only its unpack reads with a stride.
 @inline ftm_block(L, x, yl, zl) = x + L.nx*(yl - 1) + L.nx*L.Py*(zl - 1)
 @inline ftm_block_z(L, x, yl, zl) = zl + L.Pz*(x - 1) + L.Pz*L.nx*(yl - 1)
 
@@ -110,7 +88,6 @@ end
     return nothing
 end
 
-# Block `dst` of every GPU's send buffer becomes block `src` of GPU dst's recv.
 function ftm_exchange!(recv, send, L)
     rp, sp = recv.a2, send.a2
     for src in eachindex(sp), dst in eachindex(rp)
@@ -149,34 +126,32 @@ end
     return imagpart ? imag(v) : real(v)
 end
 
-# p = (; nx, ny, nz, niter)
 function init(p)
     nd = JACC.Multi.ndev()
     L = FTLayout(p, nd)
     arr(T, m, cols) = JACC.Multi.array(zeros(T, m, cols); ghost_dims=0)
+    initial, tw = arr(ComplexF64, p.nx*p.ny, p.nz), arr(Float64, p.nx*p.nz, p.ny)
+    starts = JACC.Multi.array(nas_ft_plane_starts!(Vector{Float64}(undef, p.nz), L.nx, L.ny);
+        ghost_dims=0)
+    JACC.Multi.parallel_for(L.nz, ftm_initial, initial, starts, L.nx*L.ny)
+    ftm_launch(L.nx*L.nz, L.ny, ftm_twiddle, tw, L, -4.0*NAS_FT_ALPHA*pi^2)
     return (;
-        L,
+        L, initial,
         u=arr(ComplexF64, p.nx*p.ny, p.nz),
-        w0=arr(ComplexF64, p.nx*p.nz, p.ny), w1=arr(ComplexF64, p.nx*p.nz, p.ny),
-        tw=arr(Float64, p.nx*p.nz, p.ny),
+        w0=arr(ComplexF64, p.nx*p.nz, p.ny), w1=arr(ComplexF64, p.nx*p.nz, p.ny), tw,
         send=arr(ComplexF64, p.nx*p.ny*L.Pz, nd), recv=arr(ComplexF64, p.nx*p.ny*L.Pz, nd),
-        starts=JACC.Multi.array(zeros(Float64, p.nz); ghost_dims=0),
-        host_starts=Vector{Float64}(undef, p.nz), checksums=ComplexF64[],
     )
 end
 
 function run!(s, p)
     L = s.L
-    nas_ft_plane_starts!(s.host_starts, L.nx, L.ny)
-    for (d, part) in enumerate(s.starts.a2)
-        multi_upload!(part, d, s.host_starts[((d - 1)*L.Pz + 1):(d*L.Pz)], L.Pz)
+    for (d, (dst, src)) in enumerate(zip(s.u.a2, s.initial.a2))
+        multi_copy!(dst, d, 1, src, d, 1, L.nx*L.ny*L.Pz)
     end
-    JACC.Multi.parallel_for(L.nz, ftm_initial, s.u, s.starts, L.nx*L.ny)
-    ftm_launch(L.nx*L.nz, L.ny, ftm_twiddle, s.tw, L, -4.0*NAS_FT_ALPHA*pi^2)
     multi_fft!(s.u, (L.nx, L.ny, L.Pz), (1, 2), false)
     ftm_z_to_y!(s.w0, s.u, s)
     multi_fft!(s.w0, (L.nz, L.nx, L.Py), 1, false)
-    empty!(s.checksums)
+    checksums = ComplexF64[]
     nd = JACC.Multi.ndev()
     for _ in 1:p.niter
         ftm_launch(L.nx*L.nz, L.ny, ftm_evolve, s.w0, s.w1, s.tw, L)
@@ -186,7 +161,7 @@ function run!(s, p)
         n = NAS_FT_CHECKSUM_SAMPLES
         re = JACC.Multi.parallel_reduce(n*nd, ftm_flat, ftm_checksum, n, s.u, L, false)
         im = JACC.Multi.parallel_reduce(n*nd, ftm_flat, ftm_checksum, n, s.u, L, true)
-        push!(s.checksums, ComplexF64(re, im))
+        push!(checksums, ComplexF64(re, im))
     end
-    return s.checksums
+    return checksums
 end

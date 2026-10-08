@@ -37,11 +37,20 @@ extracts of `src/`; update them when `src/` changes. They include imports,
 data placement and everything the timed region calls (kernels, halos,
 reductions, JACC's multi-GPU path). They exclude:
 
-- harness interface, sizing, correctness checks and tuning knobs
-- timing-only syncs and single-GPU-only fast paths
-- metaprogramming (`@accelerate` is written out) and test mocks
-- library-gap workarounds and class tables
+- harness interface, sizing, correctness checks and tuning knobs (written at
+  the simplest default, e.g. one Dagger chunk per GPU)
+- timing-only syncs (setup waits, waits a call already implies), setup-only
+  frees, and single-GPU-only fast paths; syncs needed for correctness stay
+- metaprogramming (the plain `@accelerate` macro stands in for its generator)
+  and test mocks
+- library-gap workarounds (e.g. Dagger's Greedy scheduler, cuPyNumeric's
+  aliasing copies, JACC's flat launches) and class tables; JACC's cross-device
+  copy helpers (`multi_copy!`, `multi_upload!`) are treated as library calls
 - RNG generator definitions (their calls count)
+- comments
+
+Every model does the same work: each finishes the same reductions, and code
+the source writes as a temporary or an `if` stays in that form.
 
 `refs/nas_{ep,ft,mg}/cuda.cu.ref` are excerpts of NPB-GPU's CUDA code under
 the same rules: kernels, launches and the algorithm are kept, while
