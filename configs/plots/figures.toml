@@ -3,7 +3,7 @@
 # Figure keys: config, results, fusion, name, metrics, title, legend_title,
 #   labels.<fusion>.<series> (legend text; sorted by its first number),
 #   colorbar = { label, values = { series = number } } (one color per distinct value, light→dark)
-#   log = [metrics] (log y-axis for those metrics)
+#   log = [metrics] (log y-axis for those metrics), split = { metric = value } (broken y axis)
 
 format = "pdf"
 width_in = 3.5   # one IEEE column

@@ -60,7 +60,8 @@ const VALUE_GRADIENT = cgrad([colorant"#E3A008", colorant"#F28E2B", colorant"#E1
 # One panel colored by a per-series value (`vals`), a color bar, and the legend
 # as a column right of the bar. Distinct values are evenly spaced on the
 # gradient; ties share a color.
-function colorbar_figure(series, metric, vals, cbar_label; unit, log_values=false, panel_w, panel_h, st)
+function colorbar_figure(series, metric, vals, cbar_label; unit, log_values=false, split=nothing,
+        panel_w, panel_h, st)
     width = 2panel_w
     series = sort(series; by=s -> get(vals, s.label, Inf))
     tick_vals = unique(get(vals, s.label, NaN) for s in series)
@@ -74,7 +75,7 @@ function colorbar_figure(series, metric, vals, cbar_label; unit, log_values=fals
     # Taller, for the color bar's title.
     height = 1.15panel_h
     fix = gr_margin_fix(width, height, st)
-    p = panel_plot(series, metric; title="", log_values,
+    p = panel_plot(series, metric; title="", log_values, split,
         ylabel=metric == "throughput" ? unit : nothing,
         first_col=true, last_row=true, bottom_row=true, fix, st)
     bottom = (fix.bottom + fix.guide) * Plots.px
@@ -214,7 +215,7 @@ function figures_main(args=ARGS)
                 fig = haskey(f, "colorbar") ?
                     colorbar_figure(p.series, m, f["colorbar"]["values"], f["colorbar"]["label"];
                         unit=throughput_unit(group), log_values=m in aslist(get(f, "log", String[])),
-                        sizing(2)...) :
+                        split=get(get(f, "split", Dict()), m, nothing), sizing(2)...) :
                     legend_right(p.series, m; unit=throughput_unit(group), sizing(2)...,
                         legend_title=string.(aslist(get(f, "legend_title", String[]))))
                 tag = Dict("on" => "_fused", "off" => "_unfused", "both" => "")[fusion]
