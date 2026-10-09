@@ -70,6 +70,14 @@ function colorbar_figure(series, metric, vals, cbar_label; unit, log_values=fals
     at = Dict(zip(tick_vals, tick_pos))
     series = [merge(s, (; color=get(VALUE_GRADIENT, at[get(vals, s.label, NaN)]), ls=:solid))
               for s in series]
+    # Series sharing a value share a color (e.g. func and let); dodge them a
+    # little along the log2 GPU axis so both markers stay visible.
+    series = map(series) do s
+        same = [t.label for t in series if get(vals, t.label, NaN) === get(vals, s.label, NaN)]
+        length(same) == 1 && return s
+        f = 2.0^(0.14 * (findfirst(==(s.label), same) - (length(same) + 1) / 2))
+        merge(s, (; agg=[merge(x, (; gpus=x.gpus * f)) for x in s.agg]))
+    end
     lst = merge(st, (; legend=st.legend - 1, legend_k=0.7st.legend_k))
     d = legend_dims(lst)
     # Taller, for the color bar's title.
@@ -89,18 +97,18 @@ function colorbar_figure(series, metric, vals, cbar_label; unit, log_values=fals
         right_margin=0.3text_px(st.tick) * Plots.px,   # the label sits close to the legend
         bottom_margin=bottom)
     # Legend column: the longest label at ~1 em per character (measured), plus the swatch.
-    leg_w = (d.swatch + 8 + 1.0lst.legend * maximum(length(s.label) for s in series)) / width
+    leg_w = (d.swatch + 16 + 1.0lst.legend * maximum(length(s.label) for s in series)) / width
     leg = plot(; framestyle=:none, grid=false, ticks=false, legend=false, widen=false,
         xlims=(0, leg_w * width), ylims=(0, 1), margin=0Plots.mm, top_margin=2Plots.mm,
         bottom_margin=bottom)
     scale = lst.legend_k / lst.k
     step = 1.6d.row / height
-    # Highest value on top, as on the color bar.
+    # Highest value on top, as on the color bar. Shapes only, in black: the
+    # color bar carries the color.
     for (i, s) in enumerate(reverse(series))
         y = 0.5 + ((length(series) + 1) / 2 - i) * step
-        plot!(leg, [0, d.swatch], [y, y]; color=s.color, lw=0.9scale * lst.lw, label="")
-        hollow_marker!(leg, [d.swatch / 2], [y], s, 0.65scale * lst.ms)
-        annotate!(leg, d.swatch + 4, y, text(s.label, lst.legend, :black, :left))
+        hollow_marker!(leg, [d.swatch / 2], [y], merge(s, (; color=:black)), 2.0scale * lst.ms)
+        annotate!(leg, d.swatch + 10, y, text(s.label, lst.legend, :black, :left))
     end
     cbar_w = 0.085
     return plot(p, cbar, leg; layout=grid(1, 3; widths=[1 - cbar_w - leg_w, cbar_w, leg_w]),

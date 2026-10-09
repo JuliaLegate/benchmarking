@@ -207,7 +207,8 @@ function panel_plot(series, metric; title, log_values, zero_log=false, split=not
     gridlines=true, ylabel=nothing, pow10=false, tight=nothing, first_col, last_row, bottom_row, fix, st)
     tight = something(tight, st.compact)
     labeled = !st.compact && (first_col || ylabel !== nothing)
-    gpus = sort(unique(x.gpus for s in series for x in s.agg))
+    # Rounded: a figure may dodge overlapping series slightly off the GPU counts.
+    gpus = sort(unique(round(Int, x.gpus) for s in series for x in s.agg))
     p = plot(;
         title, xlabel=bottom_row ? "GPUs" : "",
         ylabel=labeled ? something(ylabel, METRICS[metric].ylabel) : "",

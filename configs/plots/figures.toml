@@ -41,8 +41,8 @@ title = ""
 [[figure]]   # Fusion: Gray-Scott comparison and Monte Carlo forms, time per step
 name = "fusion_time"
 legend_columns = 2
-panel_size = [400, 215]   # shorter: less empty space between the line groups
-ylabel = "Time (ms)"   # short enough for the short panels
+panel_size = [400, 245]   # shorter: less empty space between the line groups
+ylabel = "Time/step (ms)"
 panels = [
     { config = "configs/multi_gpu/grayscott.toml", results = "results-brev/grayscott-compare", title = "Gray-Scott", log = true },
     { config = "configs/multi_gpu/montecarlo_forms.toml", results = "results-brev/20261005-224227-evLB1b", title = "Monte Carlo", hide = ["PIE.jl (naive)"], relabel = { "PIE.jl (naive, unfused)" = "PIE.jl (unfused)" } },
