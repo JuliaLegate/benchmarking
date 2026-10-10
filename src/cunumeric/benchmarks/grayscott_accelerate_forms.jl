@@ -33,24 +33,21 @@ function cuda_runnable(b::AbstractGrayScottAccelerateForm{T}) where {T}
     return GrayScottBaseline{T}(; N=b.N, M=b.M)
 end
 
-function _define_grayscott_accelerated_step(type, form=:function; aggressive=false)
+function _define_grayscott_accelerated_step(type, form=:function)
     body = deepcopy(GRAYSCOTT_STEP_BODY)
     signature = :(_gs_step!(b::$type, u, v, u_new, v_new, args::GSParams))
-    definition = _define_accelerated_definition(signature, body, form; aggressive)
+    definition = _define_accelerated_definition(signature, body, form)
     return Core.eval(@__MODULE__, definition)
 end
 
 if CUNUMERIC_BENCH_ACCELERATE
-    # `aggressive=true` merges the u/v updates into one launch. `begin` cannot:
-    # its named F_v and v_lap stay live; the expression form accelerates each
-    # statement separately.
-    for (type, form, aggressive) in (
-        (GrayScottAccelerated, :function, true),
-        (GrayScottFunctionAccelerated, :function, true),
-        (GrayScottBeginAccelerated, :begin, false),
-        (GrayScottLetAccelerated, :let, true),
+    for (type, form) in (
+        (GrayScottAccelerated, :function),
+        (GrayScottFunctionAccelerated, :function),
+        (GrayScottBeginAccelerated, :begin),
+        (GrayScottLetAccelerated, :let),
     )
-        _define_grayscott_accelerated_step(type, form; aggressive)
+        _define_grayscott_accelerated_step(type, form)
     end
 end
 

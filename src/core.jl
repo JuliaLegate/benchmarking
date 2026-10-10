@@ -104,16 +104,17 @@ function fit_one_gpu(
 end
 
 # Internal adapter for benchmark generators that share a quoted step body.
-function _define_accelerated_definition(signature, body, form=:function; aggressive=false)
-    if form === :function
-        return cuNumeric._accelerate_expand(
-            Expr(:function, signature, body), @__MODULE__; aggressive
-        )
+function _define_accelerated_definition(signature, body, form=:function)
+    input = if form === :function
+        Expr(:function, signature, body)
+    elseif form === :begin
+        Expr(:block, body.args...)
+    else
+        Expr(:let, body)
     end
-    scoped = form === :begin ? Expr(:block, body.args...) : Expr(:let, body)
-    call = Expr(:macrocall, Symbol("@accelerate"), LineNumberNode(0),
-        :(aggressive = $aggressive), scoped)
-    return Expr(:function, signature, Expr(:block, Base.macroexpand(@__MODULE__, call)))
+    call = Expr(:macrocall, Symbol("@accelerate"), LineNumberNode(0), input)
+    expanded = Base.macroexpand(@__MODULE__, call)
+    return form === :function ? expanded : Expr(:function, signature, Expr(:block, expanded))
 end
 
 # Maps a config table name to its benchmark type. Each benchmark file
