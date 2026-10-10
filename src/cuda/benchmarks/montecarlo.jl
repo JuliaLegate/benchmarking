@@ -5,10 +5,9 @@ end
 name(::CUDAMonteCarlo) = "montecarlo"
 register_benchmark("montecarlo", CUDAMonteCarlo)
 
-allowed_types(::Type{<:CUDAMonteCarlo}) = Union{Float32,Float64}
-
-if isdefined(@__MODULE__, :CUDA)
-    run!(mci::CUDAMonteCarlo, x::CUDA.CuArray) = _montecarlo_mapreduce(mci, x)
+function run!(mci::CUDAMonteCarlo{T}, x) where {T}
+    total = mapreduce(_montecarlo_scalar_integrand, +, x; init=zero(T))
+    return _montecarlo_weight(mci) * total
 end
 
 function benchmark_backend_label(

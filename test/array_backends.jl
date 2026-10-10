@@ -107,10 +107,14 @@ end
         run!(c, cs...)
         @test bs[1] == cs[1]
         x = T[0, 0.5, 1, 2, 5]
-        @test run!(MonteCarloIntegration{T}(; n_samples=5), x) ==
+        @test run!(MonteCarloMapReduce{T}(; n_samples=5), x) ==
               run!(CUDAMonteCarlo{T}(; n_samples=5), x)
-        @test _montecarlo_mapreduce(CUDAMonteCarlo{T}(; n_samples=5), x) ≈
+        @test run!(CUDAMonteCarlo{T}(; n_samples=5), x) ≈
               (T(10)/length(x))*sum(exp(-v^2) for v in x)
+        gs = GlobalSettings(; n_warmup=0, n_iter=1)
+        @test check_benchmark_correctness(
+            CUDAMonteCarlo{T}(; n_samples=1024), gs; mod=Base,
+        ) == "pass"
         for (B, C) in ((TensorProjection3, CUDATensorProjection3),
                        (TensorContract4, CUDATensorContract4))
             b, c = B{T}(; N=3), C{T}(; N=3)

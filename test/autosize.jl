@@ -7,7 +7,7 @@ include("../src/cunumeric/benchmarks/montecarlo.jl")
 
 @testset "Monte Carlo autosizing reserves reduction workspace" begin
     budget = 113_066_115_072 # Budget from the reported initialization OOM.
-    for T in (Float32, Float64), B in (MonteCarloIntegration, MonteCarloNaive)
+    for T in (Float32, Float64), B in (MonteCarloMapReduce, MonteCarloBroadcast)
         N, M = fit_one_gpu(B, T; budget)
         @test M == 1
         @test N % 8 == 0
