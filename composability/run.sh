@@ -18,6 +18,8 @@ esac
 case $workload in
     krylov)
         P=BENCH cpus=2
+        export BENCH_SOLVERS=${BENCH_SOLVERS-cg} BENCH_LOCAL=${BENCH_LOCAL-0}
+        [[ $BENCH_SOLVERS =~ ^(cg|bicgstab|cg,bicgstab|bicgstab,cg)$ && $BENCH_LOCAL =~ ^[01]$ ]] || usage
         header=experiment,base_n,backend,solver,mode,eltype,gpus,n,iterations,mean_ms,stderr_ms,median_ms,min_ms,max_ms,relative_residual,samples_ms ;;
     ordinarydiffeq)
         P=ODE cpus=4
@@ -39,13 +41,13 @@ export "${P}_SAMPLES=$(setting SAMPLES 5)" LEGATE_AUTO_CONFIG=1 OPENBLAS_NUM_THR
 cases=()
 for backend in "${backends[@]}"; do
     if [[ $workload == krylov ]]; then
-        IFS=, read -r -a solvers <<< "${BENCH_SOLVERS:-cg}"
+        IFS=, read -r -a solvers <<< "$BENCH_SOLVERS"
         for solver in "${solvers[@]}"; do cases+=("$backend $solver stock"); done
     else
         cases+=("$backend")
     fi
 done
-if [[ $workload == krylov && ${BENCH_LOCAL:-0} == 1 ]]; then
+if [[ $workload == krylov && $BENCH_LOCAL == 1 ]]; then
     for solver in "${solvers[@]}"; do cases+=("cuNumeric $solver local"); done
 fi
 
@@ -94,7 +96,7 @@ for value in "$@"; do
         log=$output/${case// /-}-$gpus-$n.log
         # Krylov and ODE run each sample in a fresh process; IntOpt samples in one, with a timeout.
         if [[ $workload == integrals_optimization ]]; then
-            cmd=(timeout --kill-after=30s "${INTOPT_TIMEOUT:-15m}" "$julia" --startup-file=no
+            cmd=(timeout --signal=TERM --kill-after=30s "${INTOPT_TIMEOUT:-15m}" "$julia" --startup-file=no
                 --project="$project" "$dir/integrals_optimization/benchmark.jl" "${c[@]}" "$n")
         else
             cmd=("$julia" --startup-file=no --project="$project" "$dir/run_samples.jl"
