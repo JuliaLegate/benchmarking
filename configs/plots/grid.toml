@@ -15,31 +15,31 @@ legend_columns = 2
 
 [[panel]]
 benchmark = "gemm"
-results = "results-brev/20261001-023020-EgnbwV"
+results = "gemm"
 note = { text = "JACC omitted:\nno BLAS-3 GEMM", model = "JACC.jl" }
 
 [[panel]]
 benchmark = "montecarlo"
-results = "results-brev/20261001-025503-B66XYH"
+results = "montecarlo"
 
 [[panel]]
 benchmark = "grayscott"
-results = "results-brev/20260930-231831-1QsvHo"
+results = "grayscott"
 
 [[panel]]
 benchmark = "cg"
-results = "results-brev/20260930-232808-LygubK"
+results = "cg"
 
 [[panel]]
 benchmark = "nas_ep"
-results = "results-brev/20260930-234926-SAIP3B"
+results = "nas_ep"
 log = true
 
 [[panel]]
 benchmark = "nas_ft"
-results = "results-brev/20261001-001153-TBPDeB"
+results = "nas_ft"
 split = { time = 350 }   # Dagger at 2+ GPUs
 
 [[panel]]
 benchmark = "nas_mg"
-results = "results-brev/20261001-003034-E0lZWa"
+results = "nas_mg"

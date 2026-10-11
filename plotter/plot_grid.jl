@@ -62,9 +62,12 @@ function parse_grid_args(args)
     return (; config, out_dir)
 end
 
+# Relative results paths are under results/paper, where run_all.sh writes.
+results_path(path) = isabspath(path) ? path : joinpath(BENCH_ROOT, "results", "paper", path)
+
 # A run directory holds its CSVs under <T>/; accept either level.
 function csv_dir(path)
-    path = isabspath(path) ? path : joinpath(BENCH_ROOT, path)
+    path = results_path(path)
     isdir(path) || error("results directory not found: $path")
     any(endswith(".csv"), readdir(path)) && return path
     subdirs = filter(d -> any(endswith(".csv"), readdir(d)),

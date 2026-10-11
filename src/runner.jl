@@ -5,6 +5,7 @@ function cli_options(args)
     only = nothing
     fusion = nothing
     models = nothing
+    output = nothing
     dry = false
     verbose = false
     positional = String[]
@@ -18,6 +19,8 @@ function cli_options(args)
             fusion = value == "both" ? [true, false] : [parse_fusion(value)]
         elseif startswith(arg, "--models=")
             models = parse_models(split(split(arg, '='; limit=2)[2], ','))
+        elseif startswith(arg, "--output=")
+            output = abspath(split(arg, '='; limit=2)[2])
         elseif arg == "--dry-run"
             dry = true
         elseif arg in ("-v", "--verbose")
@@ -28,7 +31,7 @@ function cli_options(args)
             push!(positional, arg)
         end
     end
-    return (; config, only, fusion, models, dry, verbose, positional)
+    return (; config, only, fusion, models, output, dry, verbose, positional)
 end
 
 function positional_spec(p, gs)
@@ -93,8 +96,15 @@ function execute_plan(runs, gs, opts, budget, raw; launch=run, prepare=prepare_b
     results_root=normpath(joinpath(@__DIR__, "..", "results")), preflight=preflight_models)
     preflight(runs)
     root = normpath(joinpath(@__DIR__, ".."))
-    mkpath(results_root)
-    dir = mktempdir(results_root; prefix=Dates.format(now(), "yyyymmdd-HHMMSS")*"-", cleanup=false)
+    # --output names the run directory exactly; otherwise a timestamped one.
+    output = get(opts, :output, nothing)
+    dir = if output === nothing
+        mkpath(results_root)
+        mktempdir(results_root; prefix=Dates.format(now(), "yyyymmdd-HHMMSS")*"-", cleanup=false)
+    else
+        isfile(joinpath(output, "manifest.toml")) && error("$output already holds a run")
+        mkpath(output)
+    end
     manifest = plan_manifest(runs, budget, raw)
     manifest_path = joinpath(dir, "manifest.toml")
     save_manifest() = open(io->TOML.print(io, manifest), manifest_path, "w")

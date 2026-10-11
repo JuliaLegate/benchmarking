@@ -146,8 +146,9 @@ end
         mcspecs, mcgs, TOML.parsefile(MONTECARLO_CONFIG),
         parse_plot_groups(MONTECARLO_CONFIG), 1_000_000,
     )
-    @test Set(r.spec.name for r in mcruns) == Set(("montecarlo", "montecarlo_naive"))
-    @test all(r.model == :cunumeric for r in mcruns)
+    # cuPyNumeric has only the mapreduce variant.
+    @test Set((r.spec.name, r.model) for r in mcruns) == Set((
+        ("montecarlo", :cunumeric), ("montecarlo", :cupynumeric), ("montecarlo_naive", :cunumeric)))
     @test all(
         length(unique((r.N, r.M) for r in mcruns if r.spec.gpus == p)) == 1 for
         p in (1, 2, 4, 8)
@@ -482,6 +483,15 @@ end
         @test manifest["status"]=="incomplete"
         @test manifest["runs"][1]["status"]=="failed"
         @test manifest["runs"][2]["status"]=="complete"
+    end
+    mktempdir() do dir
+        out = joinpath(dir, "paper", "montecarlo")
+        opts = cli_options(["--only=montecarlo", "--output=$out"])
+        go(opts) = execute_plan(runs, gs, opts, 1_000_000, RAW; launch=cmd->nothing,
+            prepare=(f, v)->nothing, results_root=dir, preflight=runs->nothing)
+        @test go(opts) == 0
+        @test isfile(joinpath(out, "manifest.toml"))
+        @test_throws ErrorException go(opts) # never reuse a run directory
     end
 end
 

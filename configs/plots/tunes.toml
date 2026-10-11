@@ -1,6 +1,6 @@
 # Dagger blocks_per_gpu sensitivity from the tune sweep (plot_tunes.jl).
 
-tunes = "results-brev/tunes"
+tunes = "tunes"
 # benchmarks = ["gemm", "montecarlo", "grayscott", "cg", "nas_ep", "nas_ft", "nas_mg"]
 benchmarks = ["cg", "nas_ep"]
 

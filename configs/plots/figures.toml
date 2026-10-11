@@ -13,7 +13,7 @@ legend_scale = 1.0
 
 [[figure]]   # Gray-Scott @accelerate forms
 config = "configs/multi_gpu/grayscott_forms.toml"
-results = "results-brev/20261001-042330-0ADaZK"
+results = "grayscott_forms"
 fusion = ["on", "off"]
 # Grids left to the GC per step (function 0, let 0, begin 4, expr 6, plain 22)
 # × ~3.14 GB per grid per GPU (weak scaling keeps it fixed).
@@ -24,7 +24,7 @@ log = ["time"]   # forms span ~12 ms to ~840 ms
 
 [[figure]]   # Gray-Scott: cuNumeric (fused/unfused), cuPyNumeric, ImplicitGlobalGrid
 config = "configs/multi_gpu/grayscott.toml"
-results = "results-brev/grayscott-compare"
+results = "grayscott_compare"
 fusion = "both"
 name = "grayscott_compare"
 metrics = ["throughput", "time"]
@@ -32,7 +32,7 @@ title = ""
 
 [[figure]]   # Monte Carlo: fused mapreduce vs broadcast + sum (naive), fused and unfused
 config = "configs/multi_gpu/montecarlo_forms.toml"
-results = "results-brev/20261005-224227-evLB1b"
+results = "montecarlo_forms"
 fusion = "both"
 name = "montecarlo_forms"
 metrics = ["throughput", "time"]
@@ -44,6 +44,6 @@ legend_columns = 2
 panel_size = [400, 245]   # shorter: less empty space between the line groups
 ylabel = "Time/step (ms)"
 panels = [
-    { config = "configs/multi_gpu/grayscott.toml", results = "results-brev/grayscott-compare", title = "Gray-Scott", log = true },
-    { config = "configs/multi_gpu/montecarlo_forms.toml", results = "results-brev/20261005-224227-evLB1b", title = "Monte Carlo", hide = ["PIE.jl (naive)"], relabel = { "PIE.jl (naive, unfused)" = "PIE.jl (unfused)" } },
+    { config = "configs/multi_gpu/grayscott.toml", results = "grayscott_compare", title = "Gray-Scott", log = true },
+    { config = "configs/multi_gpu/montecarlo_forms.toml", results = "montecarlo_forms", title = "Monte Carlo", hide = ["PIE.jl (naive)"], relabel = { "PIE.jl (naive, unfused)" = "PIE.jl (unfused)" } },
 ]

@@ -253,8 +253,7 @@ function combined_main(args)
     end
     format in ("pdf", "png", "svg") || error("--format must be pdf, png, or svg")
     raw = TOML.parsefile(config)
-    root = something(root, get(raw, "results_root", "results/composability"))
-    root = isabspath(root) ? root : joinpath(BENCH_ROOT, root)
+    root = results_path(something(root, get(raw, "results_root", "composability")))
     workloads = map(("krylov", "ode")) do workload
         sources = raw[workload]
         all(k -> k in INPUT_KEYS, keys(sources)) || error("unknown input key in [$workload]")

@@ -15,14 +15,14 @@ font_size = 6
 [[panel]]
 benchmark = "grayscott"
 members = ["grayscott_function_accelerated"]
-results = "results-brev/20261005-235912-5SOKy7"
+results = "sweep_grayscott"
 xlabel = "Grid size N (N×N)"
 labels = { "PIE.jl (function accelerated)" = "PIE.jl", "PIE.jl (function accelerated, unfused)" = "PIE.jl (unfused)" }
 
 [[panel]]
 benchmark = "montecarlo"
 members = ["montecarlo", "montecarlo_naive"]
-results = "results-brev/20261006-001716-XNYg0g"
+results = "sweep_montecarlo"
 xlabel = "Samples"
 hide = ["PIE.jl (naive)"]
 labels = { "PIE.jl (naive, unfused)" = "PIE.jl (unfused)" }
