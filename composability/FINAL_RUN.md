@@ -26,9 +26,9 @@ These runs are not plotted.
 
 ```bash
 BENCH_SAMPLES=2 BENCH_OUTPUT="$results/cg-smoke" \
-  bash composability/krylov/run.sh weak 1024 2 4 8
+  bash composability/run.sh krylov weak 1024 2 4 8
 ODE_SAMPLES=2 ODE_OUTPUT="$results/ode-smoke" \
-  bash composability/ordinarydiffeq/run_benchmark.sh weak 128 2 4 8
+  bash composability/run.sh ordinarydiffeq weak 128 2 4 8
 ```
 
 ## 2. One-GPU sweeps
@@ -57,7 +57,7 @@ are saved with each run.
 for mode in single:single multi:weak; do
   dir=${mode%%:*}; kind=${mode##*:}
   GKSwstype=100 julia --project=environments/composability composability/krylov/plot_results.jl \
-    $kind "$results/$dir/krylov/results.csv" --output "$results/$dir/krylov/timings.svg"
+    $kind "$results/$dir/krylov/results.csv" "$results/$dir/krylov/timings.svg"
   julia --project=environments/composability composability/ordinarydiffeq/plot_results.jl \
     $kind "$results/$dir/ordinarydiffeq/results.csv" "$results/$dir/ordinarydiffeq/timings.svg"
 done

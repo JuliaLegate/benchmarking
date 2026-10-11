@@ -1,5 +1,5 @@
 # The same OrdinaryDiffEq solver and heat-equation RHS run on each array backend.
-# run_samples.jl launches this worker with ODE_SAMPLES=1 for sample isolation.
+# ../run_samples.jl launches this worker with ODE_SAMPLES=1 for sample isolation.
 import OrdinaryDiffEqLowStorageRK
 using OrdinaryDiffEqLowStorageRK: CarpenterKennedy2N54
 using SciMLBase: ODEProblem, solve, successful_retcode, FullSpecialize
