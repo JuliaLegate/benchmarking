@@ -17,12 +17,12 @@ benchmark = "grayscott"
 members = ["grayscott_function_accelerated"]
 results = "sweep_grayscott"
 xlabel = "Grid size N (N×N)"
-labels = { "PIE.jl (function accelerated)" = "PIE.jl", "PIE.jl (function accelerated, unfused)" = "PIE.jl (unfused)" }
+labels = { "cuNumeric.jl (function accelerated)" = "cuNumeric.jl", "cuNumeric.jl (function accelerated, unfused)" = "unfused" }
 
 [[panel]]
 benchmark = "montecarlo"
 members = ["montecarlo", "montecarlo_naive"]
 results = "sweep_montecarlo"
 xlabel = "Samples"
-hide = ["PIE.jl (naive)"]
-labels = { "PIE.jl (naive, unfused)" = "PIE.jl (unfused)" }
+hide = ["cuNumeric.jl (naive)"]
+labels = { "cuNumeric.jl (naive, unfused)" = "unfused" }

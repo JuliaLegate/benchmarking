@@ -422,9 +422,10 @@ function gpus_below!(p, panel_h, st)
 end
 
 # `n` panels in `columns` columns plus a shared legend. `make_panel(i; first_col,
-# last_row, bottom_row, fix)` draws panel i. `center` centers a legend row.
+# last_row, bottom_row, fix)` draws panel i. `center` centers a legend row;
+# `legend_pad` widens the gaps between its columns (px).
 function grid_layout(make_panel, n, legend_series, columns; panel_w, panel_h, st, center=false,
-        legend_cols=nothing, ylabel=nothing)
+        legend_cols=nothing, ylabel=nothing, legend_pad=0)
     rows = cld(n, columns)
     width = panel_w * columns
     # An empty grid slot holds the legend; otherwise it gets a row underneath.
@@ -454,7 +455,7 @@ function grid_layout(make_panel, n, legend_series, columns; panel_w, panel_h, st
     # One grid for all panels, so margins align per column (same panel widths).
     fig_kw = (size=(width, height), dpi=200, background_color=:white)
     body = plot(plots...; layout=grid(rows, columns))
-    fig = in_slot ? body : plot(body, grid_legend(rows_legend, width, st; center);
+    fig = in_slot ? body : plot(body, grid_legend(rows_legend, width, st; center, pad=legend_pad);
         layout=grid(2, 1; heights=[rows * panel_h, legend_h] ./ height))
     st.compact || return plot(fig; fig_kw...)
     if ylabel === nothing
@@ -468,7 +469,7 @@ end
 
 # Compact slot legend: an inset over the empty slot, reaching left of the
 # column's axis line (a slot subplot would be clipped there).
-function floating_legend!(fig, slot, rows_legend, panel_w, panel_h, st, shift; reach=0.15)
+function floating_legend!(fig, slot, rows_legend, panel_w, panel_h, st, shift; reach=0.2)
     k = length(fig.subplots) + 1
     plot!(fig; inset=(slot, bbox(-reach, 0, 1 + reach, 1)), subplot=k, framestyle=:none,
         grid=false, ticks=false, legend=false, widen=false, margin=0Plots.mm,
@@ -504,9 +505,13 @@ function panel_note!(p, note, log_y, st)
     return p
 end
 
-function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=true, legend_cols=nothing)
+function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=true, legend_cols=nothing,
+        legend_order=String[])
     # Same label always has the same style, so one shared legend covers all panels.
     legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
+    # `legend_order` (rows fill left to right); unlisted labels keep their order, after.
+    rank = Dict(display_name(l) => i for (i, l) in enumerate(legend_order))
+    legend_series = sort(legend_series; by=s -> get(rank, s.label, length(rank) + 1))
     # Panels can differ in unit, so each throughput panel labels its own.
     ylabel(i) = metric == "throughput" ? panels[i].unit : nothing
     # Compact grids share one y label with the most common unit; others go in the title.
@@ -515,8 +520,8 @@ function grid_figure(panels, metric, columns; panel_w, panel_h, st, gridlines=tr
     short(u) = replace(u, "random numbers" => "randoms")
     title(i) = st.compact && metric == "throughput" && panels[i].unit != unit ?
         "$(panels[i].title) ($(short(panels[i].unit)))" : panels[i].title
-    # Draw order (the legend keeps its own): other models, then PIE.jl over them,
-    # so it shows where it coincides with MosaicPIE (GEMM); dashed lines last.
+    # Draw order (the legend keeps its own): other models, then cuNumeric over them,
+    # so it shows where it coincides with cuPyNumeric (GEMM); dashed lines last.
     order(ss) = sort(ss; by=s -> (s.ls != :solid, startswith(s.label, CUNUMERIC_NAME)))
     draw(i; kw...) = panel_note!(panel_plot(order(panels[i].series), metric; title=title(i),
             ylabel=ylabel(i),
@@ -618,7 +623,8 @@ function grid_main(args=ARGS)
     for m in metrics
         out = joinpath(cfg.out_dir, "grid_$(m).$(format)")
         fig = grid_figure(panels, m, columns; panel_w, panel_h, st,
-            gridlines=get(raw, "gridlines", true), legend_cols=get(raw, "legend_columns", nothing))
+            gridlines=get(raw, "gridlines", true), legend_cols=get(raw, "legend_columns", nothing),
+            legend_order=string.(get(raw, "legend_order", String[])))
         save_plot(scale_open_markers!(fig), out)
         println("wrote $out")
     end

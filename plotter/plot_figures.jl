@@ -125,8 +125,8 @@ function combined_figure(f, sizing)
         group, members = first(parse_plot_groups(cfg))
         series = group_series(csv_dir(pf["results"]), group, members; fusion=get(pf, "fusion", "both"))
         validate_series_sizes(series)
-        hide = Set(string.(get(pf, "hide", String[])))
-        relabel = Dict(string(k) => string(v) for (k, v) in get(pf, "relabel", Dict()))
+        hide = Set(display_name.(string.(get(pf, "hide", String[]))))
+        relabel = Dict(display_name(string(k)) => display_name(string(v)) for (k, v) in get(pf, "relabel", Dict()))
         series = [merge(s, (; label=get(relabel, s.label, s.label), relabeled=haskey(relabel, s.label)))
                   for s in series if !(s.label in hide)]
         # Short dashes: GR's long ones are hard to read over nearby solid lines.
@@ -137,8 +137,8 @@ function combined_figure(f, sizing)
     style = Dict(s.label => (; s.color, s.marker, s.ls) for p in panels for s in p.series if !s.relabeled)
     panels = [merge(p, (; series=[merge(s, get(style, s.label, (;))) for s in p.series])) for p in panels]
     legend_series = unique(s -> s.label, [s for p in panels for s in p.series])
-    # Draw order (the legend keeps its own): other models, then PIE.jl over them,
-    # then dotted (unfused) lines, which track MosaicPIE and would hide under it.
+    # Draw order (the legend keeps its own): other models, then cuNumeric over them,
+    # then dotted (unfused) lines, which track cuPyNumeric and would hide under it.
     panels = [merge(p, (; series=sort(p.series; by=s -> (s.ls != :solid, startswith(s.label, CUNUMERIC_NAME)))))
               for p in panels]
     sz = sizing(length(panels))
@@ -151,7 +151,7 @@ function combined_figure(f, sizing)
         fix, st=sz.st, ylabel=ylabel(i))
     return grid_layout(draw, length(panels), legend_series, length(panels);
         panel_w=sz.panel_w, panel_h=sz.panel_h, st=sz.st, center=true,
-        legend_cols=get(f, "legend_columns", nothing))
+        legend_cols=get(f, "legend_columns", nothing), legend_pad=get(f, "legend_pad", 0))
 end
 
 function figures_main(args=ARGS)

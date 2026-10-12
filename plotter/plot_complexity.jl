@@ -112,10 +112,12 @@ function complexity_xticks(hi, clipped)
 end
 
 # One boxed column of entries on the right, below the points at y = 1 and
-# above the points near the x cap; the box hides the hulls behind it.
+# above the points near the x cap; the box hides the hulls behind it and
+# widens leftward to fit the longest label.
 function inset_legend!(p, series, hi, st; font=st.tick - 2)
-    x, top, step = 0.83hi, 0.64, 0.13
-    x0, x1 = x - 0.025hi, 1.065hi
+    x1, top, step = 1.065hi, 0.64, 0.13
+    x = x1 - 0.025hi - 0.0275hi * maximum(s -> sum(glyph_width, s.label), series)
+    x0 = x - 0.025hi
     y0, y1 = top - (length(series) - 0.5) * step, top + 0.5step
     plot!(p, Shape([x0, x1, x1, x0], [y0, y0, y1, y1]); fillcolor=:white, fillalpha=1,
         linecolor=:black, lw=0.6st.k, label="")

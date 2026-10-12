@@ -1,6 +1,6 @@
 # Standalone figures (plot_figures.jl). A fusion list writes one file per metric
 # and setting; a single setting writes one file with a panel per metric.
-# Figure keys: config, results, fusion, name, metrics, title, legend_title,
+# Figure keys: config, results, fusion, name, metrics, title, legend_title, legend_pad,
 #   labels.<fusion>.<series> (legend text; sorted by its first number),
 #   colorbar = { label, values = { series = number } } (one color per distinct value, light→dark)
 #   log = [metrics] (log y-axis for those metrics), split = { metric = value } (broken y axis)
@@ -41,9 +41,10 @@ title = ""
 [[figure]]   # Fusion: Gray-Scott comparison and Monte Carlo forms, time per step
 name = "fusion_time"
 legend_columns = 2
+legend_pad = 40   # px between legend columns
 panel_size = [400, 245]   # shorter: less empty space between the line groups
 ylabel = "Time/step (ms)"
 panels = [
     { config = "configs/multi_gpu/grayscott.toml", results = "grayscott_compare", title = "Gray-Scott", log = true },
-    { config = "configs/multi_gpu/montecarlo_forms.toml", results = "montecarlo_forms", title = "Monte Carlo", hide = ["PIE.jl (naive)"], relabel = { "PIE.jl (naive, unfused)" = "PIE.jl (unfused)" } },
+    { config = "configs/multi_gpu/montecarlo_forms.toml", results = "montecarlo_forms", title = "Monte Carlo", hide = ["cuNumeric.jl (naive)"], relabel = { "cuNumeric.jl (naive, unfused)" = "cuNumeric.jl (unfused)" } },
 ]

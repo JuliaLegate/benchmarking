@@ -1,5 +1,5 @@
 # Benchmark grid: one figure per metric, one panel per [[panel]] (plot_grid.jl).
-# Panel keys: benchmark, results, members, title, log, hide,
+# legend_order: legend entries, row by row. Panel keys: benchmark, results, members, title, log, hide,
 #   split = { metric = value } (broken y axis), note = { text, model, at }
 
 metrics = ["throughput", "time", "efficiency"]
@@ -12,6 +12,8 @@ width_in = 3.5   # one IEEE column
 font_size = 6
 compact = true   # shared y label, fewer y ticks
 legend_columns = 2
+# Rows fill left to right: long names in the left column, short in the right.
+legend_order = ["cuNumeric.jl", "CUDA.jl", "cuPyNumeric", "JACC.jl", "Dagger.jl"]
 
 [[panel]]
 benchmark = "gemm"

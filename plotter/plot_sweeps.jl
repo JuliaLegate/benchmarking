@@ -18,9 +18,9 @@ function sweep_series(panel)
     # Reference models are saved under the group name (e.g. grayscott_CUDA.jl.csv).
     have = Set(s.label for s in series)
     append!(series, filter(s -> !(s.label in have), overlay_refs(dir, [group]; by=:N)))
-    relabel = get(panel, "labels", Dict())
+    relabel = Dict(display_name(k) => display_name(v) for (k, v) in get(panel, "labels", Dict()))
     series = [merge(s, (; label=get(relabel, s.label, s.label))) for s in series]
-    hide = Set(string.(get(panel, "hide", String[])))
+    hide = Set(display_name.(string.(get(panel, "hide", String[]))))
     filter!(s -> !(s.label in hide), series)
     isempty(series) && error("panel $group: no series found in $(panel["results"])")
     all(s -> all(x -> x.gpus == 1, s.agg), series) || error("panel $group: not a single-GPU sweep")
@@ -52,8 +52,8 @@ function sweep_panel(panel, metric; first_col, last_row, bottom_row, fix, st, lo
         # last column needs it, the others sit next to a panel.
         top_margin=fix.top * Plots.px - 2Plots.mm, right_margin=first_col ? -1.5Plots.mm : 2.5st.k * Plots.mm,
     )
-    # Other models first, then PIE.jl over them; dashed (unfused) last: they
-    # track MosaicPIE closely and would hide under it.
+    # Other models first, then cuNumeric over them; dashed (unfused) last: they
+    # track cuPyNumeric closely and would hide under it.
     for s in sort(panel.series; by=s -> (s.ls != :solid, startswith(s.label, CUNUMERIC_NAME)))
         xs, ys = getfield.(s.agg, :N), getfield.(s.agg, y)
         hollow_marker!(p, xs, ys, s, st.ms)
