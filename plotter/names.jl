@@ -1,6 +1,6 @@
 # Model names in every plot; loc-analysis reads these two lines too.
-const CUNUMERIC_NAME = "PIE.jl"
-const CUPYNUMERIC_NAME = "MosaicPIE"
+const CUNUMERIC_NAME = "cuNumeric.jl"
+const CUPYNUMERIC_NAME = "cuPyNumeric"
 
 # Config files may name a model by its default label; map that to the configured one.
 const NAME_ALIASES = Dict("cuNumeric.jl" => CUNUMERIC_NAME, "cuNumeric" => CUNUMERIC_NAME,
