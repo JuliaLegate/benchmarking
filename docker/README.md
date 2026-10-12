@@ -1,6 +1,30 @@
 # Benchmark container
 
-From the benchmarking repository root:
+## Use the published image
+
+```bash
+docker pull ghcr.io/julialegate/benchmarking:latest
+docker run --rm -it --gpus=all ghcr.io/julialegate/benchmarking:latest
+```
+
+Inside the container you are in the benchmark checkout with every Julia
+environment, the cuPyNumeric Conda env, and IGG already set up:
+
+```bash
+julia --project=. run.jl --config=configs/single_gpu/smoke.toml   # quick check
+bash other/implicitglobalgrid/run_weak_scaling.sh                  # IGG, needs 8 GPUs
+```
+
+To pick up newer commits without rebuilding:
+
+```bash
+git pull --ff-only
+./deps-install/instantiate_projects.sh   # only if Project.toml files changed
+```
+
+## Build it yourself
+
+Run from the repo root on a clean checkout whose commit is pushed to GitHub:
 
 ```bash
 docker build -f docker/Dockerfile \
@@ -8,35 +32,18 @@ docker build -f docker/Dockerfile \
   --build-arg BENCHMARK_REF="$(git branch --show-current)" \
   --build-arg BENCHMARK_COMMIT="$(git rev-parse HEAD)" \
   -t cunumeric:benchmark .
-docker run --rm --gpus=all cunumeric:benchmark \
-  julia --project=. run.jl --config=configs/single_gpu/smoke.toml
 ```
 
-The image build runs `deps-install/instantiate_projects.sh`, so the composability Julia
-environment is already initialized in `environments/composability` within the
-checkout. All composability launchers select it automatically; no external
-environment directory is needed. Build from a cuNumeric base image containing the Krylov
-extension and ODE scalar-broadcast support before running those workloads.
-The same setup also installs the `igg-mpi` Conda environment and configures
-IGG's Julia MPI preferences. Its weak-scaling sweep is ready to launch with
-`bash other/implicitglobalgrid/run_weak_scaling.sh` on a host with eight GPUs.
+`BASE_IMAGE` is any cuNumeric.jl image; it is never rebuilt here.
 
-The image also contains a clean Git checkout of the exact benchmark commit
-used for the build. From the image's default working directory,
-`git pull --ff-only` can fetch later commits on the same branch. The build
-requires a clean checkout and the two `BENCHMARK_*` build arguments above;
-the CI workflow supplies them automatically. If package projects change after
-pulling, rerun `./deps-install/instantiate_projects.sh` to update the Julia environments.
+## Build in CI
 
-CI is opt-in: push a commit containing `[benchmark-container]` in this repo,
-or run **Benchmark container build and push** manually. Manual runs accept an
-existing base image tag/digest; commit-triggered runs use `cunumeric.jl:dev`.
-The base image is never rebuilt here. The Conda CUDA override comes from it.
+Either push a commit with `[benchmark-container]` in its message, or run the
+**Benchmark container build and push** workflow manually (optionally with a
+base image tag). Images are pushed as:
 
-Images are published as `ghcr.io/julialegate/benchmarking:dev-benchmark` and
-`<commit>-benchmark-<run-id>`. Existing cuNumeric.jl image tags are left untouched.
-The repository needs a `self-hosted, linux, x64` runner with Docker access.
+- `ghcr.io/julialegate/benchmarking:latest`
+- `ghcr.io/julialegate/benchmarking:<commit>-benchmark-<run-id>`
 
-To refresh both layers, first build `[container]` in cuNumeric.jl, then launch
-this workflow with the resulting immutable base image tag. Putting both markers
-in one cuNumeric.jl commit no longer builds both images.
+To update cuNumeric.jl too: build its image first (`[container]` in
+cuNumeric.jl), then run this workflow manually with that image tag.
