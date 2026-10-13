@@ -1,4 +1,4 @@
-# Keep orchestration off the GPU; the shell launchers isolate each timed case.
+# Keep orchestration off the GPU; composability/run.sh isolates each timed case.
 module ComposabilityCLI
 
 using Dates, TOML
@@ -9,11 +9,8 @@ const DEFAULT_CONFIG = joinpath(ROOT, "composability", "sizes_80GB.toml")
 # --models names -> launcher backend names. CUDA.jl (CuArray) is single-GPU only.
 const MODEL_BACKENDS = Dict("cuda" => "CuArray", "dagger" => "Dagger", "cunumeric" => "cuNumeric")
 const MODELS = ["cuda", "dagger", "cunumeric"]
-const LAUNCHERS = Dict(
-    "krylov" => (script="run.sh", prefix="BENCH"),
-    "ordinarydiffeq" => (script="run_benchmark.sh", prefix="ODE"),
-    "integrals_optimization" => (script="run_benchmark.sh", prefix="INTOPT"),
-)
+# Environment prefix each workload's settings use (e.g. BENCH_OUTPUT).
+const PREFIXES = Dict("krylov" => "BENCH", "ordinarydiffeq" => "ODE", "integrals_optimization" => "INTOPT")
 
 function usage(io=stdout)
     println(io, """
@@ -149,7 +146,7 @@ function launch_plan(opts; env=ENV)
         joinpath(Sys.BINDIR, Base.julia_exename())))
     plan = NamedTuple[]
     for mode in modes, workload in opts.workloads
-        spec = LAUNCHERS[workload]
+        prefix = PREFIXES[workload]
         sizes = workload_sizes(config, workload)
         base_n = sizes.base
         output = joinpath(opts.output, mode, workload)
@@ -158,17 +155,17 @@ function launch_plan(opts; env=ENV)
         else
             ["weak", string(base_n), opts.gpus...]
         end
-        cmd = Cmd(["bash", joinpath(ROOT, "composability", workload, spec.script), args...])
+        cmd = Cmd(["bash", joinpath(ROOT, "composability", "run.sh"), workload, args...])
         overrides = [
-            "$(spec.prefix)_OUTPUT" => output,
+            "$(prefix)_OUTPUT" => output,
             # CLI previews never invoke a launcher. A real run must not inherit
             # a workload's old dry-run setting from the calling shell.
-            "$(spec.prefix)_DRY_RUN" => "0",
+            "$(prefix)_DRY_RUN" => "0",
             "JULIA" => julia,
             # Workers disable startup.jl. Preserve depots added by the parent
             # startup (the container adds /depot there) so packages stay visible.
             "JULIA_DEPOT_PATH" => join(DEPOT_PATH, Sys.iswindows() ? ';' : ':'),
-            "$(spec.prefix)_BACKENDS" => join(
+            "$(prefix)_BACKENDS" => join(
                 [MODEL_BACKENDS[m] for m in opts.models if mode == "single" || m != "cuda"], ' '),
         ]
         if workload == "krylov"
@@ -189,8 +186,7 @@ function report_failure(launch, io)
     # Startup checks redirect their output before any per-case logs exist.
     planned = joinpath(launch.output, "planned-cases.csv")
     if !isfile(planned) || length(readlines(planned)) <= 1
-        filename = launch.workload == "krylov" ? "environment.txt" : "metadata.txt"
-        path = joinpath(launch.output, filename)
+        path = joinpath(launch.output, "metadata.txt")
         if isfile(path)
             println(io, "Startup diagnostics ($path, last 20 lines):")
             lines = readlines(path)

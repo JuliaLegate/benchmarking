@@ -29,7 +29,7 @@ def write_launcher_shims(directory, commands):
 
 class SetupTests(unittest.TestCase):
     def test_krylov_solver_and_backend_selection(self):
-        script = Path(__file__).resolve().parents[1] / "composability/krylov/run.sh"
+        script = Path(__file__).resolve().parents[1] / "composability/run.sh"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             project = root / "project"
@@ -44,11 +44,8 @@ class SetupTests(unittest.TestCase):
                 "julia": '''for arg in "$@"; do
     case "$arg" in
         *plot_results.jl)
-            for option in "$@"; do
-                case "$option" in --solver=*) solver=${option#--solver=} ;; esac
-            done
-            echo "$solver" >> "$BENCH_OUTPUT/plots-called.txt"
-            [[ $solver != "$BENCH_TEST_PLOT_FAILURE" ]] || exit 1
+            echo called >> "$BENCH_OUTPUT/plots-called.txt"
+            [[ -z $BENCH_TEST_PLOT_FAILURE ]] || exit 1
             touch "${@: -1}"
             exit 0 ;;
         --version) echo 'julia version test'; exit 0 ;;
@@ -73,7 +70,7 @@ echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1
                        BENCH_DRY_RUN="0", BENCH_ELTYPE="Float32")
             env.pop("CUDA_VISIBLE_DEVICES", None)
             command = [BASH, "-c", 'export PATH="$1:$PATH"; shift; exec bash "$@"',
-                       "bash", shell_path(shims), shell_path(script)]
+                       "bash", shell_path(shims), shell_path(script), "krylov"]
             scenarios = [(selection, mode, "", "", include_local)
                          for selection in ("cg", "bicgstab", "cg,bicgstab")
                          for mode in ("single", "weak") for include_local in (False, True)]
@@ -110,14 +107,12 @@ echo "RESULT,$label,$solver,$mode,Float32,$BENCH_GPUS,$n,2,1,0.1,1,1,1,0.001,1;1
                     with (output / "planned-cases.csv").open() as stream:
                         records = list(csv.DictReader(stream))
                     self.assertEqual(len(records), len(cases))
-                    self.assertEqual({r["solver"] for r in records}, set(solvers))
-                    plotted = [solver for solver in solvers if any(r["solver"] == solver for r in rows)]
-                    self.assertEqual((output / "plots-called.txt").read_text().splitlines(), plotted)
-                    for solver in solvers:
-                        image = "timings.png" if len(solvers) == 1 else f"timings-{solver}.png"
-                        self.assertEqual((output / image).exists(), solver in plotted and solver != plot_failure)
-                    self.assertIn(f"BENCH_SOLVERS={selection}", (output / "environment.txt").read_text())
-                    self.assertIn(f"BENCH_LOCAL={int(include_local)}", (output / "environment.txt").read_text())
+                    self.assertEqual({r["case"].split()[1] for r in records}, set(solvers))
+                    self.assertEqual((output / "plots-called.txt").read_text().splitlines(), ["called"])
+                    self.assertEqual((output / "timings.png").exists(), not plot_failure)
+                    metadata = (output / "metadata.txt").read_text()
+                    self.assertIn(f"BENCH_SOLVERS={selection}", metadata)
+                    self.assertIn(f"BENCH_LOCAL={int(include_local)}", metadata)
 
             for include_local in (0, 1):
                 output = root / f"preview-{include_local}"
@@ -190,12 +185,9 @@ esac
             env = os.environ.copy()
             env.update(JULIA=shell_path(shims / "julia"), BENCH_SOLVERS="cg", BENCH_LOCAL="1")
             env.pop("CUDA_VISIBLE_DEVICES", None)
-            for workload, prefix, launcher in (
-                ("krylov", "BENCH", "run.sh"),
-                ("ordinarydiffeq", "ODE", "run_benchmark.sh"),
-                ("integrals_optimization", "INTOPT", "run_benchmark.sh"),
-            ):
-                script = composability / workload / launcher
+            script = composability / "run.sh"
+            for workload, prefix in (("krylov", "BENCH"), ("ordinarydiffeq", "ODE"),
+                                     ("integrals_optimization", "INTOPT")):
                 labels = ["CUDA", "Dagger", "cuNumeric"]
                 if workload == "krylov":
                     labels.append("cuNumeric local")
@@ -212,7 +204,7 @@ esac
                                        BENCH_TEST_FAILURE=failure, BENCH_TEST_BACKEND=failed_backend)
                             result = subprocess.run(
                                 [BASH, "-c", 'export PATH="$1:$PATH"; shift; exec bash "$@"',
-                                 "bash", shell_path(shims), shell_path(script), "single", "16", "32", "48", "64"],
+                                 "bash", shell_path(shims), shell_path(script), workload, "single", "16", "32", "48", "64"],
                                 env=env, capture_output=True, text=True)
                             self.assertEqual(result.returncode, 1, result.stderr)
                             with (output / "results.csv").open() as stream:
@@ -223,26 +215,19 @@ esac
                             self.assertEqual(len(rows), len(expected))
                             size_key = "n" if workload == "krylov" else "N"
                             self.assertEqual({(row["backend"], row[size_key]) for row in rows}, expected)
-                            # Only the plume launcher records the largest fully passing baseline.
-                            if workload != "integrals_optimization":
-                                self.assertFalse((output / "base_n.txt").exists())
-                            elif expected:
-                                self.assertEqual((output / "base_n.txt").read_text().strip(), "48")
-                            else:
-                                self.assertFalse((output / "base_n.txt").exists())
                             self.assertEqual((output / "plot-called").is_file(), bool(expected))
                             self.assertEqual(len((output / "planned-cases.csv").read_text().splitlines()),
                                              1 + 4 * len(labels))
                             backend = ("CuArray" if failed_backend in ("CUDA", "all", "all_sizes")
                                        else failed_backend.split()[0])
                             mode = "local" if failed_backend == "cuNumeric local" else "stock"
-                            log = (f"Float32-{backend}-cg-{mode}-1-64.log" if workload == "krylov"
+                            log = (f"{backend}-cg-{mode}-1-64.log" if workload == "krylov"
                                    else f"{backend}-1-64.log")
                             self.assertIn("simulated", (output / log).read_text())
-                            self.assertIn("continuing the sweep", result.stderr)
+                            self.assertIn("Failed:", result.stderr)
 
     def test_krylov_collects_results_before_plotting(self):
-        script = Path(__file__).resolve().parents[1] / "composability/krylov/run.sh"
+        script = Path(__file__).resolve().parents[1] / "composability/run.sh"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             project = root / "project"
@@ -257,10 +242,9 @@ esac
                 "julia": '''for arg in "$@"; do
     case "$arg" in *plot_results.jl) echo 'simulated plotting error' >&2; exit 1 ;; esac
 done
-case "$1" in
---version) echo 'julia version test' ;;
---startup-file=no) exit 0 ;;
-*) echo 'RESULT,Dagger,cg,stock,Float32,1,16,2,1,0.1,1,1,1,0.001,1;1' ;;
+case "$*" in
+*--version*) echo 'julia version test' ;;
+*run_samples.jl*) echo 'RESULT,Dagger,cg,stock,Float32,1,16,2,1,0.1,1,1,1,0.001,1;1' ;;
 esac
 ''',
             }
@@ -276,10 +260,10 @@ esac
                     # Set PATH inside Bash so this also works with Git Bash on Windows.
                     result = subprocess.run(
                         [BASH, "-c", 'export PATH="$1:$PATH"; shift; exec bash "$@"',
-                         "bash", shell_path(shims), shell_path(script), mode, *args],
+                         "bash", shell_path(shims), shell_path(script), "krylov", mode, *args],
                         env=env, capture_output=True, text=True)
                     self.assertEqual(result.returncode, 1, result.stderr)
-                    self.assertIn("Plot generation failed", result.stderr)
+                    self.assertIn("Plot failed", result.stderr)
                     self.assertIn("Running Dagger", result.stdout)
                     self.assertGreater(len((output / "results.csv").read_text().splitlines()), 1)
                     self.assertGreater(len((output / "planned-cases.csv").read_text().splitlines()), 1)

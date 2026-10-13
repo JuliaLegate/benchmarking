@@ -34,9 +34,9 @@ using .KrylovPlot: read_results, plot_results
             @test length(results) == 6
             @test all(r -> r.solver == "bicgstab" && r.mean == 4.0 && r.stderr ≈ 2.0, results)
             @test_throws ErrorException read_results(mode, [csv, csv]; solver="bicgstab")
-            image = joinpath(tmp, "$mode-bicgstab.svg")
-            KrylovPlot.main([mode, csv, "--solver=bicgstab", "--output", image])
-            @test filesize(image) > 1000
+            KrylovPlot.main([mode, csv, joinpath(tmp, "$mode.svg")])  # one image per solver
+            @test filesize(joinpath(tmp, "$mode-cg.svg")) > 1000
+            @test filesize(joinpath(tmp, "$mode-bicgstab.svg")) > 1000
             @test startswith(KrylovPlot.Plots.current()[1][:title], "BiCGStab")
             write(csv, header * join(bicg_rows))
             @test_throws ErrorException read_results(mode, [csv])

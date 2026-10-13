@@ -1,0 +1,12 @@
+# Smoke variant of composability/sizes_141GB.toml.
+[krylov]
+single = [1024, 4096]
+weak_base = 4096
+
+[ordinarydiffeq]
+single = [128, 512]
+weak_base = 512
+
+[integrals_optimization]
+single = [32, 128]
+weak_base = 128

@@ -13,7 +13,8 @@ const CONFIG = joinpath(ROOT, "configs", "multi_gpu", "montecarlo_forms.toml")
 
 @testset "Existing Monte Carlo config produces cuNumeric worker commands" begin
     gs, specs = parse_config(CONFIG; fusion_override=[true, false])
-    runs = plan_runs(specs, gs, TOML.parsefile(CONFIG), parse_plot_groups(CONFIG), 1_000_000)
+    runs = filter(r -> r.model === :cunumeric,
+        plan_runs(specs, gs, TOML.parsefile(CONFIG), parse_plot_groups(CONFIG), 1_000_000))
     @test length(runs) == 16
     @test Set(r.spec.name for r in runs) == Set(("montecarlo", "montecarlo_naive"))
     @test BENCHMARKS["montecarlo"] === MonteCarloMapReduce

@@ -69,19 +69,16 @@ function plot_results(experiment, paths, image_path; solver="cg")
     println("Saved $image_path")
 end
 
+# One image per solver in the CSV; timings-<solver>.png when there are several.
 function main(args=ARGS)
-    solver = "cg"
-    positional = String[]
-    for arg in args
-        if startswith(arg, "--solver=")
-            solver = split(arg, '='; limit=2)[2]
-        else
-            push!(positional, arg)
-        end
+    length(args) == 3 || error("Usage: julia plot_results.jl {single|weak} results.csv timings.png")
+    experiment, csv, image = args
+    solvers = unique(split(line, ',')[4] for line in Iterators.drop(eachline(csv), 1))
+    for solver in solvers
+        base, ext = splitext(image)
+        out = length(solvers) == 1 ? image : "$base-$solver$ext"
+        plot_results(experiment, [csv], out; solver)
     end
-    length(positional) >= 4 && positional[end-1] == "--output" ||
-        error("Usage: julia plot_results.jl {single|weak} results.csv [results.csv ...] [--solver=cg|bicgstab] --output timings.png")
-    plot_results(first(positional), positional[2:end-2], last(positional); solver)
 end
 
 end # module

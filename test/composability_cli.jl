@@ -72,10 +72,11 @@ end
         @test length(plan) == 4
         @test [p.workload for p in plan] == ["krylov", "ordinarydiffeq", "krylov", "ordinarydiffeq"]
         @test basename(plan[1].cmd.exec[2]) == "run.sh"
-        @test plan[1].cmd.exec[3:end] == ["single", "1024", "2048", "4096", "8192", "16384", "32768", "65536", "81920", "98304", "114688"]
-        @test plan[2].cmd.exec[3:end] == ["single", "128", "512", "1024", "2048", "4096", "8192", "16384", "32768"]
-        @test plan[3].cmd.exec[3:end] == ["weak", "65536", "1", "4"]
-        @test plan[4].cmd.exec[3:end] == ["weak", "16384", "1", "4"]
+        @test [p.cmd.exec[3] for p in plan] == [p.workload for p in plan]
+        @test plan[1].cmd.exec[4:end] == ["single", "1024", "2048", "4096", "8192", "16384", "32768", "65536", "81920", "98304", "114688"]
+        @test plan[2].cmd.exec[4:end] == ["single", "128", "512", "1024", "2048", "4096", "8192", "16384", "32768"]
+        @test plan[3].cmd.exec[4:end] == ["weak", "65536", "1", "4"]
+        @test plan[4].cmd.exec[4:end] == ["weak", "16384", "1", "4"]
         @test "BENCH_SOLVERS=cg" in plan[1].cmd.env
         @test "BENCH_LOCAL=0" in plan[1].cmd.env
         @test !haskey(Dict(plan[2].overrides), "BENCH_SOLVERS")
@@ -105,15 +106,15 @@ end
         end
         all_plan = launch_plan(cli_options(["--mode=both"]))
         @test length(all_plan) == 6
-        @test all_plan[3].cmd.exec[3:end] == ["single", "32", "128", "512", "1024", "2048", "4096", "6144", "8192"]
-        @test all_plan[6].cmd.exec[3:end] == ["weak", "8192", "1", "2", "4", "8"]
+        @test all_plan[3].cmd.exec[4:end] == ["single", "32", "128", "512", "1024", "2048", "4096", "6144", "8192"]
+        @test all_plan[6].cmd.exec[4:end] == ["weak", "8192", "1", "2", "4", "8"]
         @test any(startswith("INTOPT_OUTPUT="), all_plan[3].cmd.env)
         custom = joinpath(tmp, "custom sizes.toml")
         custom_args = ["--only=krylov", "--mode=both", "--config=$custom"]
         write(custom, "[krylov]\nsingle = [16, 32]\nweak_base = 32\n")
         custom_plan = launch_plan(cli_options(custom_args))
-        @test custom_plan[1].cmd.exec[3:end] == ["single", "16", "32"]
-        @test custom_plan[2].cmd.exec[3:end] == ["weak", "32", "1", "2", "4", "8"]
+        @test custom_plan[1].cmd.exec[4:end] == ["single", "16", "32"]
+        @test custom_plan[2].cmd.exec[4:end] == ["weak", "32", "1", "2", "4", "8"]
         @test cli_options(["--config=$custom"]).config == custom
         for body in ("single = []\nweak_base = 32", "single = [32, 16]\nweak_base = 32",
             "single = [16, 16]\nweak_base = 32", "single = [1]\nweak_base = 32",
@@ -135,7 +136,7 @@ end
                 directory = split(only(filter(startswith("BENCH_OUTPUT="), cmd.env)), '='; limit=2)[2]
                 mkpath(directory)
                 write(joinpath(directory, "planned-cases.csv"), "backend,mode\n")
-                write(joinpath(directory, "environment.txt"), "startup failure details\n")
+                write(joinpath(directory, "metadata.txt"), "startup failure details\n")
                 return false
             end
             return true

@@ -120,7 +120,7 @@ function composability_panel(workload, experiment, panel; first_col, last_col, s
     # Reuse the paper grid's broken-axis styling for the slow Dagger baseline.
     split_at = workload == "ode" ? 8000.0 / first(rows).steps : Inf
     split = workload == "ode" && experiment == "weak" && any(r -> r.t > split_at, rows) ? split_at : nothing
-    # PIE.jl drawn last, over the other models (the legend keeps its own order).
+    # cuNumeric drawn last, over the other models (the legend keeps its own order).
     series = sort(series; by=s -> startswith(s.label, CUNUMERIC_NAME))
     p = panel_plot(series, "time"; title, split, split_pad=0.50,
         log_values=false, zero_log=experiment == "single",
@@ -253,8 +253,7 @@ function combined_main(args)
     end
     format in ("pdf", "png", "svg") || error("--format must be pdf, png, or svg")
     raw = TOML.parsefile(config)
-    root = something(root, get(raw, "results_root", "results/composability"))
-    root = isabspath(root) ? root : joinpath(BENCH_ROOT, root)
+    root = results_path(something(root, get(raw, "results_root", "composability")))
     workloads = map(("krylov", "ode")) do workload
         sources = raw[workload]
         all(k -> k in INPUT_KEYS, keys(sources)) || error("unknown input key in [$workload]")

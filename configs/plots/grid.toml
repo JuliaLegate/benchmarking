@@ -1,5 +1,5 @@
 # Benchmark grid: one figure per metric, one panel per [[panel]] (plot_grid.jl).
-# Panel keys: benchmark, results, members, title, log, hide,
+# legend_order: legend entries, row by row. Panel keys: benchmark, results, members, title, log, hide,
 #   split = { metric = value } (broken y axis), note = { text, model, at }
 
 metrics = ["throughput", "time", "efficiency"]
@@ -12,34 +12,36 @@ width_in = 3.5   # one IEEE column
 font_size = 6
 compact = true   # shared y label, fewer y ticks
 legend_columns = 2
+# Rows fill left to right: long names in the left column, short in the right.
+legend_order = ["cuNumeric.jl", "CUDA.jl", "cuPyNumeric", "JACC.jl", "Dagger.jl"]
 
 [[panel]]
 benchmark = "gemm"
-results = "results-brev/20261001-023020-EgnbwV"
+results = "gemm"
 note = { text = "JACC omitted:\nno BLAS-3 GEMM", model = "JACC.jl" }
 
 [[panel]]
 benchmark = "montecarlo"
-results = "results-brev/20261001-025503-B66XYH"
+results = "montecarlo"
 
 [[panel]]
 benchmark = "grayscott"
-results = "results-brev/20260930-231831-1QsvHo"
+results = "grayscott"
 
 [[panel]]
 benchmark = "cg"
-results = "results-brev/20260930-232808-LygubK"
+results = "cg"
 
 [[panel]]
 benchmark = "nas_ep"
-results = "results-brev/20260930-234926-SAIP3B"
+results = "nas_ep"
 log = true
 
 [[panel]]
 benchmark = "nas_ft"
-results = "results-brev/20261001-001153-TBPDeB"
+results = "nas_ft"
 split = { time = 350 }   # Dagger at 2+ GPUs
 
 [[panel]]
 benchmark = "nas_mg"
-results = "results-brev/20261001-003034-E0lZWa"
+results = "nas_mg"

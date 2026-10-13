@@ -65,7 +65,7 @@ end
 function declared_order(path)
     order = String[]
     for line in eachline(path)
-        header = strip(line)
+        header = strip(first(split(line, '#'; limit=2)))  # allow trailing comments
         startswith(header, "[[") && endswith(header, "]]") || continue
         name = strip(header[3:(end - 2)])
         name in order || push!(order, name) # if not in list, push to ordered list

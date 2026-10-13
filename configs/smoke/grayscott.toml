@@ -1,0 +1,17 @@
+# Smoke variant of multi_gpu/grayscott.toml. N-2 divides IGG's 4x2 grid.
+[Global]
+models = ["cunumeric", "cupynumeric", "cudajl", "jacc", "dagger"]
+n_warmup = 1
+n_iter = 5
+n_trial = 2
+check_correctness = true
+n_correctness_iter = 2
+auto_size = false
+
+[[grayscott]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+N = [1026, 1450, 2050, 2898]
+M = [1026, 1450, 2050, 2898]
+fusion = true

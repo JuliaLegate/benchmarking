@@ -10,9 +10,9 @@ font_size = 6
 
 [[panel]]
 benchmark = "nas_ep"
-results = "results-brev/20261001-073858-GgV9Iq"
+results = "nas_ep_strong"
 log = true
 
 [[panel]]
 benchmark = "nas_ft"
-results = "results-brev/20261001-075222-pAw6qj"
+results = "nas_ft_strong"
