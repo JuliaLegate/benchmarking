@@ -1,0 +1,31 @@
+# Smoke variant of single_gpu/grayscott_forms.toml.
+[Global]
+single_gpu = true
+models = ["cunumeric", "cudajl", "cupynumeric"]
+n_warmup = 1
+n_iter = 5
+n_trial = 2
+check_correctness = true
+n_correctness_iter = 2
+auto_size = false
+
+[plot.groups]
+grayscott = [
+    "grayscott_function_accelerated",
+    "grayscott",
+]
+
+[[grayscott_function_accelerated]]
+models = ["cunumeric"]
+T = "Float32"
+cpus = 8
+fusion = ["on", "off"]
+N = [256, 512, 1024]
+M = [256, 512, 1024]
+
+[[grayscott]]
+models = ["cudajl", "cupynumeric"]
+T = "Float32"
+cpus = 8
+N = [256, 512, 1024]
+M = [256, 512, 1024]

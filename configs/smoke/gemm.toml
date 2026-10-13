@@ -1,0 +1,16 @@
+# Smoke variant of multi_gpu/gemm.toml.
+[Global]
+models = ["cunumeric", "cupynumeric", "cudajl", "dagger"]
+n_warmup = 1
+n_iter = 5
+n_trial = 2
+check_correctness = true
+n_correctness_iter = 2
+auto_size = false
+
+[[gemm]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+N = [1024, 1296, 1632, 2048]
+M = [1024, 1296, 1632, 2048]

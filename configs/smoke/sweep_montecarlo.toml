@@ -1,0 +1,27 @@
+# Smoke variant of single_gpu/montecarlo_forms.toml.
+[Global]
+single_gpu = true
+models = ["cunumeric", "cudajl", "cupynumeric"]
+n_warmup = 1
+n_iter = 5
+n_trial = 2
+check_correctness = true
+n_correctness_iter = 2
+auto_size = false
+
+[plot.groups]
+montecarlo = ["montecarlo", "montecarlo_naive"]
+
+[[montecarlo]]
+T = "Float32"
+cpus = 8
+fusion = "on"
+N = [1024, 65536, 1048576]
+M = 1
+
+[[montecarlo_naive]]
+T = "Float32"
+cpus = 8
+fusion = ["on", "off"]
+N = [1024, 65536, 1048576]
+M = 1

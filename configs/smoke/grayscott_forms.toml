@@ -1,0 +1,58 @@
+# Smoke variant of multi_gpu/grayscott_forms.toml.
+[Global]
+models = ["cunumeric"]
+n_warmup = 1
+n_iter = 5
+n_trial = 2
+check_correctness = true
+n_correctness_iter = 2
+auto_size = false
+
+[plot.groups]
+grayscott = [
+    "grayscott_plain",
+    "grayscott_function_accelerated",
+    "grayscott_begin_accelerated",
+    "grayscott_let_accelerated",
+    "grayscott_expression_accelerated",
+]
+
+[[grayscott_plain]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+fusion = ["on", "off"]
+N = [1026, 1450, 2050, 2898]
+M = [1026, 1450, 2050, 2898]
+
+[[grayscott_function_accelerated]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+fusion = ["on", "off"]
+N = [1026, 1450, 2050, 2898]
+M = [1026, 1450, 2050, 2898]
+
+[[grayscott_begin_accelerated]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+fusion = ["on", "off"]
+N = [1026, 1450, 2050, 2898]
+M = [1026, 1450, 2050, 2898]
+
+[[grayscott_let_accelerated]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+fusion = ["on", "off"]
+N = [1026, 1450, 2050, 2898]
+M = [1026, 1450, 2050, 2898]
+
+[[grayscott_expression_accelerated]]
+T = "Float32"
+gpus = [1, 2, 4, 8]
+cpus = 8
+fusion = ["on", "off"]
+N = [1026, 1450, 2050, 2898]
+M = [1026, 1450, 2050, 2898]
