@@ -73,6 +73,12 @@ composability --only=ordinarydiffeq,krylov --solvers=cg --local --mode=single --
 composability --only=krylov --solvers=cg --mode=multi --gpus=1,2,4,8 --models=dagger,cunumeric
 composability --only=ordinarydiffeq --mode=multi --gpus=1,2,4,8 --models=cunumeric
 
+# LOC counts for plot_complexity.jl (no GPU; writes loc-analysis/results/).
+echo
+echo "==> loc-analysis"
+CUNUMERIC_BENCH_JULIA=$JULIA "${PYTHON:-python3}" loc-analysis/analyze_model_loc.py ||
+    FAILED+=("loc-analysis")
+
 echo
 if [[ ${#FAILED[@]} -eq 0 ]]; then
     echo "All runs finished: $OUT"
