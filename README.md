@@ -21,13 +21,23 @@ and per-trial mean time and throughput.
 
 ## Setup
 
+From a cuNumeric.jl checkout, fetch this repo into `benchmark/`:
+
+```bash
+git clone https://github.com/JuliaLegate/cuNumeric.jl && cd cuNumeric.jl
+./scripts/get_benchmarks.sh            # or: ./scripts/get_benchmarks.sh <tag or commit>
+cd benchmark
+```
+
+Then install the environments:
+
 ```bash
 ./deps-install/instantiate_projects.sh     # Julia envs + IGG's Conda MPI env
 ./deps-install/install_cupynumeric.sh      # cuPyNumeric Conda env
 ```
 
-As cuNumeric.jl's `benchmark/` submodule, setup develops the parent checkout;
-standalone, set `CUNUMERIC_SOURCE=/path/to/cuNumeric.jl`. Use Julia 1.13.
+Inside cuNumeric.jl's `benchmark/`, setup develops the parent checkout;
+cloned elsewhere, set `CUNUMERIC_SOURCE=/path/to/cuNumeric.jl`. Use Julia 1.13.
 `CUNUMERIC_BENCH_JULIA` and `CUNUMERIC_BENCH_CONDA` pick the Julia and Conda
 executables.
 
